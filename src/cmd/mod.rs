@@ -18,6 +18,7 @@ pub mod board;
 pub mod check;
 pub mod claim;
 pub mod export;
+pub mod git;
 pub mod import;
 pub mod init;
 pub mod list;

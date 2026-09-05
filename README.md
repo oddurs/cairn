@@ -515,6 +515,25 @@ holder — both are tests.
 The lock is released *before* hooks run, because a hook may itself call cairn and
 the write is already durable by then. There is a test for that ordering too.
 
+**Branches merge without a fight.** Two branches that both add an item conflict
+in `ROADMAP.md` and collide on an id — on the first merge. Neither is really a
+conflict: both files are derived, so the answer is to derive them again.
+
+```sh
+cairn init --git      # safe on an existing project; that is how you adopt it
+```
+
+That registers a merge driver for the generated roadmap and a `post-merge` hook
+that renumbers colliding ids and re-renders. Nothing invents a resolution; both
+files are rebuilt from the items, which were the only authority all along.
+
+The ordering constrains the design and is worth knowing: git resolves paths in
+index order, and `ROADMAP.md` sorts before `cairn/items/…`, so when the merge
+driver runs the items have not been merged yet. It therefore keeps your side —
+a valid rendering of *something* — and the hook replaces it once the items are
+settled. `cairn check --render` in CI is the backstop for the cases a hook does
+not see, such as a merge performed by a forge.
+
 **An interrupted `renumber` recovers itself.** Renumbering moves a file aside
 before writing it back; if that is interrupted, the next command restores it and
 says so.

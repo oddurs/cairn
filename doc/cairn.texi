@@ -245,6 +245,44 @@ The lock file lives beside the items, where the item scan already ignores
 dotfiles, and @command{cairn init} writes a @file{.gitignore} for it so it never
 reaches the repository.
 
+@section Merging branches
+
+@cindex merging
+@cindex git integration
+@cindex merge driver
+Two branches that each add an item conflict in the rendered roadmap and collide
+on an identifier, on the first merge. Neither is really a conflict. The roadmap
+is generated, so reconciling two renderings of different inputs is meaningless;
+the identifiers collide because allocation reads the highest in use, which no
+branch can know.
+
+@example
+cairn init --git
+@end example
+
+@noindent
+registers a merge driver for the generated file and installs a @code{post-merge}
+hook that renumbers any collision and renders again. It is safe on a project
+that already exists --- that is how one adopts it --- and doing it twice changes
+nothing.
+
+@cindex index order, and merging
+The order git works in constrains the design. Paths are resolved in index order,
+and @file{ROADMAP.md} sorts before @file{cairn/items/}, so when the merge driver
+runs the items it would render from are still unmerged. The driver therefore
+does not pretend to know the answer: it keeps our side, which is a valid
+rendering of a real state, and the hook replaces it with the right one once the
+items are settled.
+
+@cindex hooks, not cloned
+Two consequences worth knowing. The hook lives in @file{.git/hooks}, which git
+does not clone, so each working copy runs @command{cairn init --git} once. And a
+merge performed by a forge rather than locally runs no hook at all, which is why
+@command{cairn check --render} belongs in continuous integration regardless.
+
+Anything the hook changed is left for a person to commit; a hook that amended
+the merge commit would be doing something nobody asked it to.
+
 @section Interrupted renumbering
 
 @command{cairn renumber} moves a file aside before writing it back under its new

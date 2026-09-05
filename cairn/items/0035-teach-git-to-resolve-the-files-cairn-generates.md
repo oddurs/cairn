@@ -2,8 +2,9 @@
 id: 35
 title: Teach git to resolve the files cairn generates
 type: feature
-status: backlog
+status: done
 milestone: v0.2
+assignee: claude
 created: 2026-09-05
 updated: 2026-09-05
 priority: p0
@@ -56,3 +57,7 @@ integers are worth keeping, and a merge is the right moment to reconcile them.
 - [ ] Works when the merge is done by a forge rather than locally, or says
       plainly that it cannot
 - [ ] Tested by actually merging branches, not by inspecting configuration
+
+## 2026-09-05
+
+Built. Merge driver keeps our side of the generated roadmap; post-merge hook renumbers collisions and re-renders once the items are settled. The ordering constraint — git resolves ROADMAP.md before the items it is rendered from — is why the driver cannot simply render.
