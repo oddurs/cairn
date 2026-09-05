@@ -573,6 +573,23 @@ Two things are genuinely platform-shaped, and both are documented where they
 bite: hook strings go through the platform shell (use the array form to avoid
 it), and `filename_max` defaults to the POSIX 255 bytes.
 
+## The format is specified
+
+The item format is written down as a [standalone specification](spec/README.md),
+not merely as whatever this program happens to do. A reader can be implemented
+from it without consulting cairn's source, and cairn is its reference
+implementation rather than its definition.
+
+That is deliberate. A backlog kept in a repository outlives the tool that wrote
+it, and somebody has to be able to read those files in ten years with whatever
+software exists then. It also means adopting the convention does not require
+adopting this program: anything that reads Markdown and YAML can read a cairn
+backlog.
+
+The corpus in [`tests/golden`](tests/golden) — which includes files cairn would
+never write, because those are what people and other tools produce — doubles as
+a conformance suite for a second implementation.
+
 ## Prior art
 
 cairn is not the only tool in this space, and it is not always the right one.
@@ -603,6 +620,7 @@ Laid out the way a GNU project is, so the files are where you expect:
 | `NEWS` | User-visible changes, newest first |
 | `README.md` | This tour |
 | `doc/cairn.texi` | The manual — `info cairn`, or `make html` |
+| `spec/README.md` | The item format, specified. Normative and standalone |
 | `CONTRIBUTING.md` | How to get started; the backlog is the guide |
 | `SECURITY.md` | How to report a vulnerability |
 | `cairn/items/` | The project's own roadmap, in cairn |

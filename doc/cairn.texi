@@ -309,8 +309,14 @@ one item, which must yield exactly one holder and eleven clear refusals.
 @chapter File format
 
 @cindex file format, specification
-This chapter is normative. It is written so that a reader for the format could
-be implemented from it alone, without consulting cairn's source.
+@cindex specification, standalone
+The normative specification lives in @file{spec/README.md}, and at
+@url{https://github.com/oddurs/cairn/blob/main/spec/README.md}. It stands alone:
+a reader for the format can be implemented from it without consulting cairn at
+all, and cairn is its reference implementation rather than its definition.
+
+This chapter describes the same format for someone already reading the manual.
+Where the two disagree, the specification is right.
 
 @section Structure
 

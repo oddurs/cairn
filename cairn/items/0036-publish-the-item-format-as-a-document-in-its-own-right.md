@@ -2,8 +2,9 @@
 id: 36
 title: Publish the item format as a document in its own right
 type: docs
-status: backlog
+status: done
 milestone: v1.0
+assignee: claude
 created: 2026-09-05
 updated: 2026-09-05
 priority: p1
@@ -35,3 +36,7 @@ counts for more than being polished.
 - [ ] Versioned alongside `format`, with the same compatibility promise
 - [ ] Linked from the README, the manual and the repository description
 - [ ] A second implementation could be written from it — ideally, is
+
+## 2026-09-05
+
+Extracted to spec/README.md: normative, standalone, RFC 2119 keywords, ten sections, with tests/golden named as a conformance suite. The manual chapter now defers to it, so there is one authority rather than two that can drift.
