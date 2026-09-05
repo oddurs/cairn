@@ -142,13 +142,13 @@ description = "Enough to run a real project's roadmap without reaching for anyth
 name = "v0.2"
 title = "Comfortable"
 due = "2026-12-01"
-description = "The rough edges that only show up after a few weeks of daily use."
+description = "The rough edges that show up after a few weeks of daily use, and the pieces that make the central claim true rather than merely stated."
 
 [[milestone]]
 name = "v1.0"
 title = "Stable"
 due = "2027-03-01"
-description = "Documented, packaged, and safe to depend on. The file format stops moving."
+description = "Safe to depend on: every scriptable surface carries a promise, the command surface has been reviewed and pruned rather than accumulated, releases can be verified, and it installs from a package manager people already use."
 
 [[milestone]]
 name = "later"
