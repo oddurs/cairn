@@ -36,6 +36,24 @@ use std::io::{BufRead, Write};
 
 pub const PROTOCOL_VERSION: &str = "2025-06-18";
 
+/// Who the client said it was during `initialize`.
+///
+/// Without this, a claim made over MCP is recorded against whatever
+/// `git config user.name` says — so an agent's work appears in the backlog under
+/// the name of whoever owns the repository, which is both wrong and the sort of
+/// wrong that is hard to notice. The protocol already carries the answer.
+static CLIENT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
+/// The identity to record for a write that arrived over MCP.
+fn caller() -> String {
+    if let Ok(explicit) = std::env::var("CAIRN_USER")
+        && !explicit.trim().is_empty()
+    {
+        return explicit.trim().to_string();
+    }
+    CLIENT.get().cloned().unwrap_or_else(whoami)
+}
+
 #[derive(clap::Args)]
 pub struct Args {
     /// Print client configuration for this project and exit
@@ -75,7 +93,20 @@ pub fn run(args: Args) -> Result<i32> {
         let params = request.get("params").cloned().unwrap_or(json!({}));
 
         let response = match method {
-            "initialize" => success(id, initialize()),
+            "initialize" => {
+                // `clientInfo.name` is how the caller identifies itself, and is
+                // a better default than the repository owner's name.
+                if let Some(name) = params
+                    .get("clientInfo")
+                    .and_then(|c| c.get("name"))
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|n| !n.is_empty())
+                {
+                    let _ = CLIENT.set(name.to_string());
+                }
+                success(id, initialize())
+            }
             "ping" => success(id, json!({})),
             "tools/list" => success(id, json!({ "tools": tools() })),
             "tools/call" => success(id, call(&params)),
@@ -489,7 +520,7 @@ fn claim_item(a: &Value) -> Result<String> {
     };
 
     let mut item = store.find(id)?;
-    let who = s(a, "as").unwrap_or_else(whoami);
+    let who = s(a, "as").unwrap_or_else(caller);
     let force = b(a, "force");
 
     if let Some(holder) = item.meta.assignee.as_deref()

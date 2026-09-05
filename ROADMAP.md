@@ -6,13 +6,9 @@ A markdown-native roadmap and issue manager that lives in your repository.
 
 ## v0.1 — Usable in anger
 
-`#########·` 88% · 14 of 16 done · due 2026-10-15
+`##########` 94% · 15 of 16 done · due 2026-10-15
 
 Enough to run a real project's roadmap without reaching for anything else.
-
-### backlog
-
-- [ ] [`0037`](https://github.com/oddurs/cairn/blob/main/cairn/items/0037-point-a-real-agent-at-the-mcp-server-and-watch-it-work.md) Point a real agent at the MCP server and watch it work <sup>chore · p0</sup>
 
 ### in progress
 
@@ -34,6 +30,7 @@ Enough to run a real project's roadmap without reaching for anything else.
 - [x] [`0030`](https://github.com/oddurs/cairn/blob/main/cairn/items/0030-cut-a-release-candidate-and-verify-every-install-path.md) Cut a release candidate and verify every install path <sup>chore · p0 · s5</sup>
 - [x] [`0033`](https://github.com/oddurs/cairn/blob/main/cairn/items/0033-order-milestones-the-way-their-author-declared-them.md) Order milestones the way their author declared them <sup>bug · p1</sup>
 - [x] [`0034`](https://github.com/oddurs/cairn/blob/main/cairn/items/0034-render-the-roadmap-by-default-rather-than-by-discipline.md) Render the roadmap by default rather than by discipline <sup>bug · p1</sup>
+- [x] [`0037`](https://github.com/oddurs/cairn/blob/main/cairn/items/0037-point-a-real-agent-at-the-mcp-server-and-watch-it-work.md) Point a real agent at the MCP server and watch it work <sup>chore · p0</sup>
 
 ## v0.2 — Comfortable
 
