@@ -1136,6 +1136,36 @@ fn import_accepts_a_bare_array_of_items() {
 
 // --- MCP --------------------------------------------------------------------
 
+/// Drive the server with no CAIRN_USER set, as a client on somebody else's
+/// machine would be: the identity then has to come from the protocol.
+fn mcp_anonymous(p: &Project, requests: &[&str]) -> Vec<serde_json::Value> {
+    use std::io::Write;
+    let input = format!("{}\n", requests.join("\n"));
+    let mut child = Command::new(bin())
+        .arg("mcp")
+        .current_dir(p.root())
+        .env("NO_COLOR", "1")
+        .env("PATH", path_with_binary())
+        .env_remove("CAIRN_USER")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn");
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(input.as_bytes())
+        .expect("write");
+    let out = child.wait_with_output().expect("wait");
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| serde_json::from_str(l).expect("json"))
+        .collect()
+}
+
 /// Drive the server the way a client does and return one parsed reply per line.
 fn mcp(p: &Project, requests: &[&str]) -> Vec<serde_json::Value> {
     let input = format!("{}\n", requests.join("\n"));
@@ -2408,4 +2438,42 @@ fn a_repeated_import_has_nothing_left_to_close() {
     let second = p.expect(&["import", "--from", "json", "items.json"]);
     assert_contains(&second.all(), "1 already present", "nothing to do");
     assert_eq!(p.count_all(), 1);
+}
+
+#[test]
+fn mcp_records_work_under_the_name_the_client_gave() {
+    // Found by driving the server as a client: a claim over MCP was recorded
+    // against `git config user.name`, so an agent's work appeared in the backlog
+    // under the repository owner's name. The protocol already carries the
+    // answer — `clientInfo.name` in initialize.
+    let p = Project::new();
+    p.add("Something to take", &[]);
+    let replies = mcp_anonymous(
+        &p,
+        &[
+            r#"{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-06-18","clientInfo":{"name":"some-agent","version":"1"}}}"#,
+            r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"claim_item","arguments":{"id":1}}}"#,
+        ],
+    );
+    assert_eq!(replies[1]["result"]["isError"], false);
+    assert_eq!(
+        p.json(&["show", "1", "--json"])["assignee"],
+        "some-agent",
+        "the client's own name, not the repository owner's"
+    );
+}
+
+#[test]
+fn an_explicit_identity_still_wins_over_the_client_name() {
+    let p = Project::new();
+    p.add("Something to take", &[]);
+    let replies = mcp_anonymous(
+        &p,
+        &[
+            r#"{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"clientInfo":{"name":"some-agent"}}}"#,
+            r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"claim_item","arguments":{"id":1,"as":"a-person"}}}"#,
+        ],
+    );
+    assert_eq!(replies[1]["result"]["isError"], false);
+    assert_eq!(p.json(&["show", "1", "--json"])["assignee"], "a-person");
 }
