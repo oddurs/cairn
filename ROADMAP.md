@@ -6,15 +6,13 @@ A markdown-native roadmap and issue manager that lives in your repository.
 
 ## v0.1 — Usable in anger
 
-`#######···` 67% · 10 of 15 done · due 2026-10-15
+`########··` 80% · 12 of 15 done · due 2026-10-15
 
 Enough to run a real project's roadmap without reaching for anything else.
 
 ### backlog
 
 - [ ] [`0030`](https://github.com/oddurs/cairn/blob/main/cairn/items/0030-cut-a-release-candidate-and-verify-every-install-path.md) Cut a release candidate and verify every install path <sup>chore · p0 · s5</sup>
-- [ ] [`0033`](https://github.com/oddurs/cairn/blob/main/cairn/items/0033-order-milestones-the-way-their-author-declared-them.md) Order milestones the way their author declared them <sup>bug · p1</sup>
-- [ ] [`0034`](https://github.com/oddurs/cairn/blob/main/cairn/items/0034-render-the-roadmap-by-default-rather-than-by-discipline.md) Render the roadmap by default rather than by discipline <sup>bug · p1</sup>
 
 ### in progress
 
@@ -33,6 +31,8 @@ Enough to run a real project's roadmap without reaching for anything else.
 - [x] [`0018`](https://github.com/oddurs/cairn/blob/main/cairn/items/0018-preserve-line-endings-when-rewriting-an-item.md) Preserve line endings when rewriting an item <sup>bug · p0 · s2</sup>
 - [x] [`0019`](https://github.com/oddurs/cairn/blob/main/cairn/items/0019-write-item-files-atomically.md) Write item files atomically <sup>bug · p0 · s2</sup>
 - [x] [`0020`](https://github.com/oddurs/cairn/blob/main/cairn/items/0020-keep-read-commands-working-when-one-file-is-broken.md) Keep read commands working when one file is broken <sup>bug · p0 · s2</sup>
+- [x] [`0033`](https://github.com/oddurs/cairn/blob/main/cairn/items/0033-order-milestones-the-way-their-author-declared-them.md) Order milestones the way their author declared them <sup>bug · p1</sup>
+- [x] [`0034`](https://github.com/oddurs/cairn/blob/main/cairn/items/0034-render-the-roadmap-by-default-rather-than-by-discipline.md) Render the roadmap by default rather than by discipline <sup>bug · p1</sup>
 
 ## v0.2 — Comfortable
 
