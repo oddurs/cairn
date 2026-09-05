@@ -1,0 +1,346 @@
+---
+import Base from "../layouts/Base.astro";
+const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+---
+
+<Base
+  title="cairn — a roadmap that lives in your repository"
+  description="cairn keeps a project's roadmap and issues as Markdown files in the repository, under a schema you define, with tools that let coding agents work the backlog."
+  wide
+>
+  <!-- The artefact is the argument: an item is a file, so show the file. -->
+  <section class="hero">
+    <div class="wrap hero__inner">
+      <div class="hero__claim">
+        <h1>Your backlog is a directory of Markdown files.</h1>
+        <p class="lede">
+          cairn keeps a project's roadmap and issues in the repository itself,
+          under a schema you declare. Reviewable in the pull request that closes
+          them. Readable in ten years. No server, no account, no browser.
+        </p>
+
+        <div class="install">
+          <pre><code>curl -fsSL https://raw.githubusercontent.com/oddurs/cairn/main/install.sh | sh</code></pre>
+          <p class="install__alt">
+            Or <code>brew tap oddurs/cairn &amp;&amp; brew install cairn</code>.
+            Linux, macOS and Windows.
+          </p>
+        </div>
+
+        <p class="hero__links">
+          <a class="cta" href={`${base}/docs`}>Read the docs</a>
+          <a href="https://github.com/oddurs/cairn">Source on GitHub</a>
+        </p>
+      </div>
+
+      <figure class="hero__file slab">
+        <figcaption>cairn/items/0001-support-oauth-login.md</figcaption>
+        <pre><code><span class="d">---</span>
+<span class="b">id</span>: 1
+<span class="b">title</span>: Support OAuth login
+<span class="b">type</span>: feature
+<span class="b">status</span>: doing
+<span class="b">milestone</span>: v0.1
+<span class="b">priority</span>: p0
+<span class="d">---</span>
+
+<span class="k">## Problem</span>
+
+Password auth is the only option, and
+enterprise users keep asking for SSO.
+
+<span class="k">## Acceptance criteria</span>
+
+- [ ] Authorization code flow with PKCE
+- [ ] Refresh tokens survive a restart</code></pre>
+      </figure>
+    </div>
+  </section>
+
+  <!-- Recorded from real command output, so it cannot drift into flattery. -->
+  <section class="band band--deep">
+    <div class="wrap">
+      <h2>What using it looks like</h2>
+      <p class="lede">
+        Every frame below is real output, recorded by running the commands. It
+        is regenerated on every change, and continuous integration fails if it
+        no longer matches.
+      </p>
+      <img
+        class="demo"
+        src={`${base}/demo.svg`}
+        alt="A terminal session: creating two items where the second depends on the first, running cairn next, claiming the top item, closing it, and watching the dependent item become available."
+        loading="lazy"
+        decoding="async"
+      />
+      <p class="note">
+        Note the third command. <code>0002</code> depends on <code>0001</code>,
+        so it stays off the list until <code>0001</code> closes.
+        <code>cairn next</code> shows work that is genuinely startable, not everything
+        that is open.
+      </p>
+    </div>
+  </section>
+
+  <!-- Strata rather than three identical cards: each idea is a full band with
+       its own weight, separated by hairlines. -->
+  <section class="band">
+    <div class="wrap strata">
+      <article class="stratum">
+        <h3>The schema is yours</h3>
+        <div class="stratum__body">
+          <p>
+            Item types, statuses, custom fields, milestones and saved views are
+            declared in one file. Rename <code>doing</code> to
+            <code>on the pass</code> if that is what your team says — every
+            status belongs to a fixed category, so progress bars and
+            <code>cairn close</code> keep working whatever you call things.
+          </p>
+        </div>
+        <pre class="stratum__code slab"><code><span class="d">[[status]]</span>
+<span class="b">name</span> = "doing"
+<span class="b">label</span> = "in progress"
+<span class="b">category</span> = "active"
+<span class="b">color</span> = "yellow"</code></pre>
+      </article>
+
+      <article class="stratum">
+        <h3>Agents work the backlog</h3>
+        <div class="stratum__body">
+          <p>
+            <code>cairn mcp</code> serves the backlog over the Model Context
+            Protocol. An agent gets typed tools rather than instructions it can
+            forget, and a rejected write comes back as something it can act on.
+          </p>
+        </div>
+        <pre class="stratum__code slab"><code>update_item <span class="d">&#123;"status": "in progress"&#125;</span>
+
+<span class="r">unknown status `in progress`</span>
+<span class="d">known: backlog, planned, doing,
+       blocked, done, dropped</span></code></pre>
+      </article>
+
+      <article class="stratum">
+        <h3>Nothing drifts</h3>
+        <div class="stratum__body">
+          <p>
+            <code>ROADMAP.md</code> is generated, and re-rendered whenever an
+            item changes. <code>cairn check</code> validates every item against
+            the schema and proves the committed roadmap still matches, which is
+            one line in continuous integration.
+          </p>
+        </div>
+        <pre class="stratum__code slab"><code>$ cairn check
+<span class="r">cairn</span>: <span class="d">items/0009-bad.md:4:</span>
+  unknown status `nope`
+
+<span class="r">failed</span>: 1 error across 4 items</code></pre>
+      </article>
+    </div>
+  </section>
+
+  <section class="band band--deep">
+    <div class="wrap">
+      <h2>Built to be left alone</h2>
+      <div class="pairs">
+        <div>
+          <h3>Writes cannot be half-finished</h3>
+          <p>
+            Every file is written beside its target, flushed, and renamed over
+            it. A crash leaves the old contents or the new ones, never a
+            mixture. There is a test that kills the program mid-write forty
+            times.
+          </p>
+        </div>
+        <div>
+          <h3>Branches merge without a fight</h3>
+          <p>
+            Two branches that both add an item would conflict in the generated
+            roadmap and collide on an identifier. Neither is a real conflict, so
+            <code>cairn init --git</code> teaches git to re-derive both instead.
+          </p>
+        </div>
+        <div>
+          <h3>The format is specified</h3>
+          <p>
+            The item format is <a href={`${base}/format`}>written down</a>
+            independently of this program, versioned, and pinned by a corpus of
+            files that must keep parsing the same way.
+          </p>
+        </div>
+        <div>
+          <h3>Concurrent writers are safe</h3>
+          <p>
+            Mutating commands take a lock; reads never do. Forty processes
+            creating items at once produce forty distinct identifiers, and
+            twelve agents racing for one item produce exactly one owner.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band close">
+    <div class="wrap">
+      <h2>Start in one command</h2>
+      <pre class="slab"><code>$ cairn init
+<span class="g">created</span> cairn.toml
+<span class="g">created</span> cairn/items/
+
+$ cairn new <span class="y">"Support OAuth login"</span> --type feature --milestone v0.1
+<span class="g">created</span> 0001  Support OAuth login</code></pre>
+      <p class="hero__links">
+        <a class="cta" href={`${base}/docs`}>Read the docs</a>
+        <a href={`${base}/docs/agents`}>Set it up for an agent</a>
+      </p>
+    </div>
+  </section>
+
+  <style>
+    .hero {
+      padding-block: clamp(2.5rem, 7vw, 5.5rem);
+    }
+    .hero__inner {
+      display: grid;
+      gap: clamp(2rem, 5vw, 4rem);
+      grid-template-columns: 1fr;
+      align-items: start;
+    }
+    @media (min-width: 62rem) {
+      .hero__inner {
+        grid-template-columns: 1.05fr 0.95fr;
+      }
+    }
+    .hero__claim h1 {
+      margin-bottom: 1.1rem;
+    }
+    .hero__claim .lede {
+      max-width: 44ch;
+    }
+
+    .install {
+      margin-block: 1.75rem 1.25rem;
+    }
+    .install pre {
+      background: var(--slate-deep);
+      border: 1px solid var(--hairline);
+      border-left: 2px solid var(--lichen);
+      border-radius: 3px;
+      font-size: 0.78rem;
+    }
+    .install__alt {
+      margin: 0.7rem 0 0;
+      color: var(--moss);
+      font-size: 0.9375rem;
+    }
+    .install__alt code {
+      color: var(--chalk);
+      font-size: 0.85em;
+    }
+
+    .hero__links {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 1.5rem;
+      margin-top: 1.75rem;
+    }
+    .cta {
+      background: var(--lichen);
+      color: var(--slate);
+      font-family: var(--mono);
+      font-weight: 600;
+      font-size: 0.9375rem;
+      padding: 0.6rem 1.1rem;
+      border-radius: 2px;
+      text-decoration: none;
+    }
+    .cta:hover {
+      background: #c8d84f;
+    }
+
+    .hero__file figcaption {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      color: var(--moss);
+      padding: 0.6rem 1.25rem;
+      border-bottom: 1px solid var(--hairline);
+      background: var(--slate);
+    }
+
+    .demo {
+      width: 100%;
+      height: auto;
+      display: block;
+      margin-block: 2rem 1.25rem;
+      border: 1px solid var(--hairline);
+      border-radius: 4px;
+    }
+    .note {
+      color: var(--moss);
+      font-size: 0.9375rem;
+      max-width: 62ch;
+    }
+
+    .strata {
+      display: grid;
+      gap: 0;
+    }
+    .stratum {
+      display: grid;
+      gap: 1.25rem 3rem;
+      padding-block: 2.25rem;
+      border-bottom: 1px solid var(--hairline);
+      align-items: start;
+    }
+    .stratum:first-child {
+      padding-top: 0;
+    }
+    .stratum:last-child {
+      border-bottom: 0;
+      padding-bottom: 0;
+    }
+    @media (min-width: 54rem) {
+      .stratum {
+        grid-template-columns: 14rem minmax(0, 1fr) minmax(0, 20rem);
+      }
+    }
+    .stratum h3 {
+      margin: 0;
+      color: var(--chalk);
+    }
+    .stratum__body p {
+      margin: 0;
+      color: var(--moss);
+    }
+    .stratum__code {
+      font-size: 0.78rem;
+    }
+
+    .pairs {
+      display: grid;
+      gap: 2rem 3.5rem;
+      margin-top: 2rem;
+    }
+    @media (min-width: 46rem) {
+      .pairs {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+    .pairs h3 {
+      margin: 0 0 0.4rem;
+    }
+    .pairs p {
+      margin: 0;
+      color: var(--moss);
+    }
+
+    .close pre {
+      max-width: 52rem;
+      font-size: 0.8125rem;
+    }
+    .close h2 {
+      margin-bottom: 1.25rem;
+    }
+  </style>
+</Base>

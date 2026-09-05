@@ -3,6 +3,8 @@
 A roadmap and issue manager that lives in your repository, as Markdown, under a
 schema you define.
 
+**[cairn.sh docs →](https://oddurs.github.io/cairn)**
+
 A cairn is a stack of stones marking a trail. This one marks yours: every item
 is a plain `.md` file with YAML frontmatter, versioned alongside the code,
 reviewable in a pull request, and greppable with the tools you already have.
@@ -642,6 +644,7 @@ Laid out the way a GNU project is, so the files are where you expect:
 | `README.md` | This tour |
 | `doc/cairn.texi` | The manual — `info cairn`, or `make html` |
 | `spec/README.md` | The item format, specified. Normative and standalone |
+| `www/` | The website — landing page and docs, built with Astro |
 | `CONTRIBUTING.md` | How to get started; the backlog is the guide |
 | `SECURITY.md` | How to report a vulnerability |
 | `cairn/items/` | The project's own roadmap, in cairn |

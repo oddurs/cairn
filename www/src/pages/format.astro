@@ -1,0 +1,27 @@
+---
+import Docs from "../layouts/Docs.astro";
+// Rendered from spec/README.md in the repository, so the specification exists
+// in one place. A site that restated it would eventually contradict it.
+import { Content } from "../content/format.md";
+---
+
+<Docs
+  title="Item format"
+  description="The normative specification for storing a project's backlog as files in its own repository."
+  summary="Normative, and versioned. Rendered here from the specification in the repository, so there is one authority rather than two that can drift."
+>
+  <div class="spec">
+    <Content />
+  </div>
+
+  <style>
+    /* The specification opens with its own title and a horizontal rule; the
+       page heading above already carries both. */
+    .spec :global(> h1:first-child),
+    .spec :global(> h1:first-child + p),
+    .spec :global(> h1:first-child + p + p),
+    .spec :global(> h1:first-child ~ hr:first-of-type) {
+      display: none;
+    }
+  </style>
+</Docs>
