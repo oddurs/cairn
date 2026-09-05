@@ -152,6 +152,10 @@ enum Command {
     /// Bring a project up to the current on-disk format
     Migrate(cmd::migrate::Args),
 
+    /// Resolve a generated file during a merge (used by git, not by people)
+    #[command(hide = true)]
+    MergeDriver(cmd::git::MergeArgs),
+
     /// Inspect and manage milestones
     Milestone(cmd::milestone::Args),
 
@@ -224,6 +228,7 @@ fn run(command: Command) -> Result<i32> {
         Command::Check(a) => cmd::check::run(a),
         Command::Renumber(a) => cmd::renumber::run(a),
         Command::Migrate(a) => cmd::migrate::run(a),
+        Command::MergeDriver(a) => cmd::git::merge_driver(a),
         Command::Milestone(a) => cmd::milestone::run(a),
         Command::Config(a) => cmd::misc::config(a),
         Command::Agent(a) => cmd::misc::agent(a),

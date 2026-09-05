@@ -2255,3 +2255,131 @@ fn bare_and_heading_are_refused_together() {
     p.add("Something", &[]);
     p.fails(&["note", "1", "text", "--bare", "--heading", "Ignored"]);
 }
+
+// --- git integration --------------------------------------------------------
+
+/// Run git in the project, requiring success.
+fn git(p: &Project, args: &[&str]) -> String {
+    let out = Command::new("git")
+        .args(args)
+        .current_dir(p.root())
+        .env("GIT_AUTHOR_NAME", "test")
+        .env("GIT_AUTHOR_EMAIL", "test@example.invalid")
+        .env("GIT_COMMITTER_NAME", "test")
+        .env("GIT_COMMITTER_EMAIL", "test@example.invalid")
+        .env("PATH", path_with_binary())
+        .output()
+        .unwrap_or_else(|e| panic!("git {args:?}: {e}"));
+    assert!(
+        out.status.success(),
+        "git {args:?} failed:\n{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    String::from_utf8_lossy(&out.stdout).into_owned()
+}
+
+/// A repository with cairn set up and one committed item.
+fn repository() -> Project {
+    let p = Project::empty();
+    git(&p, &["init", "-q", "-b", "main", "."]);
+    p.expect(&["init", "--bare", "--name", "Merged", "--git"]);
+    p.add("Base", &[]);
+    git(&p, &["add", "-A"]);
+    git(&p, &["commit", "-qm", "base"]);
+    p
+}
+
+#[test]
+fn branches_that_both_add_an_item_merge_without_a_conflict() {
+    // Before this, the first parallel merge produced a conflict in ROADMAP.md
+    // and two items claiming the same id. Neither is really a conflict: both
+    // files are derived, so the answer is to derive them again.
+    let p = repository();
+
+    git(&p, &["checkout", "-qb", "branch-a"]);
+    p.add("From A", &[]);
+    git(&p, &["add", "-A"]);
+    git(&p, &["commit", "-qm", "a"]);
+
+    git(&p, &["checkout", "-q", "main"]);
+    git(&p, &["checkout", "-qb", "branch-b"]);
+    p.add("From B", &[]);
+    git(&p, &["add", "-A"]);
+    git(&p, &["commit", "-qm", "b"]);
+
+    // The merge itself must succeed: no conflict markers, no manual step.
+    git(&p, &["merge", "--no-edit", "branch-a"]);
+
+    p.expect(&["check"]);
+    p.expect(&["render", "--check", "-q"]);
+
+    let ids = p.expect(&["list", "-A", "--ids"]).lines();
+    assert_eq!(ids.len(), 3, "every item survived the merge");
+    let unique: std::collections::HashSet<_> = ids.iter().collect();
+    assert_eq!(unique.len(), 3, "and the collision was repaired");
+
+    let roadmap = p.read("ROADMAP.md");
+    for title in ["Base", "From A", "From B"] {
+        assert_contains(&roadmap, title, "the roadmap was re-derived, not merged");
+    }
+    assert!(!roadmap.contains("<<<<<<<"), "no conflict markers survived");
+}
+
+#[test]
+fn the_git_setup_is_idempotent_and_adoptable() {
+    let p = Project::empty();
+    git(&p, &["init", "-q", "-b", "main", "."]);
+    // Adopting it on a project that already exists must not re-run init.
+    p.expect(&["init", "--bare", "--name", "Existing"]);
+    p.add("Already here", &[]);
+
+    let first = p.expect(&["init", "--git"]);
+    assert_contains(&first.all(), "merge driver", "it reports what it changed");
+    let second = p.expect(&["init", "--git"]);
+    assert_contains(&second.all(), "already in place", "and does nothing twice");
+
+    assert_eq!(p.count_all(), 1, "the existing backlog was left alone");
+    assert_contains(
+        &p.read(".gitattributes"),
+        "merge=cairn",
+        "attributes written",
+    );
+    assert!(p.path(".git/hooks/post-merge").exists(), "hook installed");
+    assert_contains(
+        &p.expect(&["config"]).stdout,
+        "integrated",
+        "and the state is visible",
+    );
+}
+
+#[test]
+fn the_setup_refuses_to_overwrite_someone_elses_hook() {
+    let p = Project::empty();
+    git(&p, &["init", "-q", "-b", "main", "."]);
+    p.expect(&["init", "--bare", "--name", "Hooked"]);
+    std::fs::create_dir_all(p.path(".git/hooks")).unwrap();
+    p.write(
+        ".git/hooks/post-merge",
+        "#!/bin/sh\necho someone else's hook\n",
+    );
+
+    let out = p.fails(&["init", "--git"]);
+    assert_contains(&out.all(), "not cairn's", "it says why");
+    assert_contains(&out.all(), "cairn renumber", "and what to add by hand");
+    assert_contains(
+        &p.read(".git/hooks/post-merge"),
+        "someone else",
+        "the existing hook is untouched",
+    );
+}
+
+#[test]
+fn outside_a_repository_the_setup_says_so() {
+    let p = Project::new();
+    assert_contains(
+        &p.fails(&["init", "--git"]).all(),
+        "not a git repository",
+        "rather than failing obscurely",
+    );
+}

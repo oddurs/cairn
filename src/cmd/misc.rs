@@ -75,6 +75,17 @@ pub fn config(args: ConfigArgs) -> Result<i32> {
     println!();
     println!("{:<12} {}", style::dim("items"), cfg.project.dir);
     println!("{:<12} {}", style::dim("render"), cfg.render.target);
+    println!(
+        "{:<12} {}",
+        style::dim("git"),
+        if crate::cmd::git::is_configured(&cfg) {
+            "integrated".to_string()
+        } else if crate::cmd::git::in_repository(&cfg.root) {
+            style::dim("not integrated — `cairn init --git`")
+        } else {
+            style::dim("not a repository")
+        }
+    );
     println!();
 
     section(
@@ -183,6 +194,7 @@ pub fn schema_json(cfg: &Config) -> serde_json::Value {
             "default_type": cfg.project.default_type,
             "default_status": cfg.initial_status(),
             "root": cfg.root.display().to_string(),
+            "git_integrated": crate::cmd::git::is_configured(cfg),
         },
         "types": cfg.types.iter().map(|t| json!({
             "name": t.name, "label": t.label, "description": t.description

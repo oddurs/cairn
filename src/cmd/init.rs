@@ -43,6 +43,11 @@ pub struct Args {
     /// Overwrite an existing cairn.toml
     #[arg(long, action = ArgAction::SetTrue)]
     pub force: bool,
+
+    /// Teach git to resolve the files cairn generates. Safe to run on an
+    /// existing project, which is how one adopts it.
+    #[arg(long, action = ArgAction::SetTrue)]
+    pub git: bool,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, ValueEnum)]
@@ -56,9 +61,17 @@ pub enum Preset {
 pub fn run(args: Args) -> Result<i32> {
     let cwd = std::env::current_dir()?;
     let config_path = cwd.join(CONFIG_FILE);
+
+    // `--git` on a project that already exists installs only the integration.
+    // Adopting it should not mean re-running init over a live backlog.
     if config_path.exists() && !args.force {
+        if args.git {
+            let cfg = Config::discover()?;
+            return crate::cmd::git::setup(&cfg).map(|()| 0);
+        }
         bail!(
-            "{} already exists (use --force to overwrite)",
+            "{} already exists (use --force to overwrite, or --git to add the \
+             git integration to it)",
             config_path.display()
         );
     }
@@ -115,6 +128,19 @@ pub fn run(args: Args) -> Result<i32> {
             "{} {}",
             style::green("created"),
             path.strip_prefix(&cwd).unwrap_or(&path).display()
+        );
+    }
+
+    if args.git {
+        println!();
+        crate::cmd::git::setup(&cfg)?;
+    } else if crate::cmd::git::in_repository(&cwd) {
+        println!();
+        println!(
+            "{}",
+            style::dim(
+                "Tip: `cairn init --git` teaches git to resolve the roadmap and renumber\n                      colliding ids when branches merge."
+            )
         );
     }
 
