@@ -318,7 +318,14 @@ impl Item {
 
         let yaml =
             serde_yaml_ng::to_string(&Value::Mapping(m)).context("serialising frontmatter")?;
-        let body = self.body.trim_end();
+        // Bodies arrive from seven places — an argument, stdin, an editor, an
+        // import document, three MCP tools — and any of them can carry CRLF.
+        // Normalising here rather than at each entry means no future one can
+        // reintroduce the fault: a body that reached the struct with CRLF in it
+        // would otherwise be given another CR by `eol.apply`, writing `\r\r\n`,
+        // and enough such lines flip what `Eol::detect` reads back.
+        let body = self.body.replace("\r\n", "\n");
+        let body = body.trim_end();
         // Rendered with LF throughout, then given back whatever ending the file
         // arrived with.
         Ok(self.eol.apply(&format!("---\n{}---\n\n{}\n", yaml, body)))
@@ -327,6 +334,14 @@ impl Item {
     pub fn save(&self) -> Result<()> {
         let text = self.to_markdown()?;
         crate::store::write_atomic(&self.path, text.as_bytes())
+    }
+
+    /// Set the body from outside, normalising line endings on the way in.
+    ///
+    /// `Item::parse` guarantees a body read from disk holds no CRLF; this keeps
+    /// that true for bodies that never came from disk.
+    pub fn set_body(&mut self, text: &str) {
+        self.body = text.replace("\r\n", "\n");
     }
 
     pub fn touch(&mut self, today: &str) {
@@ -633,6 +648,26 @@ mod properties {
     }
 
     proptest! {
+        /// A body given CRLF from outside is written back as clean line
+        /// endings, whatever the file itself uses. Getting this wrong writes
+        /// `\r\r\n` and eventually flips the whole file.
+        #[test]
+        fn a_body_carrying_crlf_is_normalised_on_write(
+            item in item_strategy(),
+            note in "[a-z ]{1,20}",
+        ) {
+            let mut item = item;
+            item.set_body(&format!("first line\r\n{note}\r\nlast line"));
+            let rendered = item.to_markdown().unwrap();
+            prop_assert!(!rendered.contains("\r\r"), "doubled carriage return");
+            if item.eol == Eol::Lf {
+                prop_assert!(!rendered.contains('\r'), "a CRLF body leaked into an LF file");
+            }
+            // And the file still reads back as the ending it had.
+            let again = Item::parse(&item.path, &rendered).unwrap();
+            prop_assert_eq!(again.eol, item.eol);
+        }
+
         /// The one guarantee the storage format has to make: what cairn writes,
         /// cairn reads back unchanged.
         #[test]

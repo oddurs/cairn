@@ -768,7 +768,12 @@ any other change, and @command{cairn check} catches what the merge could not.
 @command{cairn mcp} speaks the Model Context Protocol on standard input and
 output, exposing the backlog as tools: @code{get_schema}, @code{next_items},
 @code{list_items}, @code{search_items}, @code{show_item}, @code{claim_item},
-@code{create_item}, @code{update_item}, @code{close_item} and @code{check}.
+@code{create_item}, @code{update_item}, @code{add_note}, @code{close_item} and
+@code{check}.
+
+@code{add_note} appends to an item's body and @code{update_item} replaces it.
+The distinction is deliberate: a caller recording why it decided something must
+not be able to erase what came before by getting one field wrong.
 
 @example
 cairn mcp --config
