@@ -151,7 +151,7 @@ pub fn run(args: Args) -> Result<i32> {
         }
     }
 
-    item.body = if args.stdin {
+    let body = if args.stdin {
         let mut buf = String::new();
         std::io::Read::read_to_string(&mut std::io::stdin(), &mut buf)
             .context("reading body from stdin")?;
@@ -164,6 +164,7 @@ pub fn run(args: Args) -> Result<i32> {
             .and_then(|t| t.template.clone())
             .unwrap_or_default()
     };
+    item.set_body(&body);
 
     if item.path.exists() {
         bail!("{} already exists", item.path.display());

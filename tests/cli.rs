@@ -2196,3 +2196,62 @@ fn mcp_can_append_a_note_without_replacing_the_body() {
     assert_contains(&body, "Original body.", "kept");
     assert_contains(&body, "Why it was dropped.", "added");
 }
+
+#[test]
+fn a_note_carrying_crlf_never_reaches_the_file() {
+    // Found in review. `--stdin` and the MCP tool bypassed the normalisation
+    // that `Item::parse` does on read, so a CRLF note wrote `\r\r\n` into a CRLF
+    // item, and enough CRLF lines flipped an LF item's detected ending —
+    // turning a one-field change into a whole-file diff.
+    let p = Project::new();
+    p.write(
+        "cairn/items/0001-crlf.md",
+        "---\r\nid: 1\r\ntitle: CRLF\r\nstatus: backlog\r\n---\r\n\r\nBody.\r\n",
+    );
+    let out = p.run_stdin(&["note", "1", "--stdin", "-q"], "one\r\ntwo\r\nthree\r\n");
+    assert!(out.ok(), "{}", out.all());
+    let file = p.read("cairn/items/0001-crlf.md");
+    assert!(!file.contains("\r\r"), "doubled carriage return:\n{file:?}");
+    assert!(file.contains("\r\n"), "the file is still CRLF");
+    assert!(
+        !file.replace("\r\n", "").contains('\n'),
+        "no line was left with a bare newline"
+    );
+
+    // An LF item stays LF no matter how many CRLF lines a note carries.
+    p.add("Plain", &["--body", "Body."]);
+    let many: String = (0..40).map(|n| format!("line {n}\r\n")).collect();
+    assert!(p.run_stdin(&["note", "2", "--stdin", "-q"], &many).ok());
+    let plain_path = p.expect(&["show", "2", "--path"]).trimmed();
+    let plain = std::fs::read_to_string(plain_path).unwrap();
+    assert!(!plain.contains('\r'), "an LF item was flipped by its note");
+
+    p.expect(&["check"]);
+}
+
+#[test]
+fn mcp_notes_are_normalised_too() {
+    let p = Project::new();
+    p.write(
+        "cairn/items/0001-crlf.md",
+        "---\r\nid: 1\r\ntitle: CRLF\r\nstatus: backlog\r\n---\r\n\r\nBody.\r\n",
+    );
+    let replies = mcp(
+        &p,
+        &[
+            r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"add_note","arguments":{"id":1,"text":"one\r\ntwo"}}}"#,
+        ],
+    );
+    assert_eq!(replies[0]["result"]["isError"], false);
+    assert!(
+        !p.read("cairn/items/0001-crlf.md").contains("\r\r"),
+        "the MCP tool wrote a doubled carriage return"
+    );
+}
+
+#[test]
+fn bare_and_heading_are_refused_together() {
+    let p = Project::new();
+    p.add("Something", &[]);
+    p.fails(&["note", "1", "text", "--bare", "--heading", "Ignored"]);
+}

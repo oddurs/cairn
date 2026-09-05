@@ -298,9 +298,10 @@ format.
 cairn mcp --config      # prints the snippet for .mcp.json, .cursor/mcp.json, …
 ```
 
-`cairn mcp` serves the backlog over the Model Context Protocol on stdio: ten
-tools covering `get_schema`, `next_items`, `search_items`, `show_item`,
-`claim_item`, `create_item`, `update_item`, `close_item` and `check`. Tools beat
+`cairn mcp` serves the backlog over the Model Context Protocol on stdio: eleven
+tools covering `get_schema`, `next_items`, `list_items`, `search_items`,
+`show_item`, `claim_item`, `create_item`, `update_item`, `add_note`,
+`close_item` and `check`. Tools beat
 instructions because they cannot be forgotten halfway through a task, and a
 rejected write comes back as something the model can act on:
 

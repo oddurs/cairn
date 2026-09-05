@@ -277,7 +277,11 @@ dependencies and puts work already in progress first.\n",
 `cairn claim --next` picks and claims the top-ranked unclaimed item in one step, and prints its \
 body so you can begin immediately.\n",
     );
-    s.push_str("3. Do the work, recording what you learn: `cairn set <ID> <field>=<value>`.\n");
+    s.push_str(
+        "3. Do the work. Record what you learn: `cairn set <ID> <field>=<value>` for fields, \
+`cairn note <ID> \"<TEXT>\"` for anything that needs a sentence — why you chose something, what \
+you tried, what to watch for.\n",
+    );
     s.push_str("4. `cairn close <ID>` when it is done, or `cairn release <ID>` to hand it back.\n");
     s.push_str("5. `cairn check` before you report finished. It must pass.\n\n");
 
@@ -290,6 +294,7 @@ body so you can begin immediately.\n",
     s.push_str("cairn show <ID> --json            # one item, including its body\n");
     s.push_str("cairn new \"<TITLE>\" --type <TYPE> --milestone <MILESTONE>\n");
     s.push_str("cairn set <ID> status=<STATUS>    # also labels+=x, or any field below\n");
+    s.push_str("cairn note <ID> \"<TEXT>\"          # append reasoning; never replaces\n");
     s.push_str("cairn close <ID>\n");
     s.push_str("cairn check                       # validate; run before finishing\n");
     s.push_str(&format!(

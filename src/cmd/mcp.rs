@@ -398,12 +398,13 @@ fn create_item(a: &Value) -> Result<String> {
         }
     }
 
-    item.body = s(a, "body").unwrap_or_else(|| {
+    let body = s(a, "body").unwrap_or_else(|| {
         item.kind()
             .and_then(|k| cfg.item_type(k))
             .and_then(|t| t.template.clone())
             .unwrap_or_default()
     });
+    item.set_body(&body);
     if item.path.exists() {
         bail!("{} already exists", item.path.display());
     }
@@ -438,7 +439,7 @@ fn update_item(a: &Value) -> Result<String> {
         crate::cmd::set::check_no_cycle(&store, &item)?;
     }
     if let Some(body) = a.get("body").and_then(Value::as_str) {
-        item.body = body.to_string();
+        item.set_body(body);
     }
     item.touch(&today());
     item.save()?;
@@ -553,11 +554,12 @@ fn add_note(a: &Value) -> Result<String> {
         None => format!("## {}\n\n{text}", today()),
     };
     let body = item.body.trim_end();
-    item.body = if body.is_empty() {
+    let combined = if body.is_empty() {
         addition
     } else {
         format!("{body}\n\n{addition}")
     };
+    item.set_body(&combined);
     item.touch(&today());
     item.save()?;
     drop(lock);

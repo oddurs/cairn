@@ -51,7 +51,7 @@ pub struct Args {
     pub heading: Option<String>,
 
     /// Append without a heading
-    #[arg(long, action = ArgAction::SetTrue)]
+    #[arg(long, action = ArgAction::SetTrue, conflicts_with = "heading")]
     pub bare: bool,
 
     /// Print nothing on success
@@ -91,11 +91,12 @@ pub fn run(args: Args) -> Result<i32> {
     // One blank line between what was there and what is being added, whatever
     // the body ended with.
     let body = item.body.trim_end();
-    item.body = if body.is_empty() {
+    let combined = if body.is_empty() {
         addition
     } else {
         format!("{body}\n\n{addition}")
     };
+    item.set_body(&combined);
     item.touch(&today());
     item.save()?;
     drop(lock);

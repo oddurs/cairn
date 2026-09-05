@@ -176,11 +176,12 @@ pub fn run(args: Args) -> Result<i32> {
         let mut item = Item {
             id,
             meta: Default::default(),
-            body: inc.body.clone().unwrap_or_default(),
+            body: String::new(),
             path: store.path_for(id, &title),
             front: String::new(),
             eol: Default::default(),
         };
+        item.set_body(inc.body.as_deref().unwrap_or_default());
         item.meta.title = Some(title.clone());
         item.meta.created = inc.created.clone().or_else(|| Some(today()));
         // The source's own timestamp is kept: stamping 200 imported items with
