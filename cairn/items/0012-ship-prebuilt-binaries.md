@@ -4,8 +4,9 @@ title: Ship prebuilt binaries
 type: chore
 status: doing
 milestone: v0.1
+assignee: claude
 created: 2026-09-04
-updated: 2026-09-04
+updated: 2026-09-05
 priority: p0
 effort: m
 ---
