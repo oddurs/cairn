@@ -1,0 +1,54 @@
+name: pages
+
+# The site is static and deploys from the same CI as everything else — no
+# server, no account beyond the one already hosting the repository, which is
+# the promise the tool itself makes.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "www/**"
+      - "spec/**"
+      - "doc/demo.svg"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: www/package-lock.json
+      - run: npm ci
+        working-directory: www
+      # `npm run build` syncs the specification and the recorded demo from the
+      # repository first, so neither is written twice.
+      - run: npm run build
+        working-directory: www
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: www/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

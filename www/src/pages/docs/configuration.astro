@@ -1,0 +1,184 @@
+---
+import Docs from "../../layouts/Docs.astro";
+const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+---
+
+<Docs
+  title="The schema"
+  description="Item types, statuses, custom fields, milestones and saved views are declared in cairn.toml. Nothing about a workflow is built in."
+  summary="Everything about a workflow is declared in one file. Nothing is built in, and the commands enforce whatever you wrote."
+>
+  <p>
+    <code>cairn.toml</code> is the entire configuration surface. Run
+    <code>cairn config</code> to see it resolved, or <code>cairn config
+    --json</code> to hand it to something else.
+  </p>
+
+  <h2>Statuses</h2>
+
+  <pre><code>[[status]]
+name = "doing"
+label = "in progress"
+category = "active"
+color = "yellow"
+board = true</code></pre>
+
+  <p>
+    Order in the file is the column order on the board and the sort order in
+    listings. Two properties carry meaning beyond display.
+  </p>
+
+  <h3>Category is what the program reasons about</h3>
+
+  <p>
+    Every status belongs to exactly one of <code>open</code>,
+    <code>active</code>, <code>done</code> or <code>dropped</code>. Names are
+    what your team says; categories are what progress bars, <code>cairn
+    close</code>, default filters and checkbox rendering key off.
+  </p>
+
+  <p>
+    So you can call your statuses anything. This is a real project's schema, and
+    every command still works:
+  </p>
+
+  <pre><code>idea         category = open
+prepping     category = open      (shown as "mise en place")
+on-the-pass  category = active
+served       category = done
+86ed         category = dropped</code></pre>
+
+  <p>
+    <code>cairn close</code> on that project produces
+    <code>status: served</code>. Without the split, every feature would have to
+    hardcode the word "done" and renaming a status would quietly break half the
+    tool.
+  </p>
+
+  <p>
+    It is also what makes import possible. Status names mean nothing across a
+    project boundary — one project's <code>shipped</code> is another's
+    <code>served</code> is GitHub's <code>closed</code> — so importing maps by
+    category, the only axis that survives the trip.
+  </p>
+
+  <h3>Label separates what you see from what you type</h3>
+
+  <p>
+    <code>label</code> is display only. The status above shows as "in progress"
+    in a table, while <code>--filter status=doing</code>, <code>--plain</code>
+    and <code>--json</code> all use <code>doing</code>, so scripts keep working
+    when you reword something.
+  </p>
+
+  <h2>Types</h2>
+
+  <pre><code>[[type]]
+name = "bug"
+icon = "!"
+color = "red"
+template = """
+## What happens
+
+## Reproduction
+"""</code></pre>
+
+  <p>
+    <code>template</code> seeds the body of every new item of that type, so bug
+    reports arrive with the same headings without anyone having to remember
+    them.
+  </p>
+
+  <h2>Custom fields</h2>
+
+  <pre><code>[[field]]
+name = "priority"
+kind = "enum"
+values = ["p0", "p1", "p2", "p3"]
+default = "p2"
+column = true</code></pre>
+
+  <p>
+    <code>kind</code> is one of <code>text</code>, <code>enum</code>,
+    <code>list</code>, <code>date</code>, <code>number</code> or
+    <code>bool</code>. Enum values are ordered, so <code>--sort priority</code>
+    sorts by declared severity rather than alphabetically.
+  </p>
+
+  <p>
+    <code>column = true</code> puts the field in tables and on board cards. A
+    column that turns out to be empty for every row is dropped, so declaring a
+    field you only sometimes use costs nothing.
+  </p>
+
+  <h2>Milestones</h2>
+
+  <pre><code>[[milestone]]
+name = "v0.1"
+title = "Usable in anger"
+due = "2026-10-15"</code></pre>
+
+  <p>
+    Milestones are the sections of the rendered roadmap. Dated ones sort by
+    date. An undated one keeps the position it was declared in, by taking the
+    date of the next dated milestone after it — so a <code>m0-proof</code>
+    written above a dated <code>m1</code> comes first, while a trailing
+    <code>later</code> stays last.
+  </p>
+
+  <h2>Saved views</h2>
+
+  <pre><code>[[view]]
+name = "triage"
+filter = "milestone=,category!=done"
+columns = ["id", "type", "title", "created"]</code></pre>
+
+  <p>Used as <code>cairn list --view triage</code>.</p>
+
+  <h2>Filters</h2>
+
+  <p>
+    Every query command takes the same grammar. Clauses are combined with
+    commas; alternatives within one use <code>|</code>; an empty value means
+    unset.
+  </p>
+
+  <pre><code>cairn list --filter 'priority=p0|p1,category!=done'
+cairn list --filter 'milestone='          # not scheduled yet
+cairn list --filter 'labels~auth'         # substring or list membership
+cairn list --filter 'updated&lt;2026-06-01'</code></pre>
+
+  <p>
+    Operators are <code>=</code> <code>!=</code> <code>~</code> <code>!~</code>
+    <code>&gt;</code> <code>&gt;=</code> <code>&lt;</code> <code>&lt;=</code>.
+    Alongside your own fields there are <code>category</code>,
+    <code>blocked</code>, <code>ready</code>, <code>blockers</code> and
+    <code>body</code> for full text.
+  </p>
+
+  <h2>Hooks</h2>
+
+  <p>cairn does not embed a scripting language. It runs yours.</p>
+
+  <pre><code>[hooks]
+after-create = "cairn render -q"
+after-change = ["python3", "scripts/notify.py"]</code></pre>
+
+  <p>
+    A string goes through the platform shell, which is convenient and therefore
+    platform-specific. An array is executed directly with no shell at all, which
+    is portable — use it in any project that runs on more than one system.
+  </p>
+
+  <p>
+    Hooks receive the event in the environment and the complete item as JSON on
+    standard input. They run after the change is on disk, so a failing hook
+    warns and nothing is rolled back.
+  </p>
+
+  <p>
+    The render hooks are enabled by default. Keeping the roadmap current is the
+    point, so it is done rather than remembered — see
+    <a href={`${base}/docs/durability`}>durability</a>.
+  </p>
+</Docs>
