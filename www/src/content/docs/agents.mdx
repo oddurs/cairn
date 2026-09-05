@@ -1,0 +1,88 @@
+---
+title: Agents
+description: cairn serves the backlog to coding agents over the Model Context Protocol, as typed tools rather than instructions.
+summary: Programs that write code write plans too, and left alone they scatter TODO files in formats of their own devising. The answer is a schema, and tools that enforce it.
+order: 3
+---
+
+import Terminal from "../../components/Terminal.astro";
+import Callout from "../../components/Callout.astro";
+
+## Over MCP
+
+```sh
+cairn mcp --config
+```
+
+That prints the snippet for `.mcp.json`, `.cursor/mcp.json` or wherever your
+client keeps its configuration. `cairn mcp` then serves the backlog over the
+Model Context Protocol on standard input and output — eleven tools covering
+`get_schema`, `next_items`, `list_items`, `search_items`, `show_item`,
+`claim_item`, `create_item`, `update_item`, `add_note`, `close_item` and
+`check`.
+
+Tools beat written instructions for the same reason a type beats a comment: they
+are checked. An agent cannot forget them halfway through a task, and it cannot
+invent a format because the only way to touch the backlog is through calls that
+reject bad writes.
+
+## A rejected write teaches
+
+Failures come back in the result rather than as protocol errors, so the model
+can read what went wrong and correct itself.
+
+<Terminal name="mcp" caption="The most common mistake, and the reason for it is worth knowing: a status has a name and a label. Tables show the label; every write takes the name." />
+
+## The loop an agent follows
+
+1. `get_schema` — statuses, fields and milestones are declared per project and
+   are not fixed. Ask first.
+2. `next_items` — work that is genuinely startable. Anything waiting on
+   unfinished work is excluded, and what is already under way comes first.
+3. `claim_item` — take it before starting, so two workers do not duplicate each
+   other. Called with no id it takes the top-ranked unclaimed item and returns
+   its body, so work can begin in one call.
+4. `add_note` — record why something was decided. Distinct from `update_item`'s
+   body, which replaces: a caller writing down its reasoning must not be able to
+   erase what came before.
+5. `close_item`, then `check` before reporting done.
+
+Every item crossing that boundary carries `blocked`, `ready` and `blockers`,
+because dependency state is what an agent most needs and cannot work out from a
+single item.
+
+## Work is recorded under the caller's name
+
+Identity comes from `CAIRN_USER` if set, then the name the client gave in its
+MCP handshake, then the login.
+
+<Callout>
+So an agent's claims appear in the backlog under the agent's name rather than
+the repository owner's, and two agents on one project can tell each other's work
+apart.
+</Callout>
+
+## Without MCP
+
+```sh
+cairn agent --write AGENTS.md
+```
+
+For a client that speaks no protocol, this writes an instruction block generated
+from your live schema — the real statuses, the real fields, the real milestones
+— between markers, so re-running it updates the block and leaves the rest of the
+file alone.
+
+Because it is generated, it cannot describe a workflow the project does not
+have. Agents then read with `cairn list --json` and `cairn show <id> --json`,
+and write with `cairn new`, `cairn set` and `cairn note`.
+
+## Two agents at once
+
+Mutating commands take a lock; reads never do, so listing never queues behind
+somebody's write. Forty processes creating items simultaneously produce forty
+distinct identifiers, and twelve agents racing for one item produce exactly one
+owner and eleven refusals that name the holder.
+
+Across branches the lock does not apply, so identifiers can still collide on a
+merge. `cairn init --git` teaches git to repair that automatically.

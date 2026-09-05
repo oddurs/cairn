@@ -1,0 +1,35 @@
+---
+/* The only filled element on the site. One accent, spent on the thing you
+   should do next — so `primary` should appear once per view. */
+const { href, variant = "primary", ...rest } = Astro.props;
+---
+
+<a href={href} class:list={["btn", `btn--${variant}`]} {...rest}><slot /></a>
+
+<style>
+  .btn {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    text-decoration: none;
+    border-radius: var(--radius-sm);
+  }
+  .btn--primary {
+    background: var(--accent);
+    color: var(--accent-fg);
+    font-weight: var(--weight-semibold);
+    padding: var(--space-2) var(--space-4);
+  }
+  .btn--primary:hover {
+    background: var(--accent-hover);
+  }
+  .btn--quiet {
+    color: var(--fg);
+    text-decoration: underline;
+    text-decoration-color: var(--border);
+    text-underline-offset: 0.22em;
+  }
+  .btn--quiet:hover {
+    text-decoration-color: var(--accent);
+  }
+</style>

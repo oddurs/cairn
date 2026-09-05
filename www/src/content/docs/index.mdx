@@ -1,0 +1,101 @@
+---
+title: Getting started
+description: Install cairn, create a project, and work through the loop it is built around.
+summary: Install it, create a project, and work through the loop it is built around — find something to do, take it, finish it.
+order: 1
+---
+
+import Terminal from "../../components/Terminal.astro";
+import Callout from "../../components/Callout.astro";
+
+## Install
+
+A prebuilt binary, with no Rust toolchain needed:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/oddurs/cairn/main/install.sh | sh
+```
+
+It detects your platform, verifies the release checksum and installs to
+`~/.local/bin`. Homebrew takes three commands, because recent versions require
+third-party taps to be trusted explicitly:
+
+```sh
+brew tap oddurs/cairn
+brew trust oddurs/cairn
+brew install cairn
+```
+
+From source, `cargo install --git https://github.com/oddurs/cairn cairn-md`.
+
+<Callout>
+The package is called `cairn-md` because `cairn` belongs to an unrelated crate.
+The binary it installs is `cairn`.
+</Callout>
+
+## Create a project
+
+```sh
+$ cairn init
+created cairn.toml
+created cairn/items/
+```
+
+That writes the schema and the directory items live in. Run it at the root of a
+repository — items are meant to be committed alongside the code they describe.
+
+`cairn init --preset minimal` starts from three statuses and nothing else. The
+default writes a fully commented schema to delete from, which is usually the
+faster way to arrive somewhere that fits.
+
+## The loop
+
+Four commands carry the day-to-day. Everything else is machinery underneath
+them.
+
+<Terminal name="next" caption="Work that is genuinely startable. Anything waiting on unfinished work is excluded, and what is already under way comes first — the most useful next action is usually finishing something." />
+
+<Terminal name="claim" caption="Takes the top-ranked unclaimed item, writes your name into it, and prints its body so work can begin. It refuses an item somebody else holds, and one that is blocked." />
+
+Then record what you learned and finish:
+
+```sh
+$ cairn note 1 "Chose the authorization code flow; implicit is deprecated."
+$ cairn close 1
+```
+
+`cairn note` appends to the item under a dated heading. A status records what
+was decided; a note records why, which is the difference between a backlog and a
+list of things nobody remembers rejecting.
+
+## What gets written down
+
+An item is a Markdown file, and that is the whole storage format.
+
+<Terminal name="item" />
+
+Everything above the closing `---` is checked against the schema. Everything
+below it is yours and is never interpreted. Edit the file in your editor or from
+the command line — both keep working, and changing a title renames the file to
+match.
+
+## The generated roadmap
+
+`ROADMAP.md` is built from the items, and rebuilt whenever one changes. Never
+edit it by hand.
+
+```sh
+$ cairn render
+wrote ROADMAP.md  14 items
+```
+
+<Terminal name="check" caption="cairn check --render --strict belongs in continuous integration. It validates every item against the schema and proves the committed roadmap still matches them, which is what stops a roadmap from quietly becoming fiction." />
+
+## Where to go next
+
+- [The schema](./configuration) — item types, statuses, fields and milestones,
+  and why status categories matter.
+- [Agents](./agents) — serving the backlog over MCP, and the loop an agent
+  follows.
+- [Durability](./durability) — what happens on a crash, a merge, or two people
+  writing at once.

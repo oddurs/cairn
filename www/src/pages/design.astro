@@ -1,0 +1,298 @@
+---
+import Doc from "../layouts/Doc.astro";
+import Band from "../components/Band.astro";
+import Grid from "../components/Grid.astro";
+import Stack from "../components/Stack.astro";
+import Button from "../components/Button.astro";
+import Callout from "../components/Callout.astro";
+import Lede from "../components/Lede.astro";
+
+const surfaces = [
+  ["--bg", "the page"],
+  ["--bg-sunken", "a recessed band or a code block"],
+  ["--bg-raised", "inline code, a chip"],
+  ["--bg-deep", "the heaviest stratum"],
+];
+const ink = [
+  ["--fg", "body and headings"],
+  ["--fg-muted", "supporting prose, captions"],
+  ["--accent", "the one thing to do next"],
+  ["--border", "every rule and edge"],
+];
+const ansi = [
+  ["--ansi-dim", "d"],
+  ["--ansi-yellow", "y"],
+  ["--ansi-blue", "b"],
+  ["--ansi-green", "g"],
+  ["--ansi-red", "r"],
+  ["--ansi-magenta", "m"],
+  ["--ansi-cyan", "c"],
+];
+const type = [
+  ["--text-3xl", "page title"],
+  ["--text-2xl", "section heading"],
+  ["--text-xl", "rarely; a lift within prose"],
+  ["--text-lg", "subheading, lede"],
+  ["--text-base", "body"],
+  ["--text-sm", "captions, navigation"],
+  ["--text-xs", "terminal output"],
+  ["--text-2xs", "a filename above a terminal"],
+];
+const space = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
+---
+
+<Doc
+  title="Design system"
+  description="The tokens and components the cairn site is built from."
+  summary="Two layers of tokens and eight components. A page declares content; it does not declare colour, spacing or type."
+>
+  <Callout>
+    This page is the system rendering itself. Every swatch below is drawn with
+    the token it names, so if something here looks wrong, it is wrong
+    everywhere.
+  </Callout>
+
+  <h2>Principles</h2>
+
+  <ol>
+    <li>
+      <strong>The artefact is the argument.</strong> An item is a file, so the
+      site shows files and real terminal output rather than describing them.
+      Nothing on the site is typed to look like the program.
+    </li>
+    <li>
+      <strong>Strata, not cards.</strong> A cairn is stacked stone. The page is
+      horizontal bands of differing weight, separated by one hairline. Nothing
+      is a rounded box with a shadow.
+    </li>
+    <li>
+      <strong>Monospace is the voice.</strong> In this product monospace is how
+      the subject speaks, so headings are set in it. The proportional face is
+      for prose only.
+    </li>
+    <li>
+      <strong>One accent, spent once.</strong> Lichen marks the thing you should
+      do next. If it appears twice in a view, one of them is wrong.
+    </li>
+  </ol>
+
+  <h2>Colour</h2>
+
+  <p>
+    Raw values are named for what they are; semantic tokens are named for the
+    job they do. Components only reference the second layer, so a value changes
+    in one place.
+  </p>
+
+  <h3>Surfaces</h3>
+  <div class="swatches">
+    {
+      surfaces.map(([token, use]) => (
+        <div class="swatch">
+          <span class="swatch__chip" style={`background: var(${token})`} />
+          <code>{token}</code>
+          <span class="swatch__use">{use}</span>
+        </div>
+      ))
+    }
+  </div>
+
+  <h3>Ink and edge</h3>
+  <div class="swatches">
+    {
+      ink.map(([token, use]) => (
+        <div class="swatch">
+          <span class="swatch__chip" style={`background: var(${token})`} />
+          <code>{token}</code>
+          <span class="swatch__use">{use}</span>
+        </div>
+      ))
+    }
+  </div>
+
+  <h3>Terminal</h3>
+  <p>
+    The colours the program itself prints. The sample recorder emits the class
+    in the right column, so a terminal on the site is coloured the way a
+    terminal is.
+  </p>
+  <div class="swatches">
+    {
+      ansi.map(([token, cls]) => (
+        <div class="swatch">
+          <span class="swatch__chip" style={`background: var(${token})`} />
+          <code>{token}</code>
+          <span class="swatch__use">
+            <code>.{cls}</code>
+          </span>
+        </div>
+      ))
+    }
+  </div>
+
+  <h2>Type</h2>
+
+  <p>
+    A major-third scale, fluid where the jump between a phone and a desk would
+    otherwise be jarring.
+  </p>
+
+  <div class="scale">
+    {
+      type.map(([token, use]) => (
+        <div class="scale__row">
+          <span class="scale__sample" style={`font-size: var(${token})`}>
+            The stones are stacked
+          </span>
+          <code>{token}</code>
+          <span class="swatch__use">{use}</span>
+        </div>
+      ))
+    }
+  </div>
+
+  <h2>Space</h2>
+
+  <p>
+    A four-pixel base, doubling loosely. The last two are fluid, because band
+    padding is what changes most across viewports.
+  </p>
+
+  <div class="space">
+    {
+      space.map((n) => (
+        <div class="space__row">
+          <code>--space-{n}</code>
+          <span class="space__bar" style={`width: var(--space-${n})`} />
+        </div>
+      ))
+    }
+  </div>
+
+  <h2>Components</h2>
+
+  <p>
+    Eight, each doing one job. A page composes them; it does not restyle them.
+  </p>
+
+  <h3>Button</h3>
+  <p class="demo-row">
+    <Button href="#components">Primary</Button>
+    <Button href="#components" variant="quiet">Quiet</Button>
+  </p>
+  <p>
+    <code>primary</code> is the only filled element on the site and should
+    appear once per view.
+  </p>
+
+  <h3>Lede</h3>
+  <Lede>
+    The sentence under a heading, muted and held to a shorter measure so it
+    reads as an opening rather than a paragraph.
+  </Lede>
+
+  <h3>Callout</h3>
+  <Callout>
+    A <strong>note</strong> in a document. The rule on the left carries the
+    meaning, so there is no icon and no coloured panel.
+  </Callout>
+  <Callout tone="warn">
+    A <strong>warning</strong>. Same shape, different rule.
+  </Callout>
+
+  <h3>Band, Grid and Stack</h3>
+  <p>
+    <code>Band</code> is a horizontal stratum with a tone.
+    <code>Grid</code> collapses to one column below a stated minimum.
+    <code>Stack</code> owns vertical rhythm, so children never carry margins
+    that depend on their neighbours.
+  </p>
+
+  <h3>Terminal and Prose</h3>
+  <p>
+    <code>Terminal</code> renders a recording from
+    <code>doc/samples.json</code>; it cannot show anything the program did not
+    print. <code>Prose</code> styles whatever a Markdown document emits, so
+    writing a document is writing prose.
+  </p>
+
+  <style>
+    .swatches {
+      display: grid;
+      gap: var(--space-2);
+      margin-bottom: var(--space-4);
+    }
+    .swatch {
+      display: grid;
+      grid-template-columns: 2.5rem 12rem 1fr;
+      gap: var(--space-3);
+      align-items: center;
+      font-size: var(--text-sm);
+    }
+    .swatch__chip {
+      display: block;
+      height: 1.5rem;
+      border-radius: var(--radius-sm);
+      border: var(--hairline);
+    }
+    .swatch__use {
+      color: var(--fg-muted);
+    }
+
+    .scale {
+      display: grid;
+      gap: var(--space-3);
+      margin-bottom: var(--space-4);
+    }
+    .scale__row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 9rem 12rem;
+      gap: var(--space-3);
+      align-items: baseline;
+      border-bottom: var(--hairline);
+      padding-bottom: var(--space-2);
+      font-size: var(--text-sm);
+    }
+    .scale__sample {
+      font-family: var(--font-mono);
+      line-height: var(--leading-tight);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .space {
+      display: grid;
+      gap: var(--space-2);
+      margin-bottom: var(--space-4);
+    }
+    .space__row {
+      display: grid;
+      grid-template-columns: 8rem 1fr;
+      gap: var(--space-3);
+      align-items: center;
+      font-size: var(--text-sm);
+    }
+    .space__bar {
+      display: block;
+      height: 0.75rem;
+      background: var(--accent);
+      border-radius: 1px;
+    }
+
+    .demo-row {
+      display: flex;
+      gap: var(--space-5);
+      align-items: center;
+    }
+
+    @media (max-width: 40rem) {
+      .swatch,
+      .scale__row,
+      .space__row {
+        grid-template-columns: 1fr;
+        gap: var(--space-1);
+      }
+    }
+  </style>
+</Doc>

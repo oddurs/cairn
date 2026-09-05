@@ -1,0 +1,156 @@
+---
+title: The schema
+description: Item types, statuses, custom fields, milestones and saved views are declared in cairn.toml. Nothing about a workflow is built in.
+summary: Everything about a workflow is declared in one file. Nothing is built in, and the commands enforce whatever you wrote.
+order: 2
+---
+
+import Callout from "../../components/Callout.astro";
+
+`cairn.toml` is the entire configuration surface. Run `cairn config` to see it
+resolved, or `cairn config --json` to hand it to something else.
+
+## Statuses
+
+```toml
+[[status]]
+name = "doing"
+label = "in progress"
+category = "active"
+color = "yellow"
+board = true
+```
+
+Order in the file is the column order on the board and the sort order in
+listings. Two properties carry meaning beyond display.
+
+### Category is what the program reasons about
+
+Every status belongs to exactly one of `open`, `active`, `done` or `dropped`.
+Names are what your team says; categories are what progress bars, `cairn close`,
+default filters and checkbox rendering key off.
+
+So you can call your statuses anything. This is a real project's schema, and
+every command still works:
+
+```
+idea         category = open
+prepping     category = open      (shown as "mise en place")
+on-the-pass  category = active
+served       category = done
+86ed         category = dropped
+```
+
+`cairn close` on that project produces `status: served`.
+
+<Callout>
+Without the split, every feature would have to hardcode the word "done", and
+renaming a status would quietly break half the tool.
+</Callout>
+
+It is also what makes import possible. Status names mean nothing across a
+project boundary — one project's `shipped` is another's `served` is GitHub's
+`closed` — so importing maps by category, the only axis that survives the trip.
+
+### Label separates what you see from what you type
+
+`label` is display only. The status above shows as "in progress" in a table,
+while `--filter status=doing`, `--plain` and `--json` all use `doing`, so
+scripts keep working when you reword something.
+
+## Types
+
+```toml
+[[type]]
+name = "bug"
+icon = "!"
+color = "red"
+template = """
+## What happens
+
+## Reproduction
+"""
+```
+
+`template` seeds the body of every new item of that type, so bug reports arrive
+with the same headings without anyone having to remember them.
+
+## Custom fields
+
+```toml
+[[field]]
+name = "priority"
+kind = "enum"
+values = ["p0", "p1", "p2", "p3"]
+default = "p2"
+column = true
+```
+
+`kind` is one of `text`, `enum`, `list`, `date`, `number` or `bool`. Enum values
+are ordered, so `--sort priority` sorts by declared severity rather than
+alphabetically.
+
+`column = true` puts the field in tables and on board cards. A column that turns
+out to be empty for every row is dropped, so declaring a field you only
+sometimes use costs nothing.
+
+## Milestones
+
+```toml
+[[milestone]]
+name = "v0.1"
+title = "Usable in anger"
+due = "2026-10-15"
+```
+
+Milestones are the sections of the rendered roadmap. Dated ones sort by date. An
+undated one keeps the position it was declared in, by taking the date of the
+next dated milestone after it — so an `m0-proof` written above a dated `m1`
+comes first, while a trailing `later` stays last.
+
+## Saved views
+
+```toml
+[[view]]
+name = "triage"
+filter = "milestone=,category!=done"
+columns = ["id", "type", "title", "created"]
+```
+
+Used as `cairn list --view triage`.
+
+## Filters
+
+Every query command takes the same grammar. Clauses are combined with commas;
+alternatives within one use `|`; an empty value means unset.
+
+```sh
+cairn list --filter 'priority=p0|p1,category!=done'
+cairn list --filter 'milestone='          # not scheduled yet
+cairn list --filter 'labels~auth'         # substring or list membership
+cairn list --filter 'updated<2026-06-01'
+```
+
+Operators are `=` `!=` `~` `!~` `>` `>=` `<` `<=`. Alongside your own fields
+there are `category`, `blocked`, `ready`, `blockers` and `body` for full text.
+
+## Hooks
+
+cairn does not embed a scripting language. It runs yours.
+
+```toml
+[hooks]
+after-create = "cairn render -q"
+after-change = ["python3", "scripts/notify.py"]
+```
+
+A string goes through the platform shell, which is convenient and therefore
+platform-specific. An array is executed directly with no shell at all, which is
+portable — use it in any project that runs on more than one system.
+
+Hooks receive the event in the environment and the complete item as JSON on
+standard input. They run after the change is on disk, so a failing hook warns
+and nothing is rolled back.
+
+The render hooks are enabled by default. Keeping the roadmap current is the
+point, so it is done rather than remembered.

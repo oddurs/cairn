@@ -1,5 +1,7 @@
 import { defineConfig } from "astro/config";
 
+import mdx from "@astrojs/mdx";
+
 // Built statically and served from GitHub Pages — no server, which is the same
 // promise the tool itself makes.
 export default defineConfig({
@@ -7,4 +9,5 @@ export default defineConfig({
   base: "/cairn",
   trailingSlash: "ignore",
   build: { format: "directory" },
+  integrations: [mdx()],
 });

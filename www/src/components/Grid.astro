@@ -1,0 +1,31 @@
+---
+/* Columns that collapse to one on small screens. `min` is the width below
+   which a second column stops being worth having. */
+const { cols = 2, gap = "6", min = "22rem", align = "start" } = Astro.props;
+---
+
+<div
+  class="grid"
+  style={`--grid-cols: ${cols}; --grid-gap: var(--space-${gap}); --grid-min: ${min}; --grid-align: ${align}`}
+>
+  <slot />
+</div>
+
+<style>
+  .grid {
+    display: grid;
+    gap: var(--grid-gap);
+    align-items: var(--grid-align);
+    grid-template-columns: repeat(
+      auto-fit,
+      minmax(min(var(--grid-min), 100%), 1fr)
+    );
+  }
+  /* Above the breakpoint, honour the requested count exactly rather than
+     letting auto-fit invent a column. */
+  @media (min-width: 64rem) {
+    .grid {
+      grid-template-columns: repeat(var(--grid-cols), minmax(0, 1fr));
+    }
+  }
+</style>

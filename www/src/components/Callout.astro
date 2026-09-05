@@ -1,0 +1,23 @@
+---
+/* An aside in a document. The rule on the left carries the meaning, so there is
+   no icon and no coloured panel — the page stays quiet and the note still
+   reads as a note. */
+const { tone = "note" } = Astro.props;
+---
+
+<aside class:list={["callout", `callout--${tone}`]}><slot /></aside>
+
+<style>
+  .callout {
+    margin-block: 0 var(--space-4);
+    padding: var(--space-3) 0 var(--space-3) var(--space-4);
+    border-left: 2px solid var(--border);
+    color: var(--fg-muted);
+    font-size: var(--text-sm);
+  }
+  .callout--note { border-left-color: var(--ansi-blue); }
+  .callout--warn { border-left-color: var(--ansi-yellow); }
+  .callout :global(p) { margin: 0; }
+  .callout :global(p + p) { margin-top: var(--space-2); }
+  .callout :global(strong) { color: var(--fg); }
+</style>

@@ -1,0 +1,32 @@
+---
+/* A horizontal stratum. A cairn is stacked stone, so the page is bands of
+   differing weight rather than a grid of cards. `tone` chooses the surface;
+   `first` drops the top rule where a band opens the page. */
+const { tone = "base", first = false, id } = Astro.props;
+---
+
+<section class:list={["band", `band--${tone}`, first && "band--first"]} id={id}>
+  <div class="band__wrap"><slot /></div>
+</section>
+
+<style>
+  .band {
+    padding-block: var(--space-9);
+    border-top: var(--hairline);
+  }
+  .band--first {
+    border-top: 0;
+    padding-block: var(--space-8) var(--space-9);
+  }
+  .band--sunken {
+    background: var(--bg-sunken);
+  }
+  .band--deep {
+    background: var(--bg-deep);
+  }
+  .band__wrap {
+    max-width: var(--page-max);
+    margin-inline: auto;
+    padding-inline: var(--gutter);
+  }
+</style>
