@@ -1,0 +1,59 @@
+cairn NEWS — history of user-visible changes.
+
+Copyright (C) 2026 Oddur Sigurdsson.
+See the end of the file for copying conditions.
+
+Please send bug reports and suggestions through the project's issue tracker.
+
+
+* Noteworthy changes in release 0.1.0 (unreleased)
+
+** Storage
+
+Items are Markdown files with YAML frontmatter, under a schema declared in
+cairn.toml.  The format is specified normatively in the manual and is fixed at
+format 1; see "Compatibility" for what may change and when.
+
+Writes are atomic: every file is written beside its target, flushed, and
+renamed over it, so an interruption leaves either the old contents or the new
+ones.  Line endings are preserved, so a checkout configured with core.autocrlf
+does not rewrite the whole backlog.
+
+Mutating commands take a lock so that concurrent writers cannot allocate the
+same identifier.  Reads never take it.
+
+** Commands
+
+  cairn init, new, list, show, set, close, reopen, edit, remove
+  cairn next, claim, release, search    — finding and taking work
+  cairn board, roadmap, render          — views, and the generated ROADMAP.md
+  cairn check, renumber, migrate        — validation and repair
+  cairn milestone, config               — the schema
+  cairn import, export                  — the interchange format
+  cairn agent, mcp                      — instructions and tools for agents
+  cairn completions, man                — shell completions and manual pages
+
+** Agents
+
+`cairn mcp` serves the backlog over the Model Context Protocol, exposing ten
+tools.  `cairn agent` writes an instruction block generated from the project's
+own schema.  Items carry their dependency state, so an agent can tell what is
+ready to start.
+
+** Platforms
+
+Linux is tier 1; macOS and Windows are tier 2.  The full test suite runs on all
+three.  See "Platforms" in the manual.
+
+
+----------------------------------------------------------------------
+Copying and distribution of this file, with or without modification, are
+permitted in any medium without royalty provided the copyright notice and this
+notice are preserved.
+
+This file is part of cairn.
+
+cairn is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version.

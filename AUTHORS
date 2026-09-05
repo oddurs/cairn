@@ -1,0 +1,12 @@
+cairn — a roadmap and issue manager that lives in your repository.
+
+The following people have contributed to cairn. Names are added here on a
+contributor's first accepted change; see `git log` for the full record.
+
+Oddur Sigurdsson  <oddurs@gmail.com>   original author and maintainer
+
+Copyright (C) 2026 Oddur Sigurdsson.
+
+Copying and distribution of this file, with or without modification, are
+permitted in any medium without royalty provided the copyright notice and this
+notice are preserved.

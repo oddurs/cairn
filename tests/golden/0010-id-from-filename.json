@@ -1,0 +1,17 @@
+{
+  "assignee": null,
+  "body": "Body.\n",
+  "category": "open",
+  "created": null,
+  "depends_on": [],
+  "fields": {},
+  "id": 10,
+  "labels": [],
+  "milestone": null,
+  "ref": "0010",
+  "source": null,
+  "status": "backlog",
+  "title": "The id comes from the filename",
+  "type": null,
+  "updated": null
+}

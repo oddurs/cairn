@@ -1,0 +1,19 @@
+{
+  "assignee": null,
+  "body": "Körper mit Ümlauten. 中文段落。\n",
+  "category": "open",
+  "created": null,
+  "depends_on": [],
+  "fields": {},
+  "id": 5,
+  "labels": [
+    "日本語"
+  ],
+  "milestone": null,
+  "ref": "0005",
+  "source": null,
+  "status": "backlog",
+  "title": "日本語 and emoji 🎯 and Ünïcödé",
+  "type": null,
+  "updated": null
+}

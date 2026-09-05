@@ -1,0 +1,17 @@
+{
+  "assignee": null,
+  "body": "Below is not frontmatter:\n\n---\nid: 999\ntitle: not a real item\n---\n\nStill the body.\n",
+  "category": "open",
+  "created": null,
+  "depends_on": [],
+  "fields": {},
+  "id": 6,
+  "labels": [],
+  "milestone": null,
+  "ref": "0006",
+  "source": null,
+  "status": "backlog",
+  "title": "A body containing frontmatter delimiters",
+  "type": null,
+  "updated": null
+}

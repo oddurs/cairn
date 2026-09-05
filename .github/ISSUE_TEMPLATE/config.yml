@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Roadmap and planned work
+    url: https://github.com/oddurs/cairn/blob/main/ROADMAP.md
+    about: cairn tracks itself. Check here before proposing a feature — it may already be filed, with the reasoning.
+  - name: Security report
+    url: https://github.com/oddurs/cairn/security/advisories/new
+    about: Please report vulnerabilities privately rather than as an issue.
