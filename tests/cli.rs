@@ -18,6 +18,17 @@ fn bin() -> &'static str {
     env!("CARGO_BIN_EXE_cairn")
 }
 
+/// The default hooks run `cairn render -q`, which finds cairn on PATH. That
+/// holds for an installed binary and not for one under `target/`, so tests put
+/// the built binary's directory on PATH and behave like an installed tool.
+fn path_with_binary() -> std::ffi::OsString {
+    let dir = Path::new(bin()).parent().expect("binary directory");
+    let existing = std::env::var_os("PATH").unwrap_or_default();
+    let mut paths = vec![dir.to_path_buf()];
+    paths.extend(std::env::split_paths(&existing));
+    std::env::join_paths(paths).expect("PATH")
+}
+
 // --- harness ----------------------------------------------------------------
 
 struct Out {
@@ -85,6 +96,7 @@ impl Project {
             // enabled so the hook tests can exercise them.
             .env("NO_COLOR", "1")
             .env("CAIRN_USER", "tester")
+            .env("PATH", path_with_binary())
             .env_remove("CAIRN_NO_HOOKS")
             .stdin(Stdio::null())
             .output()
@@ -105,6 +117,7 @@ impl Project {
             .current_dir(self.root())
             .env("NO_COLOR", "1")
             .env("CAIRN_USER", "tester")
+            .env("PATH", path_with_binary())
             .env_remove("CAIRN_NO_HOOKS")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -1538,6 +1551,7 @@ fn race(p: &Project, invocations: Vec<Vec<String>>) -> Vec<Out> {
                 .args(&args)
                 .current_dir(p.root())
                 .env("NO_COLOR", "1")
+                .env("PATH", path_with_binary())
                 .stdin(Stdio::null())
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped())

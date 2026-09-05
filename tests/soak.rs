@@ -47,6 +47,17 @@ impl Rng {
     }
 }
 
+/// The default hooks invoke `cairn` by name, as an installed one would be.
+fn path_with_binary() -> std::ffi::OsString {
+    let dir = std::path::Path::new(env!("CARGO_BIN_EXE_cairn"))
+        .parent()
+        .expect("binary directory");
+    let existing = std::env::var_os("PATH").unwrap_or_default();
+    let mut paths = vec![dir.to_path_buf()];
+    paths.extend(std::env::split_paths(&existing));
+    std::env::join_paths(paths).expect("PATH")
+}
+
 struct Soak {
     dir: tempfile::TempDir,
     rng: Rng,
@@ -68,6 +79,7 @@ impl Soak {
             .current_dir(self.dir.path())
             .env("NO_COLOR", "1")
             .env("CAIRN_USER", "soak")
+            .env("PATH", path_with_binary())
             .stdin(Stdio::null())
             .output()
             .expect("running cairn");
