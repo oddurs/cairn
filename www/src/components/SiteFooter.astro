@@ -1,0 +1,53 @@
+---
+const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+---
+
+<footer class="foot">
+  <div class="foot__wrap">
+    <p>
+      cairn is free software under the
+      <a href="https://github.com/oddurs/cairn/blob/main/COPYING"
+        >GNU General Public License, version 3 or later</a
+      >.
+    </p>
+    <p class="foot__links">
+      <a href="https://github.com/oddurs/cairn">Source</a>
+      <a href="https://github.com/oddurs/cairn/releases">Releases</a>
+      <a href={`${base}/format`}>Item format</a>
+    </p>
+  </div>
+</footer>
+
+<style>
+  .foot {
+    border-top: var(--hairline);
+    background: var(--bg-sunken);
+    padding-block: var(--space-7);
+  }
+  .foot__wrap {
+    max-width: var(--page-max);
+    margin-inline: auto;
+    padding-inline: var(--gutter);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-4) var(--space-7);
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .foot p {
+    margin: 0;
+    color: var(--fg-muted);
+    font-size: var(--text-sm);
+  }
+  .foot__links {
+    display: flex;
+    gap: var(--space-5);
+  }
+  .foot__links a {
+    color: var(--fg-muted);
+    text-decoration: none;
+  }
+  .foot__links a:hover {
+    color: var(--fg);
+  }
+</style>

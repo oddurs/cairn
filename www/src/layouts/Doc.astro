@@ -1,0 +1,123 @@
+---
+import Base from "./Base.astro";
+import Prose from "../components/Prose.astro";
+import Lede from "../components/Lede.astro";
+import { getCollection } from "astro:content";
+
+const { title, description, summary } = Astro.props;
+const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+const docs = (await getCollection("docs")).sort(
+  (a, b) => a.data.order - b.data.order,
+);
+const sections = [
+  {
+    label: "Using cairn",
+    pages: docs.map((d) => ({
+      href: `${base}/docs/${d.id}`.replace(/\/index$/, ""),
+      label: d.data.title,
+    })),
+  },
+  {
+    label: "Reference",
+    pages: [
+      { href: `${base}/format`, label: "Item format" },
+      { href: `${base}/design`, label: "Design system" },
+      {
+        href: "https://github.com/oddurs/cairn/blob/main/doc/cairn.texi",
+        label: "The manual",
+      },
+    ],
+  },
+];
+const here = Astro.url.pathname.replace(/\/$/, "");
+---
+
+<Base title={`${title} — cairn`} description={description}>
+  <div class="doc">
+    <nav class="doc__nav" aria-label="Documentation">
+      {
+        sections.map((s) => (
+          <div class="doc__group">
+            <p class="doc__label">{s.label}</p>
+            <ul>
+              {s.pages.map((p) => (
+                <li>
+                  <a
+                    href={p.href}
+                    aria-current={here === p.href ? "page" : undefined}
+                  >
+                    {p.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))
+      }
+    </nav>
+
+    <article class="doc__body">
+      <h1>{title}</h1>
+      {summary && <Lede>{summary}</Lede>}
+      <Prose><slot /></Prose>
+    </article>
+  </div>
+
+  <style>
+    .doc {
+      max-width: var(--page-max);
+      margin-inline: auto;
+      padding-inline: var(--gutter);
+      padding-block: var(--space-8);
+      display: grid;
+      gap: var(--space-8);
+      align-items: start;
+    }
+    @media (min-width: 56rem) {
+      .doc {
+        grid-template-columns: 14rem minmax(0, 1fr);
+      }
+      .doc__nav {
+        position: sticky;
+        top: calc(var(--sticky-top) + var(--space-5));
+      }
+    }
+    .doc__group + .doc__group {
+      margin-top: var(--space-5);
+    }
+    .doc__label {
+      margin: 0 0 var(--space-2);
+      font-size: var(--text-sm);
+      color: var(--fg-muted);
+    }
+    .doc__nav ul {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      border-left: var(--hairline);
+    }
+    .doc__nav li a {
+      display: block;
+      padding: var(--space-1) 0 var(--space-1) var(--space-3);
+      margin-left: -1px;
+      border-left: 1px solid transparent;
+      text-decoration: none;
+      color: var(--fg-muted);
+      font-size: var(--text-sm);
+    }
+    .doc__nav li a:hover {
+      color: var(--fg);
+    }
+    .doc__nav li a[aria-current="page"] {
+      color: var(--fg);
+      border-left-color: var(--accent);
+    }
+    .doc__body > :global(h1) {
+      margin-bottom: var(--space-3);
+    }
+    .doc__body :global(.lede) {
+      margin-bottom: var(--space-6);
+    }
+  </style>
+</Base>

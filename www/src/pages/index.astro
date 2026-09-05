@@ -1,72 +1,85 @@
 ---
 import Base from "../layouts/Base.astro";
+import Band from "../components/Band.astro";
+import Grid from "../components/Grid.astro";
+import Stack from "../components/Stack.astro";
+import Button from "../components/Button.astro";
+import Lede from "../components/Lede.astro";
 import Terminal from "../components/Terminal.astro";
 const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+const guarantees = [
+  {
+    title: "Writes cannot be half-finished",
+    body: "Every file is written beside its target, flushed, and renamed over it. A crash leaves the old contents or the new ones, never a mixture. There is a test that kills the program mid-write forty times.",
+  },
+  {
+    title: "Branches merge without a fight",
+    body: "Two branches that both add an item would conflict in the generated roadmap and collide on an identifier. Neither is a real conflict, so cairn teaches git to re-derive both instead.",
+  },
+  {
+    title: "The format is specified",
+    body: "The item format is written down independently of this program, versioned, and pinned by a corpus of files that must keep parsing the same way.",
+  },
+  {
+    title: "Concurrent writers are safe",
+    body: "Mutating commands take a lock; reads never do. Forty processes creating items at once produce forty distinct identifiers, and twelve agents racing for one item produce exactly one owner.",
+  },
+];
 ---
 
 <Base
   title="cairn — a roadmap that lives in your repository"
   description="cairn keeps a project's roadmap and issues as Markdown files in the repository, under a schema you define, with tools that let coding agents work the backlog."
-  wide
 >
-  <!-- The artefact is the argument: an item is a file, so lead with the file,
-       read straight off disk rather than typed to look right. -->
-  <section class="hero">
-    <div class="wrap hero__inner">
-      <div class="hero__claim">
+  {/* The artefact is the argument: an item is a file, so lead with the file,
+      read off disk rather than typed to look right. */}
+  <Band first>
+    <Grid cols={2} gap="8" min="26rem">
+      <Stack gap="5">
         <h1>Your backlog is a directory of Markdown files.</h1>
-        <p class="lede">
+        <Lede narrow>
           cairn keeps a project's roadmap and issues in the repository itself,
           under a schema you declare. Reviewable in the pull request that closes
           them. Readable in ten years. No server, no account, no browser.
-        </p>
-
+        </Lede>
         <div class="install">
           <pre><code>curl -fsSL https://raw.githubusercontent.com/oddurs/cairn/main/install.sh | sh</code></pre>
-          <p class="install__alt">
-            Or <code>brew tap oddurs/cairn &amp;&amp; brew install cairn</code>.
-            Linux, macOS and Windows.
-          </p>
         </div>
-
-        <p class="actions">
-          <a class="cta" href={`${base}/docs`}>Read the docs</a>
-          <a href="https://github.com/oddurs/cairn">Source on GitHub</a>
+        <p class="aside">
+          Or <code>brew tap oddurs/cairn &amp;&amp; brew install cairn</code>.
+          Linux, macOS and Windows.
         </p>
-      </div>
+        <p class="row">
+          <Button href={`${base}/docs`}>Read the docs</Button>
+          <Button href="https://github.com/oddurs/cairn" variant="quiet">
+            Source on GitHub
+          </Button>
+        </p>
+      </Stack>
+      <Terminal name="item" />
+    </Grid>
+  </Band>
 
-      <div class="hero__file">
-        <Terminal name="item" />
-      </div>
-    </div>
-  </section>
+  <Band tone="sunken">
+    <Stack gap="6">
+      <Stack gap="3">
+        <h2>See the whole thing at a glance</h2>
+        <Lede>
+          Columns come from the statuses you declared, in the order you declared
+          them. Width follows content, so an empty column does not take a full
+          share. A leading <code>!</code> marks work that cannot be started
+          because something else is unfinished.
+        </Lede>
+      </Stack>
+      <Terminal name="board" />
+    </Stack>
+  </Band>
 
-  <!-- The board is the most distinctive thing the program prints, so it gets a
-       band of its own rather than a corner of a grid. -->
-  <section class="band band--deep">
-    <div class="wrap">
-      <div class="split">
-        <div>
-          <h2>See the whole thing at a glance</h2>
-          <p class="lede">
-            Columns come from the statuses you declared, in the order you
-            declared them. Width follows content, so an empty column does not
-            take a full share. A leading <code>!</code> marks work that cannot
-            be started because something else is unfinished.
-          </p>
-        </div>
-      </div>
-      <div class="board">
-        <Terminal name="board" />
-      </div>
-    </div>
-  </section>
-
-  <!-- Two commands carry the day, so they get equal weight side by side. -->
-  <section class="band">
-    <div class="wrap">
+  <Band>
+    <Stack gap="6">
       <h2>The loop is two commands</h2>
-      <div class="duo">
+      <Grid cols={2} gap="7" min="26rem">
         <Terminal
           name="next"
           caption="Work that is genuinely startable. Anything waiting on unfinished work is excluded, and what is already under way comes first — the most useful next action is usually finishing something."
@@ -75,19 +88,22 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
           name="claim"
           caption="Takes the top-ranked unclaimed item, writes your name into it, and prints its body so work can begin. It refuses an item somebody else holds, and one that is blocked."
         />
-      </div>
-    </div>
-  </section>
+      </Grid>
+    </Stack>
+  </Band>
 
-  <section class="band band--deep">
-    <div class="wrap">
-      <h2>Recorded, not illustrated</h2>
-      <p class="lede">
-        Every terminal on this page — the file, the board, the listings, the
-        rejected tool call — was captured by running the real thing. So was the
-        session below. All of it is regenerated on each change, and continuous
-        integration fails if any of it stops matching what the program does.
-      </p>
+  <Band tone="sunken">
+    <Stack gap="6">
+      <Stack gap="3">
+        <h2>Recorded, not illustrated</h2>
+        <Lede>
+          Every terminal on this page — the file, the board, the listings, the
+          rejected tool call — was captured by running the real thing. So was
+          the session below. All of it is regenerated on each change, and
+          continuous integration fails if any of it stops matching what the
+          program does.
+        </Lede>
+      </Stack>
       <img
         class="demo"
         src={`${base}/demo.svg`}
@@ -95,271 +111,88 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
         loading="lazy"
         decoding="async"
       />
-    </div>
-  </section>
+    </Stack>
+  </Band>
 
-  <!-- Strata rather than three identical cards. -->
-  <section class="band">
-    <div class="wrap strata">
-      <article class="stratum">
-        <div class="stratum__lede">
-          <h3>The schema is yours</h3>
-          <p>
-            Item types, statuses, custom fields, milestones and saved views are
-            declared in one file. Rename <code>doing</code> to whatever your
-            team says — every status belongs to a fixed category, so progress
-            bars and <code>cairn close</code> keep working regardless.
-          </p>
-        </div>
-        <pre class="stratum__code slab"><code><span class="d">[[status]]</span>
-<span class="b">name</span>     = "doing"
-<span class="b">label</span>    = "in progress"
-<span class="b">category</span> = "active"
-<span class="b">color</span>    = "yellow"</code></pre>
-      </article>
+  <Band>
+    <Grid cols={2} gap="8" min="26rem">
+      <Stack gap="3">
+        <h2>Agents get tools, not instructions</h2>
+        <Lede>
+          <code>cairn mcp</code> serves the backlog over the Model Context
+          Protocol. A rejected write comes back as something the model can act
+          on, so it corrects itself instead of inventing a format.
+        </Lede>
+        <p class="row">
+          <Button href={`${base}/docs/agents`} variant="quiet">
+            How to set it up
+          </Button>
+        </p>
+      </Stack>
+      <Terminal name="mcp" />
+    </Grid>
+  </Band>
 
-      <article class="stratum">
-        <div class="stratum__lede">
-          <h3>Agents get tools, not instructions</h3>
-          <p>
-            <code>cairn mcp</code> serves the backlog over the Model Context
-            Protocol. A rejected write comes back as something the model can act
-            on, so it corrects itself instead of inventing a format.
-          </p>
-        </div>
-        <div class="stratum__code">
-          <Terminal name="mcp" />
-        </div>
-      </article>
-
-      <article class="stratum">
-        <div class="stratum__lede">
-          <h3>Nothing drifts</h3>
-          <p>
-            <code>ROADMAP.md</code> is generated and re-rendered whenever an item
-            changes. One line in continuous integration validates every item and
-            proves the committed roadmap still matches them.
-          </p>
-        </div>
-        <div class="stratum__code">
-          <Terminal name="check" />
-        </div>
-      </article>
-    </div>
-  </section>
-
-  <section class="band band--deep">
-    <div class="wrap">
+  <Band tone="sunken">
+    <Stack gap="6">
       <h2>Built to be left alone</h2>
-      <div class="pairs">
-        <div>
-          <h3>Writes cannot be half-finished</h3>
-          <p>
-            Every file is written beside its target, flushed, and renamed over
-            it. A crash leaves the old contents or the new ones, never a
-            mixture. There is a test that kills the program mid-write forty
-            times.
-          </p>
-        </div>
-        <div>
-          <h3>Branches merge without a fight</h3>
-          <p>
-            Two branches that both add an item would conflict in the generated
-            roadmap and collide on an identifier. Neither is a real conflict, so
-            <code>cairn init --git</code> teaches git to re-derive both instead.
-          </p>
-        </div>
-        <div>
-          <h3>The format is specified</h3>
-          <p>
-            The item format is <a href={`${base}/format`}>written down</a>
-            independently of this program, versioned, and pinned by a corpus of
-            files that must keep parsing the same way.
-          </p>
-        </div>
-        <div>
-          <h3>Concurrent writers are safe</h3>
-          <p>
-            Mutating commands take a lock; reads never do. Forty processes
-            creating items at once produce forty distinct identifiers, and
-            twelve agents racing for one item produce exactly one owner.
-          </p>
-        </div>
-      </div>
-    </div>
-  </section>
+      <Grid cols={2} gap="7" min="24rem">
+        {
+          guarantees.map((g) => (
+            <Stack gap="2">
+              <h3>{g.title}</h3>
+              <p class="muted">{g.body}</p>
+            </Stack>
+          ))
+        }
+      </Grid>
+    </Stack>
+  </Band>
 
-  <section class="band close">
-    <div class="wrap close__inner">
-      <div>
+  <Band>
+    <Grid cols={2} gap="8" min="26rem" align="center">
+      <Stack gap="4">
         <h2>Milestones, from the same files</h2>
-        <p class="lede">
+        <Lede>
           The roadmap is derived from the items, so it cannot describe a plan
           nobody is working on.
+        </Lede>
+        <p class="row">
+          <Button href={`${base}/docs`}>Read the docs</Button>
+          <Button href={`${base}/format`} variant="quiet">The item format</Button>
         </p>
-        <p class="actions">
-          <a class="cta" href={`${base}/docs`}>Read the docs</a>
-          <a href={`${base}/docs/agents`}>Set it up for an agent</a>
-        </p>
-      </div>
+      </Stack>
       <Terminal name="roadmap" />
-    </div>
-  </section>
+    </Grid>
+  </Band>
 
   <style>
-    .hero {
-      padding-block: clamp(2.5rem, 7vw, 5rem);
-    }
-    .hero__inner {
-      display: grid;
-      gap: clamp(2rem, 5vw, 4rem);
-      grid-template-columns: 1fr;
-      align-items: start;
-    }
-    @media (min-width: 64rem) {
-      .hero__inner {
-        grid-template-columns: 1fr 1fr;
-      }
-    }
-    .hero__claim h1 {
-      margin-bottom: 1.1rem;
-    }
-    .hero__claim .lede {
-      max-width: 46ch;
-    }
-
-    .install {
-      margin-block: 1.75rem 1.25rem;
-    }
+    /* The only page-level rules that remain: three arrangements the system has
+       no general name for. Everything else is a token or a component. */
     .install pre {
-      background: var(--slate-deep);
-      border: 1px solid var(--hairline);
-      border-left: 2px solid var(--lichen);
-      border-radius: 3px;
-      font-size: 0.8125rem;
+      border-left: 2px solid var(--accent);
     }
-    .install__alt {
-      margin: 0.7rem 0 0;
-      color: var(--moss);
-      font-size: 0.9375rem;
-    }
-    .install__alt code {
-      color: var(--chalk);
-      font-size: 0.85em;
-    }
-
-    .actions {
+    .row {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
-      gap: 1.5rem;
-      margin-top: 1.75rem;
+      gap: var(--space-5);
+      margin: 0;
     }
-    .cta {
-      background: var(--lichen);
-      color: var(--slate);
-      font-family: var(--mono);
-      font-weight: 600;
-      font-size: 0.9375rem;
-      padding: 0.6rem 1.1rem;
-      border-radius: 2px;
-      text-decoration: none;
+    .aside,
+    .muted {
+      color: var(--fg-muted);
+      font-size: var(--text-sm);
+      margin: 0;
     }
-    .cta:hover {
-      background: #c8d84f;
+    .aside code {
+      color: var(--fg);
     }
-
-    .split h2 {
-      margin-bottom: 0.9rem;
-    }
-    .split .lede {
-      max-width: 62ch;
-    }
-    .board {
-      margin-top: 1.75rem;
-    }
-
-    .duo {
-      display: grid;
-      gap: 2.25rem;
-      margin-top: 1.75rem;
-    }
-    @media (min-width: 64rem) {
-      .duo {
-        grid-template-columns: 1fr 1fr;
-        align-items: start;
-      }
-    }
-
     .demo {
-      width: 100%;
-      height: auto;
       display: block;
-      margin-top: 2rem;
-      border: 1px solid var(--hairline);
-      border-radius: 4px;
-    }
-
-    .strata {
-      display: grid;
-    }
-    .stratum {
-      display: grid;
-      gap: 1.5rem 3.5rem;
-      padding-block: 2.5rem;
-      border-bottom: 1px solid var(--hairline);
-      align-items: start;
-    }
-    .stratum:first-child {
-      padding-top: 0;
-    }
-    .stratum:last-child {
-      border-bottom: 0;
-      padding-bottom: 0;
-    }
-    @media (min-width: 58rem) {
-      .stratum {
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
-      }
-    }
-    .stratum h3 {
-      margin: 0 0 0.5rem;
-    }
-    .stratum__lede p {
-      margin: 0;
-      color: var(--moss);
-    }
-    .stratum__code {
-      font-size: 0.8125rem;
-    }
-
-    .pairs {
-      display: grid;
-      gap: 2rem 3.5rem;
-      margin-top: 2rem;
-    }
-    @media (min-width: 46rem) {
-      .pairs {
-        grid-template-columns: 1fr 1fr;
-      }
-    }
-    .pairs h3 {
-      margin: 0 0 0.4rem;
-    }
-    .pairs p {
-      margin: 0;
-      color: var(--moss);
-    }
-
-    .close__inner {
-      display: grid;
-      gap: clamp(2rem, 5vw, 4rem);
-      align-items: center;
-    }
-    @media (min-width: 64rem) {
-      .close__inner {
-        grid-template-columns: 0.85fr 1.15fr;
-      }
+      width: 100%;
+      border: var(--hairline);
+      border-radius: var(--radius-lg);
     }
   </style>
 </Base>

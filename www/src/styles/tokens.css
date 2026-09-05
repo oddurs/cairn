@@ -1,0 +1,104 @@
+/* cairn design system — tokens.
+ *
+ * Two layers. The first names raw values; the second names their jobs. Pages
+ * and components only ever reference the second, so a value changes in one
+ * place and a decision ("what is a raised surface?") is written down rather
+ * than repeated.
+ */
+
+:root {
+  /* ── Raw: stone ────────────────────────────────────────────────────────
+     A cairn is stacked stone, so the palette is stone: wet slate for ground,
+     chalk for type, and the sulphur-green of lichen for the one thing you
+     should do next. */
+  --slate-900: #1c2226;
+  --slate-800: #222a2e;
+  --slate-700: #2b3338;
+  --slate-600: #333c41;
+  --slate-500: #3d4750;
+  --chalk-100: #e9e7e1;
+  --chalk-400: #8a9691;
+  --lichen-500: #b9c93f;
+  --lichen-400: #c8d84f;
+
+  /* Raw: the colours the program itself prints, so a sample on a page looks
+     like a sample in a terminal. */
+  --ansi-dim: #7d8a84;
+  --ansi-yellow: #d6b25e;
+  --ansi-blue: #7aa2c4;
+  --ansi-green: #94b566;
+  --ansi-red: #cc7a6b;
+  --ansi-magenta: #b08cc4;
+  --ansi-cyan: #6fb0ad;
+
+  /* ── Semantic: surfaces and ink ──────────────────────────────────────── */
+  --bg: var(--slate-700);
+  --bg-sunken: var(--slate-800);
+  --bg-raised: var(--slate-600);
+  --bg-deep: var(--slate-900);
+  --fg: var(--chalk-100);
+  --fg-muted: var(--chalk-400);
+  --border: var(--slate-500);
+  --accent: var(--lichen-500);
+  --accent-hover: var(--lichen-400);
+  --accent-fg: var(--slate-700);
+
+  /* ── Type ──────────────────────────────────────────────────────────────
+     Monospace carries the display voice: in this product that is how the
+     subject speaks, so headings are set in it rather than in a display serif.
+     The proportional face is for prose only. */
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-sans: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+
+  /* A major-third scale (1.25), fluid where the jump would otherwise be
+     jarring across viewports. */
+  --text-2xs: 0.75rem;
+  --text-xs: 0.8125rem;
+  --text-sm: 0.9375rem;
+  --text-base: clamp(1rem, 0.96rem + 0.2vw, 1.0625rem);
+  --text-lg: 1.0625rem;
+  --text-xl: 1.3125rem;
+  --text-2xl: clamp(1.45rem, 1.2rem + 1.1vw, 2rem);
+  --text-3xl: clamp(2rem, 1.3rem + 3.4vw, 3.6rem);
+
+  --leading-tight: 1.15;
+  --leading-snug: 1.4;
+  --leading-normal: 1.65;
+  --leading-code: 1.6;
+
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+
+  --tracking-tight: -0.02em;
+
+  /* Line length. Serif would take more; this is a sans, so 66 characters. */
+  --measure: 66ch;
+  --measure-tight: 46ch;
+
+  /* ── Space ─────────────────────────────────────────────────────────────
+     A 4px base, doubling loosely. The two largest are fluid because band
+     padding is what changes most between a phone and a desk. */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 2.75rem;
+  --space-8: clamp(2.5rem, 5vw, 4rem);
+  --space-9: clamp(3rem, 7vw, 5.5rem);
+
+  --gutter: clamp(1.25rem, 5vw, 4.5rem);
+  --page-max: 78rem;
+
+  /* ── Line and edge ─────────────────────────────────────────────────────
+     One hairline everywhere. Radius is nearly nothing: stone is cut, not
+     moulded, and a large radius would make every slab read as a card. */
+  --hairline: 1px solid var(--border);
+  --radius-sm: 2px;
+  --radius: 3px;
+  --radius-lg: 4px;
+
+  --sticky-top: 3.5rem;
+}

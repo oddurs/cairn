@@ -1,13 +1,9 @@
 ---
-import "../styles/global.css";
-const { title, description, wide = false } = Astro.props;
+import "../styles/base.css";
+import SiteHeader from "../components/SiteHeader.astro";
+import SiteFooter from "../components/SiteFooter.astro";
+const { title, description } = Astro.props;
 const base = import.meta.env.BASE_URL.replace(/\/$/, "");
-const nav = [
-  { href: `${base}/docs`, label: "Docs" },
-  { href: `${base}/format`, label: "Format" },
-  { href: "https://github.com/oddurs/cairn", label: "GitHub" },
-];
-const here = Astro.url.pathname.replace(/\/$/, "");
 ---
 
 <!doctype html>
@@ -19,140 +15,32 @@ const here = Astro.url.pathname.replace(/\/$/, "");
     <meta name="description" content={description} />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
     <meta name="theme-color" content="#2b3338" />
     <link rel="icon" href={`${base}/favicon.svg`} type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   </head>
   <body>
     <a class="skip" href="#main">Skip to content</a>
-
-    <header class="masthead">
-      <div class="wrap masthead__inner">
-        <a class="mark" href={base || "/"}>
-          <span class="mark__stack" aria-hidden="true">
-            <i></i><i></i><i></i>
-          </span>
-          cairn
-        </a>
-        <nav aria-label="Primary">
-          {
-            nav.map((n) => (
-              <a
-                href={n.href}
-                aria-current={here === n.href ? "page" : undefined}
-              >
-                {n.label}
-              </a>
-            ))
-          }
-        </nav>
-      </div>
-    </header>
-
-    <main id="main" class={wide ? "" : "prose-page"}>
-      <slot />
-    </main>
-
-    <footer class="foot">
-      <div class="wrap foot__inner">
-        <p>
-          cairn is free software under the
-          <a href="https://github.com/oddurs/cairn/blob/main/COPYING"
-            >GNU General Public License, version 3 or later</a
-          >.
-        </p>
-        <p class="foot__meta">
-          <a href="https://github.com/oddurs/cairn">Source</a>
-          <a href="https://github.com/oddurs/cairn/releases">Releases</a>
-          <a href={`${base}/format`}>Item format</a>
-        </p>
-      </div>
-    </footer>
+    <SiteHeader />
+    <main id="main"><slot /></main>
+    <SiteFooter />
 
     <style>
-      .masthead {
-        border-bottom: 1px solid var(--hairline);
-        background: var(--slate);
-        position: sticky;
-        top: 0;
-        z-index: 5;
+      .skip {
+        position: absolute;
+        left: -9999px;
       }
-      .masthead__inner {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 1.5rem;
-        min-height: 3.5rem;
-      }
-      .mark {
-        font-family: var(--mono);
-        font-weight: 600;
-        font-size: 1rem;
-        text-decoration: none;
-        display: inline-flex;
-        align-items: center;
-        gap: 0.6rem;
-      }
-      /* Three stones, narrowing upward. The only ornament on the page, and it
-         is the thing the project is named after. */
-      .mark__stack {
-        display: inline-flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 1.5px;
-      }
-      .mark__stack i {
-        display: block;
-        height: 3px;
-        background: var(--lichen);
-        border-radius: 1px;
-      }
-      .mark__stack i:nth-child(1) { width: 5px; }
-      .mark__stack i:nth-child(2) { width: 9px; }
-      .mark__stack i:nth-child(3) { width: 13px; }
-
-      nav {
-        display: flex;
-        gap: clamp(0.9rem, 3vw, 1.9rem);
-        font-size: 0.9375rem;
-      }
-      nav a {
-        text-decoration: none;
-        color: var(--moss);
-      }
-      nav a:hover,
-      nav a[aria-current="page"] {
-        color: var(--chalk);
-      }
-
-      .foot {
-        border-top: 1px solid var(--hairline);
-        background: var(--slate-deep);
-        padding-block: 2.5rem;
-        margin-top: 0;
-      }
-      .foot__inner {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 1rem 2.5rem;
-        justify-content: space-between;
-        align-items: baseline;
-      }
-      .foot p {
-        margin: 0;
-        color: var(--moss);
-        font-size: 0.9375rem;
-      }
-      .foot__meta {
-        display: flex;
-        gap: 1.25rem;
-      }
-      .foot__meta a {
-        color: var(--moss);
-        text-decoration: none;
-      }
-      .foot__meta a:hover {
-        color: var(--chalk);
+      .skip:focus {
+        left: var(--gutter);
+        top: var(--space-2);
+        z-index: 10;
+        background: var(--accent);
+        color: var(--accent-fg);
+        padding: var(--space-2) var(--space-3);
+        border-radius: var(--radius-sm);
+        font-family: var(--font-mono);
+        font-size: var(--text-sm);
       }
     </style>
   </body>

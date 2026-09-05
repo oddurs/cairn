@@ -1,0 +1,17 @@
+---
+/* Vertical rhythm applied by the parent, so children never carry margins that
+   depend on what happens to sit next to them. */
+const { gap = "5", as: Tag = "div" } = Astro.props;
+---
+
+<Tag class="stack" style={`--stack-gap: var(--space-${gap})`}><slot /></Tag>
+
+<style>
+  .stack {
+    display: flex;
+    flex-direction: column;
+  }
+  .stack > :global(* + *) {
+    margin-top: var(--stack-gap);
+  }
+</style>
