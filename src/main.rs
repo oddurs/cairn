@@ -112,6 +112,9 @@ enum Command {
     /// Change fields on an item: `cairn set 12 status=doing priority=p0`
     Set(cmd::set::Args),
 
+    /// Add to an item's body: `cairn note 12 "Dropped: too costly"`
+    Note(cmd::note::Args),
+
     /// Move items to the first `done` status
     Close(cmd::set::CloseArgs),
 
@@ -208,6 +211,7 @@ fn run(command: Command) -> Result<i32> {
         Command::Release(a) => cmd::claim::release(a),
         Command::Show(a) => cmd::show::run(a),
         Command::Set(a) => cmd::set::run(a),
+        Command::Note(a) => cmd::note::run(a),
         Command::Close(a) => cmd::set::close(a),
         Command::Reopen(a) => cmd::set::reopen(a),
         Command::Edit(a) => cmd::show::edit(a),

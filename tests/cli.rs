@@ -2073,3 +2073,126 @@ fn dropped_work_does_not_count_against_progress() {
         "the rendered roadmap agrees",
     );
 }
+
+// --- notes ------------------------------------------------------------------
+
+#[test]
+fn a_note_is_appended_under_a_heading() {
+    let p = Project::new();
+    p.add("Something", &["--body", "The original body."]);
+    p.expect(&["note", "1", "Dropped: too costly for the value.", "-q"]);
+
+    let body = p.json(&["show", "1", "--json"])["body"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert_contains(&body, "The original body.", "what was there is untouched");
+    assert_contains(&body, "Dropped: too costly", "and the note is added");
+    assert!(
+        body.find("The original body.").unwrap() < body.find("Dropped:").unwrap(),
+        "the note goes after, not before"
+    );
+    assert_contains(&body, "## 20", "filed under a dated heading");
+}
+
+#[test]
+fn notes_accumulate_rather_than_replace() {
+    let p = Project::new();
+    p.add("Something", &["--body", "Original."]);
+    p.expect(&["note", "1", "First thought.", "-q"]);
+    p.expect(&["note", "1", "Second thought.", "-q"]);
+    let body = p.json(&["show", "1", "--json"])["body"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    for expected in ["Original.", "First thought.", "Second thought."] {
+        assert_contains(&body, expected, "everything is kept");
+    }
+}
+
+#[test]
+fn a_note_can_carry_its_own_heading_or_none() {
+    let p = Project::new();
+    // An explicit body, so the type's template does not contribute headings of
+    // its own to the count below.
+    p.add("Something", &["--body", "Original."]);
+    p.expect(&[
+        "note",
+        "1",
+        "Reasoning.",
+        "--heading",
+        "Dropped, 2026-09-05",
+        "-q",
+    ]);
+    assert_contains(
+        p.json(&["show", "1", "--json"])["body"].as_str().unwrap(),
+        "## Dropped, 2026-09-05",
+        "the given heading",
+    );
+
+    let before = p.json(&["show", "1", "--json"])["body"]
+        .as_str()
+        .unwrap()
+        .matches("##")
+        .count();
+    p.expect(&["note", "1", "A bare line.", "--bare", "-q"]);
+    let body = p.json(&["show", "1", "--json"])["body"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert_contains(&body, "A bare line.", "appended");
+    assert_eq!(
+        body.matches("##").count(),
+        before,
+        "--bare added no heading"
+    );
+}
+
+#[test]
+fn a_note_can_be_read_from_stdin() {
+    let p = Project::new();
+    p.add("Something", &[]);
+    let out = p.run_stdin(
+        &["note", "1", "--stdin", "-q"],
+        "A reason long enough\nto need more than one line.\n",
+    );
+    assert!(out.ok(), "{}", out.all());
+    assert_contains(
+        p.json(&["show", "1", "--json"])["body"].as_str().unwrap(),
+        "to need more than one line.",
+        "the whole of stdin",
+    );
+}
+
+#[test]
+fn an_empty_or_ambiguous_note_is_refused() {
+    let p = Project::new();
+    p.add("Something", &["--body", "Keep me."]);
+    p.fails(&["note", "1"]);
+    p.fails(&["note", "1", "text", "--stdin"]);
+    p.fails(&["note", "1", "   "]);
+    assert_contains(
+        p.json(&["show", "1", "--json"])["body"].as_str().unwrap(),
+        "Keep me.",
+        "a refused note changed nothing",
+    );
+}
+
+#[test]
+fn mcp_can_append_a_note_without_replacing_the_body() {
+    let p = Project::new();
+    p.add("Something", &["--body", "Original body."]);
+    let replies = mcp(
+        &p,
+        &[
+            r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"add_note","arguments":{"id":1,"text":"Why it was dropped."}}}"#,
+        ],
+    );
+    assert_eq!(replies[0]["result"]["isError"], false, "{:?}", replies[0]);
+    let body = p.json(&["show", "1", "--json"])["body"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert_contains(&body, "Original body.", "kept");
+    assert_contains(&body, "Why it was dropped.", "added");
+}

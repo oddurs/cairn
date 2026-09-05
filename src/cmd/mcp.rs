@@ -167,6 +167,7 @@ fn dispatch(name: &str, a: &Value) -> Result<String> {
         "update_item" => update_item(a),
         "claim_item" => claim_item(a),
         "close_item" => close_item(a),
+        "add_note" => add_note(a),
         "check" => check(),
         other => bail!("unknown tool `{other}`"),
     }
@@ -535,6 +536,36 @@ fn claim_item(a: &Value) -> Result<String> {
     }))
 }
 
+/// Append to an item's body. Distinct from `update_item`'s `body`, which
+/// replaces: a caller recording why it decided something must not be able to
+/// erase what came before by getting one field wrong.
+fn add_note(a: &Value) -> Result<String> {
+    let cfg = Config::discover()?;
+    let store = Store::new(&cfg);
+    let lock = Lock::acquire(&cfg)?;
+    let mut item = store.find(require_id(a)?)?;
+
+    let Some(text) = s(a, "text") else {
+        bail!("`text` is required");
+    };
+    let addition = match s(a, "heading") {
+        Some(h) => format!("## {h}\n\n{text}"),
+        None => format!("## {}\n\n{text}", today()),
+    };
+    let body = item.body.trim_end();
+    item.body = if body.is_empty() {
+        addition
+    } else {
+        format!("{body}\n\n{addition}")
+    };
+    item.touch(&today());
+    item.save()?;
+    drop(lock);
+    hooks::item(&cfg, &store, hooks::Event::AfterChange, &item);
+
+    pretty(&json!({ "noted": cfg.format_id(item.id), "body": item.body }))
+}
+
 fn close_item(a: &Value) -> Result<String> {
     let cfg = Config::discover()?;
     let store = Store::new(&cfg);
@@ -728,6 +759,17 @@ fn tools() -> Vec<Value> {
                 "id": int_prop("Item id"),
                 "status": str_prop("Status to move to (default: the first done status)"),
             }), vec!["id"]),
+        }),
+        json!({
+            "name": "add_note",
+            "description": "Append a dated note to an item's body — why something was decided, \
+        what was tried, what to watch for. Use this rather than update_item's `body` when adding to the \
+        record: it cannot erase what is already there. A status says what was decided; a note says why.",
+            "inputSchema": obj(json!({
+                "id": int_prop("Item id"),
+                "text": str_prop("The note, in Markdown"),
+                "heading": str_prop("Heading to file it under (default: today's date)"),
+            }), vec!["id", "text"]),
         }),
         json!({
             "name": "check",

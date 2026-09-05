@@ -457,6 +457,7 @@ committed `ROADMAP.md` matches the items. It exits non-zero on errors, and with
 | `cairn claim` / `release` | Take or hand back an item |
 | `cairn show` | One item in full |
 | `cairn set` | Change fields: `status=doing`, `labels+=auth`, `assignee=` |
+| `cairn note` | Append to an item's body — why something was decided |
 | `cairn close` / `reopen` | Move between open and done statuses |
 | `cairn edit` | Open in `$EDITOR`, re-validate afterwards |
 | `cairn remove` (`rm`) | Delete items |
