@@ -112,11 +112,22 @@ pub fn progress_bar(done: usize, total: usize, width: usize) -> String {
     )
 }
 
-pub fn count_done(cfg: &Config, items: &[&Item]) -> usize {
-    items
+/// Finished and countable, for a progress bar.
+///
+/// Dropped items are excluded from both. A milestone holding three abandoned
+/// ideas and one finished item is complete, not a quarter done, and reporting
+/// it as a quarter done makes the number worthless — the reader has to open the
+/// milestone to find out whether the remainder is work or wreckage.
+pub fn progress(cfg: &Config, items: &[&Item]) -> (usize, usize) {
+    let countable: Vec<&&Item> = items
+        .iter()
+        .filter(|i| cfg.category(i.status()) != Category::Dropped)
+        .collect();
+    let done = countable
         .iter()
         .filter(|i| cfg.category(i.status()) == Category::Done)
-        .count()
+        .count();
+    (done, countable.len())
 }
 
 /// One item as JSON — the interchange format for scripts and coding agents.

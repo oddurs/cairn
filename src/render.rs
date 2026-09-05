@@ -14,7 +14,7 @@
 //
 // You should have received a copy of the GNU General Public License along with
 // this program.  If not, see <https://www.gnu.org/licenses/>.
-use crate::cmd::count_done;
+use crate::cmd::progress;
 use crate::config::{Category, Config};
 use crate::filter::{Ctx, Filter, milestone_rank, resolve};
 use crate::item::Item;
@@ -120,8 +120,7 @@ fn meta_line(cfg: &Config, key: &str, members: &[&Item]) -> String {
     let r = &cfg.render;
     let mut bits: Vec<String> = Vec::new();
     if r.progress {
-        let done = count_done(cfg, members);
-        let total = members.len();
+        let (done, total) = progress(cfg, members);
         if total > 0 {
             let pct = (done as f64 / total as f64 * 100.0).round() as u32;
             let filled = (done * 10).div_ceil(total).min(10);

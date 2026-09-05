@@ -17,7 +17,7 @@
 // cairn milestone — read and edit the [[milestone]] blocks in cairn.toml.
 //
 // Writes go through toml_edit so hand-written comments and formatting survive.
-use crate::cmd::{count_done, progress_bar};
+use crate::cmd::{progress, progress_bar};
 use crate::config::{CONFIG_FILE, Config};
 use crate::item::Item;
 use crate::lock::Lock;
@@ -113,14 +113,14 @@ fn list() -> Result<i32> {
             .iter()
             .filter(|i| i.milestone() == Some(m.name.as_str()))
             .collect();
-        let done = count_done(&cfg, &members);
+        let (done, total) = progress(&cfg, &members);
         // Pad the plain name before styling so the bars line up.
         println!(
             "{} {}  {}/{}{}",
             style::bold(&format!("{:<12}", m.name)),
-            progress_bar(done, members.len(), 16),
+            progress_bar(done, total, 16),
             done,
-            members.len(),
+            total,
             match &m.due {
                 Some(d) => style::dim(&format!("   due {d}")),
                 None => String::new(),

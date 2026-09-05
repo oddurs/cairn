@@ -2045,3 +2045,31 @@ fn a_dependency_cycle_is_refused_rather_than_reported_later() {
     p.expect(&["new", "D", "-d", "1", "-q"]);
     p.expect(&["check"]);
 }
+
+#[test]
+fn dropped_work_does_not_count_against_progress() {
+    // A milestone holding three abandoned ideas and one finished item is
+    // complete, not a quarter done. Reporting it as a quarter done makes the
+    // number worthless: the reader has to open the milestone to learn whether
+    // the remainder is work or wreckage.
+    let p = Project::new();
+    p.expect(&["milestone", "add", "someday"]);
+    for n in 0..4 {
+        p.add(&format!("Idea {n}"), &["--milestone", "someday"]);
+    }
+    p.expect(&["close", "1", "-q"]);
+    for id in ["2", "3", "4"] {
+        p.expect(&["set", id, "status=dropped", "-q"]);
+    }
+
+    let listed = p.expect(&["milestone", "list"]).stdout;
+    assert_contains(&listed, "100%", "the milestone is finished");
+    assert_contains(&listed, "1/1", "and only the live item is counted");
+
+    p.expect(&["render", "-q"]);
+    assert_contains(
+        &p.read("ROADMAP.md"),
+        "1 of 1 done",
+        "the rendered roadmap agrees",
+    );
+}

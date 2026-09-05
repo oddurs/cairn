@@ -2,10 +2,10 @@
 id: 8
 title: Embed GNU Guile as an extension language
 type: feature
-status: backlog
+status: dropped
 milestone: later
 created: 2026-09-04
-updated: 2026-09-04
+updated: 2026-09-05
 priority: p1
 effort: xl
 ---
@@ -66,3 +66,15 @@ designed to be embedded, and its licence (LGPL) is compatible.
 - [ ] At least one built-in is implemented in Scheme rather than Rust
 - [ ] `[render]`'s boolean knobs can be deleted without losing capability
 - [ ] Building without Guile still produces a working program
+
+## Dropped, 2026-09-05
+
+The critique behind this is still correct: a GPL binary nobody can modify
+without recompiling grants freedom in law and not in practice. But libguile
+ends the self-contained binary, and `cairn init --git` plus hooks cover the
+extension needs anyone has actually expressed — which is zero, because there
+are no users yet.
+
+Reopen when a real user wants to change behaviour that configuration cannot
+reach. Building an extension language before that is answering a question
+nobody asked, at the cost of the install being simple.

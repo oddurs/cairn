@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU General Public License along with
 // this program.  If not, see <https://www.gnu.org/licenses/>.
 // cairn roadmap — the milestone view, in the terminal.
-use crate::cmd::{count_done, paint_status, progress_bar, status_text};
+use crate::cmd::{paint_status, progress, progress_bar, status_text};
 use crate::config::Config;
 use crate::item::Item;
 use crate::store::Store;
@@ -70,7 +70,7 @@ pub fn run(args: Args) -> Result<i32> {
                 None => i.milestone().is_none(),
             })
             .collect();
-        let done = count_done(&cfg, &members);
+        let (done, total) = progress(&cfg, &members);
 
         let (name, title, due) = match m {
             Some(ms) => (ms.name.clone(), ms.title.clone(), ms.due.clone()),
@@ -87,8 +87,8 @@ pub fn run(args: Args) -> Result<i32> {
         }
         println!("{heading}");
 
-        let bar = progress_bar(done, members.len(), 20);
-        let mut meta = format!("  {bar}  {done}/{}", members.len());
+        let bar = progress_bar(done, total, 20);
+        let mut meta = format!("  {bar}  {done}/{total}");
         if let Some(d) = &due {
             meta.push_str(&style::dim(&format!("   due {d}")));
         }

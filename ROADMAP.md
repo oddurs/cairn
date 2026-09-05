@@ -6,13 +6,14 @@ A markdown-native roadmap and issue manager that lives in your repository.
 
 ## v0.1 — Usable in anger
 
-`########··` 80% · 12 of 15 done · due 2026-10-15
+`########··` 75% · 12 of 16 done · due 2026-10-15
 
 Enough to run a real project's roadmap without reaching for anything else.
 
 ### backlog
 
 - [ ] [`0030`](https://github.com/oddurs/cairn/blob/main/cairn/items/0030-cut-a-release-candidate-and-verify-every-install-path.md) Cut a release candidate and verify every install path <sup>chore · p0 · s5</sup>
+- [ ] [`0037`](https://github.com/oddurs/cairn/blob/main/cairn/items/0037-point-a-real-agent-at-the-mcp-server-and-watch-it-work.md) Point a real agent at the MCP server and watch it work <sup>chore · p0</sup>
 
 ### in progress
 
@@ -36,14 +37,16 @@ Enough to run a real project's roadmap without reaching for anything else.
 
 ## v0.2 — Comfortable
 
-`#########·` 82% · 9 of 11 done · due 2026-12-01
+`#######···` 69% · 9 of 13 done · due 2026-12-01
 
 The rough edges that only show up after a few weeks of daily use.
 
 ### backlog
 
-- [ ] [`0004`](https://github.com/oddurs/cairn/blob/main/cairn/items/0004-export-items-to-github-issues.md) Export items to GitHub issues <sup>feature · p2</sup>
 - [ ] [`0029`](https://github.com/oddurs/cairn/blob/main/cairn/items/0029-audit-dependencies-and-licences-continuously.md) Audit dependencies and licences continuously <sup>chore · p1 · s5</sup>
+- [ ] [`0035`](https://github.com/oddurs/cairn/blob/main/cairn/items/0035-teach-git-to-resolve-the-files-cairn-generates.md) Teach git to resolve the files cairn generates <sup>feature · p0</sup>
+- [ ] [`0038`](https://github.com/oddurs/cairn/blob/main/cairn/items/0038-close-an-imported-issue-with-a-pointer-to-the-item.md) Close an imported issue with a pointer to the item <sup>feature · p1</sup>
+- [ ] [`0039`](https://github.com/oddurs/cairn/blob/main/cairn/items/0039-record-a-decision-on-an-item-without-rewriting-the-file.md) Record a decision on an item without rewriting the file <sup>feature · p1</sup>
 
 ### done
 
@@ -59,9 +62,13 @@ The rough edges that only show up after a few weeks of daily use.
 
 ## v1.0 — Stable
 
-`##########` 100% · 4 of 4 done · due 2027-03-01
+`########··` 80% · 4 of 5 done · due 2027-03-01
 
 Documented, packaged, and safe to depend on. The file format stops moving.
+
+### backlog
+
+- [ ] [`0036`](https://github.com/oddurs/cairn/blob/main/cairn/items/0036-publish-the-item-format-as-a-document-in-its-own-right.md) Publish the item format as a document in its own right <sup>docs · p1</sup>
 
 ### done
 
@@ -72,15 +79,9 @@ Documented, packaged, and safe to depend on. The file format stops moving.
 
 ## later — Someday
 
-`###·······` 25% · 1 of 4 done
+`##########` 100% · 1 of 1 done
 
 Good ideas without a date yet.
-
-### backlog
-
-- [ ] [`0007`](https://github.com/oddurs/cairn/blob/main/cairn/items/0007-web-board-for-read-only-sharing.md) Web board for read-only sharing <sup>feature · p3</sup>
-- [ ] [`0008`](https://github.com/oddurs/cairn/blob/main/cairn/items/0008-embed-gnu-guile-as-an-extension-language.md) Embed GNU Guile as an extension language <sup>feature · p1</sup>
-- [ ] [`0009`](https://github.com/oddurs/cairn/blob/main/cairn/items/0009-federate-items-over-email.md) Federate items over email <sup>feature · p2</sup>
 
 ### done
 
