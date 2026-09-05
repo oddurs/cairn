@@ -133,6 +133,47 @@ pub fn progress(cfg: &Config, items: &[&Item]) -> (usize, usize) {
 }
 
 /// One item as JSON — the interchange format for scripts and coding agents.
+/// The one-line shape of a set of items: what can be started, what is under
+/// way, what is waiting. Shown under `next` and `board` so the two agree.
+///
+/// Zero terms are omitted rather than printed as zeroes — "0 blocked" is not
+/// information, and a summary that is mostly zeroes stops being read.
+pub fn summary(ctx: &crate::filter::Ctx, items: &[&Item]) -> String {
+    let ready = items.iter().filter(|i| ctx.is_ready(i)).count();
+    let active = items
+        .iter()
+        .filter(|i| ctx.cfg.category(i.status()) == Category::Active)
+        .count();
+    let blocked = items.iter().filter(|i| ctx.is_blocked(i)).count();
+
+    let mut parts = Vec::new();
+    if ready > 0 {
+        parts.push(format!("{ready} ready"));
+    }
+    if active > 0 {
+        parts.push(format!("{active} in progress"));
+    }
+    if blocked > 0 {
+        parts.push(format!("{blocked} blocked"));
+    }
+    if parts.is_empty() {
+        "nothing to start".to_string()
+    } else {
+        parts.join(" · ")
+    }
+}
+
+/// Fields the schema marks as worth showing in a table. The same choice `list`
+/// makes, so a project that tracks something other than priority gets the same
+/// treatment everywhere without configuring it twice.
+pub fn table_fields(cfg: &Config) -> Vec<String> {
+    cfg.fields
+        .iter()
+        .filter(|f| f.column)
+        .map(|f| f.name.clone())
+        .collect()
+}
+
 pub fn item_json(
     cfg: &Config,
     item: &Item,

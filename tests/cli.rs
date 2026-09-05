@@ -2477,3 +2477,156 @@ fn an_explicit_identity_still_wins_over_the_client_name() {
     assert_eq!(replies[1]["result"]["isError"], false);
     assert_eq!(p.json(&["show", "1", "--json"])["assignee"], "a-person");
 }
+
+// --- the printed views ------------------------------------------------------
+
+#[test]
+fn next_shows_the_field_it_ranks_by() {
+    // It sorted by priority and did not show it, so the order looked arbitrary.
+    let p = Project::new();
+    p.add("Later", &["--set", "priority=p3"]);
+    p.add("Urgent", &["--set", "priority=p0"]);
+    let out = p.expect(&["next"]).stdout;
+
+    assert_contains(&out, "PRIORITY", "the sort key is a column");
+    assert_contains(&out, "p0", "and its values are shown");
+    let urgent = out.find("Urgent").expect("urgent listed");
+    let later = out.find("Later").expect("later listed");
+    assert!(
+        urgent < later,
+        "and the order it implies is the order shown"
+    );
+}
+
+#[test]
+fn a_column_empty_for_every_row_is_dropped() {
+    // `blocked by` is empty whenever nothing is blocked, which under the
+    // default filter is always. A schema field can be empty for a given query
+    // too, so the rule is general rather than a special case per column.
+    let p = Project::new();
+    p.add("Nothing blocks this", &[]);
+    let out = p.expect(&["next"]).stdout;
+    assert!(
+        !out.contains("BLOCKED BY"),
+        "no always-empty column:\n{out}"
+    );
+
+    let blocker = p.add("The blocker", &[]);
+    p.add("Waits", &["-d", &blocker]);
+    let with = p.expect(&["next", "--blocked", "-n", "10"]).stdout;
+    assert_contains(&with, "BLOCKED BY", "shown once it carries something");
+    assert_contains(&with, &blocker, "naming what is in the way");
+}
+
+#[test]
+fn next_and_board_agree_on_the_shape_of_the_work() {
+    let p = Project::new();
+    let blocker = p.add("The blocker", &[]);
+    p.add("Waits", &["-d", &blocker]);
+    p.add("Free", &[]);
+    p.expect(&["set", &blocker, "status=doing", "-q"]);
+
+    for args in [vec!["next", "--blocked"], vec!["board"]] {
+        let out = p.expect(&args).stdout;
+        assert_contains(&out, "ready", &format!("{args:?} summarises"));
+        assert_contains(&out, "1 in progress", &format!("{args:?} counts active"));
+        assert_contains(&out, "1 blocked", &format!("{args:?} counts blocked"));
+    }
+}
+
+#[test]
+fn the_board_gives_width_to_columns_that_hold_something() {
+    let p = Project::new();
+    p.add("A title long enough to need real width on the board", &[]);
+    let out = p.expect(&["board"]).stdout;
+    let rule = out
+        .lines()
+        .find(|l| l.contains('─'))
+        .expect("a rule under the headings");
+    let widths: Vec<usize> = rule
+        .split("  ")
+        .filter(|s| !s.trim().is_empty())
+        .map(|s| s.chars().filter(|c| *c == '─').count())
+        .collect();
+    assert!(widths.len() > 1, "several columns: {rule}");
+    let widest = widths.iter().max().unwrap();
+    let narrowest = widths.iter().min().unwrap();
+    assert!(
+        widest > narrowest,
+        "an empty column should not take a full share: {widths:?}"
+    );
+}
+
+#[test]
+fn the_board_marks_work_that_cannot_be_started() {
+    let p = Project::new();
+    let blocker = p.add("The blocker", &[]);
+    p.add("Waits on it", &["-d", &blocker]);
+    let out = p.expect(&["board"]).stdout;
+
+    let waits = out
+        .lines()
+        .find(|l| l.contains("Waits on it"))
+        .expect("listed");
+    let free = out
+        .lines()
+        .find(|l| l.contains("The blocker"))
+        .expect("listed");
+    assert!(
+        waits.trim_start().starts_with('!'),
+        "blocked is marked: {waits:?}"
+    );
+    assert!(
+        !free.trim_start().starts_with('!'),
+        "startable is not: {free:?}"
+    );
+}
+
+#[test]
+fn the_board_is_plain_text_when_asked() {
+    let p = seeded();
+    let out = p.expect(&["board", "--color", "never"]).stdout;
+    assert!(
+        !out.contains('\u{1b}'),
+        "no escapes survived clipping:\n{out:?}"
+    );
+    assert!(
+        p.expect(&["board", "--color", "always"])
+            .stdout
+            .contains('\u{1b}')
+    );
+}
+
+#[test]
+fn a_nonsensical_board_width_is_clamped_not_obeyed() {
+    // Zero-width columns render as nothing but ellipses.
+    let p = seeded();
+    let out = p
+        .expect(&["board", "--width", "0", "--color", "never"])
+        .stdout;
+    assert_contains(&out, "0001", "an id still fits");
+}
+
+#[test]
+fn a_dated_milestone_is_filed_among_the_dated_ones() {
+    // Declaration order is meaningful — an undated milestone takes its position
+    // from the dated one that follows it — so appending every new milestone put
+    // it after a trailing `later`, which then inherited its date and stopped
+    // sorting last. Found by looking at the demo's own output.
+    let p = Project::new();
+    p.expect(&["milestone", "add", "v0.2", "--due", "2027-02-01"]);
+    p.expect(&["milestone", "add", "someday"]);
+
+    let listed = p.expect(&["milestone", "list"]).stdout;
+    let at = |name: &str| listed.find(name).unwrap_or_else(|| panic!("{name} listed"));
+    assert!(
+        at("v0.1") < at("v0.2"),
+        "dated milestones stay in date order"
+    );
+    assert!(at("v0.2") < at("v1.0"), "including one added afterwards");
+    assert!(at("v1.0") < at("later"), "and undated ones stay at the end");
+    assert!(
+        at("later") < at("someday"),
+        "in the order they were declared"
+    );
+}

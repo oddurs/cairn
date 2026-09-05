@@ -24,7 +24,6 @@ use crate::filter::{Ctx, Filter, resolve, sort_items};
 use crate::item::Item;
 use crate::store::Store;
 use crate::style;
-use crate::table::clip;
 use anyhow::{Result, bail};
 use clap::ArgAction;
 use terminal_size::{Width, terminal_size};
@@ -98,70 +97,195 @@ pub fn run(args: Args) -> Result<i32> {
         .unwrap_or(100);
     let gap = 2;
     let n = columns.len();
-    let width = args
-        .width
-        .unwrap_or_else(|| ((term.saturating_sub(gap * (n - 1))) / n).clamp(16, 40));
 
-    let mut cells: Vec<Vec<String>> = Vec::with_capacity(n);
+    // A card carries what the list carries: the id, whatever the schema thinks
+    // is worth a column, and the title. Blocked work is marked, because "cannot
+    // be started" is the most useful thing to know at a glance and was
+    // previously invisible.
+    let fields = crate::cmd::table_fields(&cfg);
+    let any_blocked = items.iter().any(|i| ctx.is_blocked(i));
+    let marker = |i: &Item| -> &str {
+        if !any_blocked {
+            ""
+        } else if ctx.is_blocked(i) {
+            "! "
+        } else {
+            "  "
+        }
+    };
+
+    let mut plain: Vec<Vec<String>> = Vec::with_capacity(n);
+    let mut painted: Vec<Vec<String>> = Vec::with_capacity(n);
     let mut headers: Vec<String> = Vec::with_capacity(n);
+    let mut header_plain: Vec<String> = Vec::with_capacity(n);
+
     for value in &columns {
         let members: Vec<&Item> = items
             .iter()
             .filter(|i| matches_group(i, &ctx, &group_by, value))
             .collect();
-        let title = if group_by == "status" {
-            paint_status(&cfg, value)
+
+        let label = if group_by == "status" {
+            crate::cmd::status_text(&cfg, value)
         } else if value.is_empty() {
-            style::dim("(none)")
+            "(none)".to_string()
         } else {
             value.clone()
         };
-        headers.push(format!(
-            "{title} {}",
-            style::dim(&format!("{}", members.len()))
-        ));
-        cells.push(
-            members
+        let heading = format!("{label} {}", members.len());
+        header_plain.push(heading.clone());
+        headers.push(if group_by == "status" {
+            format!(
+                "{} {}",
+                paint_status(&cfg, value),
+                style::dim(&members.len().to_string())
+            )
+        } else {
+            format!("{label} {}", style::dim(&members.len().to_string()))
+        });
+
+        let mut col_plain = Vec::with_capacity(members.len());
+        let mut col_painted = Vec::with_capacity(members.len());
+        for i in &members {
+            let id = cfg.format_id(i.id);
+            let extras: Vec<String> = fields
                 .iter()
-                .map(|i| {
-                    format!(
-                        "{} {}",
-                        style::dim(&cfg.format_id(i.id)),
-                        clip(i.title(), width.saturating_sub(cfg.project.id_width + 1))
-                    )
-                })
-                .collect(),
-        );
+                .map(|f| resolve(i, &ctx, f).display())
+                .filter(|v| !v.is_empty())
+                .collect();
+            let prefix = if extras.is_empty() {
+                format!("{}{} ", marker(i), id)
+            } else {
+                format!("{}{} {} ", marker(i), id, extras.join(" "))
+            };
+            col_plain.push(format!("{prefix}{}", i.title()));
+            col_painted.push(prefix);
+            col_painted.pop();
+            col_painted.push(format!(
+                "{}{} {}",
+                if any_blocked && ctx.is_blocked(i) {
+                    style::yellow("!")
+                } else if any_blocked {
+                    " ".to_string()
+                } else {
+                    String::new()
+                },
+                style::dim(&id),
+                if extras.is_empty() {
+                    i.title().to_string()
+                } else {
+                    format!("{} {}", extras.join(" "), i.title())
+                }
+            ));
+        }
+        plain.push(col_plain);
+        painted.push(col_painted);
     }
+
+    // Width in proportion to content rather than in equal shares. An empty
+    // column needs its heading and nothing more; a full one should not be
+    // truncated to match it.
+    let want: Vec<usize> = (0..n)
+        .map(|i| {
+            plain[i]
+                .iter()
+                .map(|c| c.width())
+                .chain(std::iter::once(header_plain[i].width()))
+                .max()
+                .unwrap_or(8)
+        })
+        .collect();
+    let available = term.saturating_sub(gap * n.saturating_sub(1));
+    // A column narrower than an id plus an ellipsis shows nothing at all, so a
+    // requested width is clamped rather than obeyed literally.
+    let floor = cfg.project.id_width + 4;
+    let widths: Vec<usize> = if let Some(w) = args.width {
+        vec![w.max(floor); n]
+    } else if want.iter().sum::<usize>() <= available {
+        want
+    } else {
+        // Everything shrinks together, but nothing below what a heading needs.
+        let total: usize = want.iter().sum();
+        want.iter()
+            .enumerate()
+            .map(|(i, w)| {
+                let share = w * available / total.max(1);
+                share.max(header_plain[i].width().min(14)).max(floor)
+            })
+            .collect()
+    };
 
     let sep = " ".repeat(gap);
-    println!("{}", join_padded(&headers, width, &sep));
-    println!(
-        "{}",
-        style::dim(&join_padded(&vec!["─".repeat(width); n], width, &sep))
-    );
+    println!("{}", join_columns(&headers, &widths, &sep));
+    let rule: Vec<String> = widths.iter().map(|w| "─".repeat(*w)).collect();
+    println!("{}", style::dim(&join_columns(&rule, &widths, &sep)));
 
-    let depth = cells.iter().map(Vec::len).max().unwrap_or(0);
+    let depth = painted.iter().map(Vec::len).max().unwrap_or(0);
     for row in 0..depth {
-        let line: Vec<String> = cells
-            .iter()
-            .map(|c| c.get(row).cloned().unwrap_or_default())
+        let line: Vec<String> = (0..n)
+            .map(|c| {
+                painted[c]
+                    .get(row)
+                    .map(|text| clip_visible(text, widths[c]))
+                    .unwrap_or_default()
+            })
             .collect();
-        println!("{}", join_padded(&line, width, &sep));
+        println!("{}", join_columns(&line, &widths, &sep));
     }
+
+    let all: Vec<&Item> = items.iter().collect();
+    println!("\n{}", style::dim(&crate::cmd::summary(&ctx, &all)));
     Ok(0)
 }
 
-/// Pad on visible width, ignoring escape codes.
-fn join_padded(cells: &[String], width: usize, sep: &str) -> String {
+/// Pad each cell to its own column's width, measuring what the reader sees
+/// rather than the escape codes.
+fn join_columns(cells: &[String], widths: &[usize], sep: &str) -> String {
     let padded: Vec<String> = cells
         .iter()
-        .map(|c| {
-            let visible = visible_width(c);
-            format!("{c}{}", " ".repeat(width.saturating_sub(visible)))
+        .enumerate()
+        .map(|(i, c)| {
+            let w = widths.get(i).copied().unwrap_or(0);
+            format!("{c}{}", " ".repeat(w.saturating_sub(visible_width(c))))
         })
         .collect();
     padded.join(sep).trim_end().to_string()
+}
+
+/// Truncate to a visible width, keeping escape sequences intact.
+fn clip_visible(text: &str, max: usize) -> String {
+    if visible_width(text) <= max {
+        return text.to_string();
+    }
+    let mut out = String::new();
+    let mut shown = 0;
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\u{1b}' {
+            out.push(c);
+            for e in chars.by_ref() {
+                out.push(e);
+                if e == 'm' {
+                    break;
+                }
+            }
+            continue;
+        }
+        let w = c.to_string().width();
+        if shown + w > max.saturating_sub(1) {
+            break;
+        }
+        out.push(c);
+        shown += w;
+    }
+    out.push('…');
+    // Only close a sequence that was actually opened: appending a reset
+    // unconditionally would put an escape into --color never output, which is
+    // meant to be plain text a script can read.
+    if out.contains('\u{1b}') {
+        out.push_str("\u{1b}[0m");
+    }
+    out
 }
 
 fn visible_width(s: &str) -> usize {

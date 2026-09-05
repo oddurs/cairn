@@ -87,3 +87,35 @@ that every branch hits, which this does not.
 - [ ] Frame snapshots in the test suite, so it is not the untested corner
 - [ ] `cairn board` keeps printing, unchanged: pipeable, screenshot-friendly,
       and what CI uses
+
+## Trigger, 2026-09-05
+
+Held at `later` deliberately, with a condition rather than a date.
+
+A terminal interface breaks none of the properties a web board broke — no
+server, no second source of truth, no browser. But it breaks one the web board
+also would have: it is **modal**. You enter it, you are in it, you leave. This
+tool's design says the backlog is not a place you visit; it is something you
+query in passing, in three commands. On that axis a TUI and a web board are
+closer than they look, and the terminal makes it *feel* native without making it
+native.
+
+The one thing commands genuinely serve badly is triage — forty items, deciding
+what matters — which is inherently a sit-down activity. That is the whole case,
+and it is a real one.
+
+Two arguments against, worth keeping visible:
+
+- Agents do not use terminal interfaces. This serves the human half only, and
+  the human half already has the fast loop.
+- It is the only component that cannot be tested the way the other hundred and
+  twenty-one tests are. Frame snapshots work, and they are a second discipline
+  in a project whose single discipline is a real asset.
+
+**Build it when somebody who is not the author has triaged this backlog and
+found it painful.** Until then it is adoption theatre — which is not nothing,
+since adoption is the bottleneck, but it should be called that rather than
+dressed up as a need.
+
+What comes first is making the printed views worth looking at: fully in
+character, cheap, testable, and it is what the README demo shows anyway.

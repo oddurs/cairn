@@ -18,8 +18,9 @@
 // The question an agent (or a person) opens the backlog with is "what should I
 // do now?", and answering it from `list` requires knowing the schema, composing
 // a filter, and resolving dependencies by hand. This command is that question.
-use crate::cmd::{item_json, paint_status};
+use crate::cmd::{item_json, paint_status, summary, table_fields};
 use crate::config::{Category, Config};
+use crate::filter::resolve;
 use crate::filter::{Ctx, Filter, Op, sort_items};
 use crate::item::Item;
 use crate::store::Store;
@@ -114,28 +115,51 @@ pub fn run(args: Args) -> Result<i32> {
         return Ok(0);
     }
 
-    let mut t = Table::new(&["id", "status", "milestone", "blocked by", "title"]);
+    // Show the fields the ranking actually uses, so the order is legible rather
+    // than looking arbitrary. Every optional column is offered and the empty
+    // ones are dropped once the rows are known — `blocked by` is empty whenever
+    // nothing is blocked, and a schema field can be empty for every item a given
+    // query returns.
+    let fields = table_fields(&cfg);
+
+    let mut headers: Vec<String> = vec!["id".into()];
+    headers.extend(fields.iter().cloned());
+    headers.push("status".into());
+    headers.push("milestone".into());
+    headers.push("blocked by".into());
+    headers.push("title".into());
+
+    let refs: Vec<&str> = headers.iter().map(String::as_str).collect();
+    let mut t = Table::new(&refs);
     for i in &picked {
-        let blockers = ctx.blockers(i);
-        let blocked_by = blockers
-            .iter()
-            .map(|b| cfg.format_id(*b))
-            .collect::<Vec<_>>()
-            .join(",");
+        let id = cfg.format_id(i.id);
         let status = cfg
             .status(i.status())
             .map(|s| s.display().to_string())
             .unwrap_or_else(|| i.status().to_string());
-        let id = cfg.format_id(i.id);
-        t.row(vec![
-            Cell::styled(id.clone(), style::dim(&id)),
-            Cell::styled(&status, paint_status(&cfg, i.status())),
-            Cell::plain(i.milestone().unwrap_or("")),
-            Cell::styled(&blocked_by, style::yellow(&blocked_by)),
-            Cell::plain(i.title()),
-        ]);
+
+        let mut row = vec![Cell::styled(id.clone(), style::dim(&id))];
+        for f in &fields {
+            row.push(Cell::plain(resolve(i, &ctx, f).display()));
+        }
+        row.push(Cell::styled(&status, paint_status(&cfg, i.status())));
+        row.push(Cell::plain(i.milestone().unwrap_or("")));
+        let blocked_by = ctx
+            .blockers(i)
+            .iter()
+            .map(|b| cfg.format_id(*b))
+            .collect::<Vec<_>>()
+            .join(",");
+        row.push(Cell::styled(&blocked_by, style::yellow(&blocked_by)));
+        row.push(Cell::plain(i.title()));
+        t.row(row);
     }
+    t.drop_empty_columns(&["id", "status", "title"]);
     print!("{}", t.render());
+
+    // "What should I do now" has a shape as well as a list.
+    let all: Vec<&Item> = items.iter().collect();
+    println!("\n{}", style::dim(&summary(&ctx, &all)));
     Ok(0)
 }
 

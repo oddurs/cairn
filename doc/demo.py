@@ -35,7 +35,10 @@ SCRIPT = [
     "cairn close 1",
     "cairn next",
     "cairn board",
-    "cairn render",
+    # Ends on the roadmap rather than `render`, which the hooks have already
+    # done by now and which would report "unchanged" — a true but anticlimactic
+    # last frame.
+    "cairn roadmap",
 ]
 
 # --- ANSI -------------------------------------------------------------------

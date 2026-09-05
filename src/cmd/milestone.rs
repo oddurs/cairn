@@ -168,7 +168,27 @@ fn add(
     let Some(aot) = entry.as_array_of_tables_mut() else {
         bail!("{CONFIG_FILE}: `milestone` is not a list of [[milestone]] blocks");
     };
-    aot.push(table);
+
+    // Declaration order is meaningful — an undated milestone takes its position
+    // from the dated one that follows it — so a dated milestone is filed among
+    // the dated ones rather than appended. Appending put every new milestone
+    // after a trailing `later`, which then inherited its date and stopped
+    // sorting last.
+    match &due {
+        Some(new_due) => {
+            let at = aot
+                .iter()
+                .position(|t| {
+                    t.get("due")
+                        .and_then(|v| v.as_str())
+                        .is_some_and(|d| d > new_due.as_str())
+                })
+                .unwrap_or(aot.len());
+            aot.insert(at, table);
+        }
+        // Undated milestones mean "after everything dated", so appending is right.
+        None => aot.push(table),
+    }
 
     crate::store::write_atomic(&path, doc.to_string().as_bytes())?;
     println!("{} milestone {}", style::green("added"), style::bold(name));
