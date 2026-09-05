@@ -182,6 +182,15 @@ description = "Items that still need a milestone or a priority"
 filter = "milestone=,category!=done"
 columns = ["id", "type", "title", "created"]
 
+# ─── Hooks ───────────────────────────────────────────────────────────────────
+# Keeping the rendered roadmap current is the point, so it is done rather than
+# remembered. See "Hooks" in the manual for the shell and argv forms.
+
+[hooks]
+after-create = "cairn render -q"
+after-change = "cairn render -q"
+after-remove = "cairn render -q"
+
 # ─── Rendered roadmap ────────────────────────────────────────────────────────
 
 [render]
