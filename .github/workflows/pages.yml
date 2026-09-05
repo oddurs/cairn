@@ -10,6 +10,7 @@ on:
       - "www/**"
       - "spec/**"
       - "doc/demo.svg"
+      - "doc/samples.json"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 

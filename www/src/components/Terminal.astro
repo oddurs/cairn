@@ -1,0 +1,47 @@
+---
+// Renders a recorded sample. The HTML comes from doc/samples.json, which is
+// produced by running the real commands — nothing here is typed to look right.
+import samples from "../content/samples.json";
+const { name, caption } = Astro.props;
+const sample = samples[name];
+if (!sample) throw new Error(`no recorded sample named "${name}"`);
+---
+
+<figure class="term">
+  <figcaption>
+    {sample.cmd ? <span class="term__cmd">$ {sample.cmd}</span> : sample.path}
+  </figcaption>
+  <pre><code set:html={sample.html} /></pre>
+  {caption && <p class="term__note">{caption}</p>}
+</figure>
+
+<style>
+  .term {
+    margin: 0;
+  }
+  figcaption {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    color: var(--moss);
+    padding: 0.55rem 1.1rem;
+    background: var(--slate);
+    border: 1px solid var(--hairline);
+    border-bottom: 0;
+    border-radius: 3px 3px 0 0;
+  }
+  .term__cmd {
+    color: var(--chalk);
+  }
+  pre {
+    background: var(--slate-deep);
+    border: 1px solid var(--hairline);
+    border-radius: 0 0 3px 3px;
+    font-size: 0.78rem;
+  }
+  .term__note {
+    margin: 0.75rem 0 0;
+    color: var(--moss);
+    font-size: 0.9375rem;
+    max-width: 60ch;
+  }
+</style>
