@@ -34,9 +34,17 @@ Enough to run a real project's roadmap without reaching for anything else.
 
 ## v0.2 — Comfortable
 
-`##########` 100% · 18 of 18 done · due 2026-12-01
+`########··` 78% · 18 of 23 done · due 2026-12-01
 
-The rough edges that only show up after a few weeks of daily use.
+The rough edges that show up after a few weeks of daily use, and the pieces that make the central claim true rather than merely stated.
+
+### backlog
+
+- [ ] [`0045`](https://github.com/oddurs/cairn/blob/main/cairn/items/0045-show-an-item-s-history.md) Show an item's history <sup>feature · p0</sup>
+- [ ] [`0046`](https://github.com/oddurs/cairn/blob/main/cairn/items/0046-change-several-items-in-one-command.md) Change several items in one command <sup>bug · p1</sup>
+- [ ] [`0047`](https://github.com/oddurs/cairn/blob/main/cairn/items/0047-say-where-to-report-bugs-in-the-program-itself.md) Say where to report bugs, in the program itself <sup>bug · p1</sup>
+- [ ] [`0048`](https://github.com/oddurs/cairn/blob/main/cairn/items/0048-choose-an-editor-that-exists-on-the-platform.md) Choose an editor that exists on the platform <sup>bug · p1</sup>
+- [ ] [`0049`](https://github.com/oddurs/cairn/blob/main/cairn/items/0049-a-cookbook-of-things-people-actually-want-to-do.md) A cookbook of things people actually want to do <sup>docs · p2</sup>
 
 ### done
 
@@ -61,9 +69,17 @@ The rough edges that only show up after a few weeks of daily use.
 
 ## v1.0 — Stable
 
-`##########` 100% · 5 of 5 done · due 2027-03-01
+`#####·····` 50% · 5 of 10 done · due 2027-03-01
 
-Documented, packaged, and safe to depend on. The file format stops moving.
+Safe to depend on: every scriptable surface carries a promise, the command surface has been reviewed and pruned rather than accumulated, releases can be verified, and it installs from a package manager people already use.
+
+### backlog
+
+- [ ] [`0050`](https://github.com/oddurs/cairn/blob/main/cairn/items/0050-say-what-is-stable-and-what-the-promise-means.md) Say what is stable, and what the promise means <sup>docs · p0</sup>
+- [ ] [`0051`](https://github.com/oddurs/cairn/blob/main/cairn/items/0051-review-the-command-surface-before-1-0-freezes-it.md) Review the command surface before 1.0 freezes it <sup>chore · p0</sup>
+- [ ] [`0052`](https://github.com/oddurs/cairn/blob/main/cairn/items/0052-sign-releases-and-ship-a-source-tarball.md) Sign releases and ship a source tarball <sup>chore · p0</sup>
+- [ ] [`0053`](https://github.com/oddurs/cairn/blob/main/cairn/items/0053-be-in-a-package-manager-people-already-use.md) Be in a package manager people already use <sup>chore · p0</sup>
+- [ ] [`0054`](https://github.com/oddurs/cairn/blob/main/cairn/items/0054-decide-about-translation-and-write-the-decision-down.md) Decide about translation, and write the decision down <sup>docs · p2</sup>
 
 ### done
 
