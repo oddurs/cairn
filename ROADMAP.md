@@ -6,7 +6,7 @@ A markdown-native roadmap and issue manager that lives in your repository.
 
 ## v0.1 — Usable in anger
 
-`########··` 75% · 12 of 16 done · due 2026-10-15
+`#########·` 88% · 14 of 16 done · due 2026-10-15
 
 Enough to run a real project's roadmap without reaching for anything else.
 
@@ -17,13 +17,12 @@ Enough to run a real project's roadmap without reaching for anything else.
 ### in progress
 
 - [ ] [`0001`](https://github.com/oddurs/cairn/blob/main/cairn/items/0001-publish-to-crates-io-and-homebrew.md) Publish to crates.io and Homebrew <sup>chore · p0</sup>
-- [ ] [`0012`](https://github.com/oddurs/cairn/blob/main/cairn/items/0012-ship-prebuilt-binaries.md) Ship prebuilt binaries <sup>chore · p0</sup>
-- [ ] [`0030`](https://github.com/oddurs/cairn/blob/main/cairn/items/0030-cut-a-release-candidate-and-verify-every-install-path.md) Cut a release candidate and verify every install path <sup>chore · p0 · s5</sup>
 
 ### done
 
 - [x] [`0002`](https://github.com/oddurs/cairn/blob/main/cairn/items/0002-ship-shell-completions-and-a-man-page-with-the-release.md) Ship shell completions and a man page with the release <sup>chore · p1</sup>
 - [x] [`0011`](https://github.com/oddurs/cairn/blob/main/cairn/items/0011-settle-the-published-name.md) Settle the published name <sup>chore · p0</sup>
+- [x] [`0012`](https://github.com/oddurs/cairn/blob/main/cairn/items/0012-ship-prebuilt-binaries.md) Ship prebuilt binaries <sup>chore · p0</sup>
 - [x] [`0013`](https://github.com/oddurs/cairn/blob/main/cairn/items/0013-record-a-terminal-demo-for-the-readme.md) Record a terminal demo for the README <sup>docs · p1</sup>
 - [x] [`0014`](https://github.com/oddurs/cairn/blob/main/cairn/items/0014-define-and-publish-platform-support-tiers.md) Define and publish platform support tiers <sup>docs · p0 · s1</sup>
 - [x] [`0015`](https://github.com/oddurs/cairn/blob/main/cairn/items/0015-port-the-end-to-end-suite-to-run-on-every-platform.md) Port the end-to-end suite to run on every platform <sup>chore · p0 · s1</sup>
@@ -32,6 +31,7 @@ Enough to run a real project's roadmap without reaching for anything else.
 - [x] [`0018`](https://github.com/oddurs/cairn/blob/main/cairn/items/0018-preserve-line-endings-when-rewriting-an-item.md) Preserve line endings when rewriting an item <sup>bug · p0 · s2</sup>
 - [x] [`0019`](https://github.com/oddurs/cairn/blob/main/cairn/items/0019-write-item-files-atomically.md) Write item files atomically <sup>bug · p0 · s2</sup>
 - [x] [`0020`](https://github.com/oddurs/cairn/blob/main/cairn/items/0020-keep-read-commands-working-when-one-file-is-broken.md) Keep read commands working when one file is broken <sup>bug · p0 · s2</sup>
+- [x] [`0030`](https://github.com/oddurs/cairn/blob/main/cairn/items/0030-cut-a-release-candidate-and-verify-every-install-path.md) Cut a release candidate and verify every install path <sup>chore · p0 · s5</sup>
 - [x] [`0033`](https://github.com/oddurs/cairn/blob/main/cairn/items/0033-order-milestones-the-way-their-author-declared-them.md) Order milestones the way their author declared them <sup>bug · p1</sup>
 - [x] [`0034`](https://github.com/oddurs/cairn/blob/main/cairn/items/0034-render-the-roadmap-by-default-rather-than-by-discipline.md) Render the roadmap by default rather than by discipline <sup>bug · p1</sup>
 

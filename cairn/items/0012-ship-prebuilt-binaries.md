@@ -2,7 +2,7 @@
 id: 12
 title: Ship prebuilt binaries
 type: chore
-status: doing
+status: done
 milestone: v0.1
 assignee: claude
 created: 2026-09-04
@@ -28,3 +28,7 @@ the workflow and the installer script.
 - [ ] `curl … | sh` installs a working binary on macOS and Linux
 - [ ] `brew install` works
 - [ ] Release artefacts are built in CI from a tag, not by hand
+
+## 2026-09-05
+
+Released. Three attempts: the packaging step copied LICENSE, renamed to COPYING when the repository was laid out the GNU way; then including the spec landed it on top of the project README; then macos-13 sat queued for twenty minutes because GitHub is retiring Intel runners, so x86_64-apple-darwin is now cross-compiled from arm64. All five artefacts publish with checksums.
