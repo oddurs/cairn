@@ -21,7 +21,10 @@ jobs:
         include:
           - os: macos-latest
             target: aarch64-apple-darwin
-          - os: macos-13
+          # Cross-compiled from the arm64 runner rather than built on macos-13.
+          # Apple ships both toolchains, and GitHub is retiring its Intel
+          # runners: the first tag sat queued for twenty minutes waiting for one.
+          - os: macos-latest
             target: x86_64-apple-darwin
           - os: ubuntu-latest
             target: x86_64-unknown-linux-musl
