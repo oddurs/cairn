@@ -1,12 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="867" height="666" viewBox="0 0 867 666" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13">
-<defs><clipPath id="r"><rect x="0" y="0" width="867" height="666" rx="9"/></clipPath></defs>
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="1086" viewBox="0 0 760 1086" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13">
+<defs><clipPath id="r"><rect x="0" y="0" width="760" height="1086" rx="9"/></clipPath></defs>
 <g clip-path="url(#r)">
-<rect width="867" height="666" fill="#1b1f27"/>
-<rect width="867" height="30" fill="#12151b"/>
+<rect width="760" height="1086" fill="#1b1f27"/>
+<rect width="760" height="30" fill="#12151b"/>
 <circle cx="19" cy="15" r="5" fill="#e06c75"/>
 <circle cx="37" cy="15" r="5" fill="#e5c07b"/>
 <circle cx="55" cy="15" r="5" fill="#98c379"/>
-<text x="434" y="19" fill="#7f8797" text-anchor="middle" font-size="11">cairn</text>
+<text x="380" y="19" fill="#7f8797" text-anchor="middle" font-size="11">cairn</text>
 <text x="22.0" y="48.0" fill="#98c379" font-weight="600">$</text>
 <text x="38.8" y="48.0" fill="#dcdfe4">cairn new 'Support OAuth login' -t feature -m v0.1 --set priority=p0</text>
 <text y="68.0"><tspan x="22.0" fill="#98c379">created</tspan><tspan x="80.8" fill="#dcdfe4"> </tspan><tspan x="89.2" fill="#dcdfe4" font-weight="600">0001</tspan><tspan x="122.8" fill="#dcdfe4">  Support OAuth login</tspan></text>
@@ -17,25 +17,39 @@
 <text y="168.0"><tspan x="22.0" fill="#7f8797">cairn/items/0002-rate-limit-the-public-api.md</tspan></text>
 <text x="22.0" y="208.0" fill="#98c379" font-weight="600">$</text>
 <text x="38.8" y="208.0" fill="#dcdfe4">cairn next</text>
-<text y="228.0"><tspan x="22.0" fill="#7f8797">ID    STATUS   MILESTONE  BLOCKED BY  TITLE</tspan></text>
-<text y="248.0"><tspan x="22.0" fill="#7f8797">0001</tspan><tspan x="55.6" fill="#dcdfe4">  </tspan><tspan x="72.4" fill="#6b7385">backlog</tspan><tspan x="131.2" fill="#dcdfe4">  v0.1                   Support OAuth login</tspan></text>
-<text x="22.0" y="288.0" fill="#98c379" font-weight="600">$</text>
-<text x="38.8" y="288.0" fill="#dcdfe4">cairn claim --next</text>
-<text y="308.0"><tspan x="22.0" fill="#98c379">claimed</tspan><tspan x="80.8" fill="#dcdfe4"> </tspan><tspan x="89.2" fill="#dcdfe4" font-weight="600">0001</tspan><tspan x="122.8" fill="#dcdfe4">  Support OAuth login</tspan></text>
-<text y="328.0"><tspan x="22.0" fill="#7f8797">  claude · doing · cairn/items/0001-support-oauth-login.md</tspan></text>
-<text x="22.0" y="368.0" fill="#98c379" font-weight="600">$</text>
-<text x="38.8" y="368.0" fill="#dcdfe4">cairn close 1</text>
-<text y="388.0"><tspan x="22.0" fill="#98c379">closed</tspan><tspan x="72.4" fill="#dcdfe4"> </tspan><tspan x="80.8" fill="#dcdfe4" font-weight="600">0001</tspan><tspan x="114.4" fill="#dcdfe4">  Support OAuth login</tspan></text>
-<text x="22.0" y="428.0" fill="#98c379" font-weight="600">$</text>
-<text x="38.8" y="428.0" fill="#dcdfe4">cairn next</text>
-<text y="448.0"><tspan x="22.0" fill="#7f8797">ID    STATUS   MILESTONE  BLOCKED BY  TITLE</tspan></text>
-<text y="468.0"><tspan x="22.0" fill="#7f8797">0002</tspan><tspan x="55.6" fill="#dcdfe4">  </tspan><tspan x="72.4" fill="#6b7385">backlog</tspan><tspan x="131.2" fill="#dcdfe4">  v0.2                   Rate-limit the public API</tspan></text>
-<text x="22.0" y="508.0" fill="#98c379" font-weight="600">$</text>
-<text x="38.8" y="508.0" fill="#dcdfe4">cairn board</text>
-<text y="528.0"><tspan x="22.0" fill="#6b7385">backlog</tspan><tspan x="80.8" fill="#dcdfe4"> </tspan><tspan x="89.2" fill="#7f8797">1</tspan><tspan x="97.6" fill="#dcdfe4">                </tspan><tspan x="232.0" fill="#61afef">planned</tspan><tspan x="290.8" fill="#dcdfe4"> </tspan><tspan x="299.2" fill="#7f8797">0</tspan><tspan x="307.6" fill="#dcdfe4">                </tspan><tspan x="442.0" fill="#e5c07b">in progress</tspan><tspan x="534.4" fill="#dcdfe4"> </tspan><tspan x="542.8" fill="#7f8797">0</tspan><tspan x="551.2" fill="#dcdfe4">            </tspan><tspan x="652.0" fill="#e06c75">blocked</tspan><tspan x="710.8" fill="#dcdfe4"> </tspan><tspan x="719.2" fill="#7f8797">0</tspan></text>
-<text y="548.0"><tspan x="22.0" fill="#7f8797">───────────────────────  ───────────────────────  ───────────────────────  ───────────────────────</tspan></text>
-<text y="568.0"><tspan x="22.0" fill="#7f8797">0002</tspan><tspan x="55.6" fill="#dcdfe4"> Rate-limit the pu…</tspan></text>
-<text x="22.0" y="608.0" fill="#98c379" font-weight="600">$</text>
-<text x="38.8" y="608.0" fill="#dcdfe4">cairn render</text>
-<text y="628.0"><tspan x="22.0" fill="#98c379">unchanged</tspan><tspan x="97.6" fill="#dcdfe4"> ROADMAP.md  </tspan><tspan x="206.8" fill="#7f8797">2 items</tspan></text>
+<text y="228.0"><tspan x="22.0" fill="#7f8797">ID    PRIORITY  STATUS   MILESTONE  TITLE</tspan></text>
+<text y="248.0"><tspan x="22.0" fill="#7f8797">0001</tspan><tspan x="55.6" fill="#dcdfe4">  p0        </tspan><tspan x="156.4" fill="#6b7385">backlog</tspan><tspan x="215.2" fill="#dcdfe4">  v0.1       Support OAuth login</tspan></text>
+<text y="288.0"><tspan x="22.0" fill="#7f8797">1 ready · 1 blocked</tspan></text>
+<text x="22.0" y="328.0" fill="#98c379" font-weight="600">$</text>
+<text x="38.8" y="328.0" fill="#dcdfe4">cairn claim --next</text>
+<text y="348.0"><tspan x="22.0" fill="#98c379">claimed</tspan><tspan x="80.8" fill="#dcdfe4"> </tspan><tspan x="89.2" fill="#dcdfe4" font-weight="600">0001</tspan><tspan x="122.8" fill="#dcdfe4">  Support OAuth login</tspan></text>
+<text y="368.0"><tspan x="22.0" fill="#7f8797">  claude · doing · cairn/items/0001-support-oauth-login.md</tspan></text>
+<text x="22.0" y="408.0" fill="#98c379" font-weight="600">$</text>
+<text x="38.8" y="408.0" fill="#dcdfe4">cairn close 1</text>
+<text y="428.0"><tspan x="22.0" fill="#98c379">closed</tspan><tspan x="72.4" fill="#dcdfe4"> </tspan><tspan x="80.8" fill="#dcdfe4" font-weight="600">0001</tspan><tspan x="114.4" fill="#dcdfe4">  Support OAuth login</tspan></text>
+<text x="22.0" y="468.0" fill="#98c379" font-weight="600">$</text>
+<text x="38.8" y="468.0" fill="#dcdfe4">cairn next</text>
+<text y="488.0"><tspan x="22.0" fill="#7f8797">ID    PRIORITY  STATUS   MILESTONE  TITLE</tspan></text>
+<text y="508.0"><tspan x="22.0" fill="#7f8797">0002</tspan><tspan x="55.6" fill="#dcdfe4">  p1        </tspan><tspan x="156.4" fill="#6b7385">backlog</tspan><tspan x="215.2" fill="#dcdfe4">  v0.2       Rate-limit the public API</tspan></text>
+<text y="548.0"><tspan x="22.0" fill="#7f8797">1 ready</tspan></text>
+<text x="22.0" y="588.0" fill="#98c379" font-weight="600">$</text>
+<text x="38.8" y="588.0" fill="#dcdfe4">cairn board</text>
+<text y="608.0"><tspan x="22.0" fill="#6b7385">backlog</tspan><tspan x="80.8" fill="#dcdfe4"> </tspan><tspan x="89.2" fill="#7f8797">1</tspan><tspan x="97.6" fill="#dcdfe4">                          </tspan><tspan x="316.0" fill="#61afef">planned</tspan><tspan x="374.8" fill="#dcdfe4"> </tspan><tspan x="383.2" fill="#7f8797">0</tspan><tspan x="391.6" fill="#dcdfe4">  </tspan><tspan x="408.4" fill="#e5c07b">in progress</tspan><tspan x="500.8" fill="#dcdfe4"> </tspan><tspan x="509.2" fill="#7f8797">0</tspan><tspan x="517.6" fill="#dcdfe4">  </tspan><tspan x="534.4" fill="#e06c75">blocked</tspan><tspan x="593.2" fill="#dcdfe4"> </tspan><tspan x="601.6" fill="#7f8797">0</tspan></text>
+<text y="628.0"><tspan x="22.0" fill="#7f8797">─────────────────────────────────  ─────────  ─────────────  ─────────</tspan></text>
+<text y="648.0"><tspan x="22.0" fill="#7f8797">0002</tspan><tspan x="55.6" fill="#dcdfe4"> p1 Rate-limit the public API</tspan></text>
+<text y="688.0"><tspan x="22.0" fill="#7f8797">1 ready</tspan></text>
+<text x="22.0" y="728.0" fill="#98c379" font-weight="600">$</text>
+<text x="38.8" y="728.0" fill="#dcdfe4">cairn roadmap</text>
+<text y="748.0"><tspan x="22.0" fill="#dcdfe4" font-weight="600">Nimbus</tspan></text>
+<text y="788.0"><tspan x="22.0" fill="#dcdfe4" font-weight="600">v0.1</tspan><tspan x="55.6" fill="#dcdfe4">  </tspan><tspan x="72.4" fill="#7f8797">First usable version</tspan></text>
+<text y="808.0"><tspan x="22.0" fill="#dcdfe4">  [####################] 100%  1/1</tspan><tspan x="307.6" fill="#7f8797">   due 2026-12-01</tspan></text>
+<text y="828.0"><tspan x="22.0" fill="#dcdfe4">  </tspan><tspan x="38.8" fill="#7f8797">Enough to dogfood in a real project.</tspan></text>
+<text y="868.0"><tspan x="22.0" fill="#dcdfe4" font-weight="600">v0.2</tspan><tspan x="55.6" fill="#dcdfe4">  </tspan><tspan x="72.4" fill="#7f8797">Hardening</tspan></text>
+<text y="888.0"><tspan x="22.0" fill="#dcdfe4">  [--------------------]   0%  0/1</tspan><tspan x="307.6" fill="#7f8797">   due 2027-02-01</tspan></text>
+<text y="928.0"><tspan x="22.0" fill="#dcdfe4" font-weight="600">v1.0</tspan><tspan x="55.6" fill="#dcdfe4">  </tspan><tspan x="72.4" fill="#7f8797">Stable release</tspan></text>
+<text y="948.0"><tspan x="22.0" fill="#dcdfe4">  [--------------------]   —  0/0</tspan><tspan x="299.2" fill="#7f8797">   due 2027-03-01</tspan></text>
+<text y="968.0"><tspan x="22.0" fill="#dcdfe4">  </tspan><tspan x="38.8" fill="#7f8797">Documented, tested, and safe to depend on.</tspan></text>
+<text y="1008.0"><tspan x="22.0" fill="#dcdfe4" font-weight="600">later</tspan><tspan x="64.0" fill="#dcdfe4">  </tspan><tspan x="80.8" fill="#7f8797">Someday</tspan></text>
+<text y="1028.0"><tspan x="22.0" fill="#dcdfe4">  [--------------------]   —  0/0</tspan></text>
+<text y="1048.0"><tspan x="22.0" fill="#dcdfe4">  </tspan><tspan x="38.8" fill="#7f8797">Good ideas without a date yet.</tspan></text>
 </g></svg>

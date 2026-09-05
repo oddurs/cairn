@@ -34,7 +34,7 @@ Enough to run a real project's roadmap without reaching for anything else.
 
 ## v0.2 — Comfortable
 
-`##########` 100% · 13 of 13 done · due 2026-12-01
+`##########` 100% · 15 of 15 done · due 2026-12-01
 
 The rough edges that only show up after a few weeks of daily use.
 
@@ -53,6 +53,8 @@ The rough edges that only show up after a few weeks of daily use.
 - [x] [`0035`](https://github.com/oddurs/cairn/blob/main/cairn/items/0035-teach-git-to-resolve-the-files-cairn-generates.md) Teach git to resolve the files cairn generates <sup>feature · p0</sup>
 - [x] [`0038`](https://github.com/oddurs/cairn/blob/main/cairn/items/0038-close-an-imported-issue-with-a-pointer-to-the-item.md) Close an imported issue with a pointer to the item <sup>feature · p1</sup>
 - [x] [`0039`](https://github.com/oddurs/cairn/blob/main/cairn/items/0039-record-a-decision-on-an-item-without-rewriting-the-file.md) Record a decision on an item without rewriting the file <sup>feature · p1</sup>
+- [x] [`0040`](https://github.com/oddurs/cairn/blob/main/cairn/items/0040-cairn-next-hides-the-thing-it-ranks-by.md) cairn next hides the thing it ranks by <sup>bug · p1</sup>
+- [x] [`0041`](https://github.com/oddurs/cairn/blob/main/cairn/items/0041-make-the-printed-board-worth-looking-at.md) Make the printed board worth looking at <sup>feature · p1</sup>
 
 ## v1.0 — Stable
 

@@ -23,6 +23,10 @@ pub struct Cell {
 }
 
 impl Cell {
+    pub fn is_empty(&self) -> bool {
+        self.text.trim().is_empty()
+    }
+
     pub fn plain(text: impl Into<String>) -> Cell {
         Cell {
             text: text.into(),
@@ -58,6 +62,39 @@ impl Table {
 
     pub fn row(&mut self, cells: Vec<Cell>) {
         self.rows.push(cells);
+    }
+
+    /// Drop columns that are empty for every row.
+    ///
+    /// A schema declares which fields are worth a column, but whether a given
+    /// query fills them is not knowable in advance: `blocked by` is empty
+    /// whenever nothing is blocked, and a field like `sprint` is empty for every
+    /// item filed after it stopped being used. An always-empty column costs
+    /// width and attention and carries nothing, so it is removed after the rows
+    /// are known rather than guessed at beforehand.
+    ///
+    /// `keep` names columns that stay even when empty — the ones whose absence
+    /// would be more confusing than their emptiness.
+    pub fn drop_empty_columns(&mut self, keep: &[&str]) {
+        let live: Vec<bool> = (0..self.headers.len())
+            .map(|i| {
+                keep.iter()
+                    .any(|k| k.eq_ignore_ascii_case(&self.headers[i]))
+                    || self
+                        .rows
+                        .iter()
+                        .any(|r| !r.get(i).is_none_or(Cell::is_empty))
+            })
+            .collect();
+        if live.iter().all(|k| *k) {
+            return;
+        }
+        let mut keep_iter = live.iter();
+        self.headers.retain(|_| *keep_iter.next().unwrap_or(&true));
+        for row in self.rows.iter_mut() {
+            let mut it = live.iter();
+            row.retain(|_| *it.next().unwrap_or(&true));
+        }
     }
 
     pub fn render(&self) -> String {
