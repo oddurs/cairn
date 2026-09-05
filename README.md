@@ -370,10 +370,16 @@ cairn speaks one documented interchange format, and every integration is an
 adapter over it — so a tracker cairn has never heard of is one `jq` script away.
 
 ```sh
-cairn import --from github --repo owner/name    # through `gh`, using your existing auth
+cairn import --from github --repo owner/name --close
 cairn import --from json backlog.json --dry-run
 cairn export --to json --output backlog.json
 ```
+
+`--close` closes each imported issue upstream with a comment naming the item it
+became. The repository is the system of record and the tracker is an inbox, so
+the two must not both stay open — the same work in two places diverges from the
+moment it exists. One direction, no reconciliation, and provenance means a
+repeated import has nothing left to close.
 
 The hard part of import is that the incoming vocabulary is not yours: a GitHub
 issue is `open` or `closed`, while your project might call those `icebox` and
@@ -405,10 +411,16 @@ cairn speaks one documented interchange format, and every integration is an
 adapter over it — so a tracker cairn has never heard of is one `jq` script away.
 
 ```sh
-cairn import --from github --repo owner/name    # through `gh`, using your existing auth
+cairn import --from github --repo owner/name --close
 cairn import --from json backlog.json --dry-run
 cairn export --to json --output backlog.json
 ```
+
+`--close` closes each imported issue upstream with a comment naming the item it
+became. The repository is the system of record and the tracker is an inbox, so
+the two must not both stay open — the same work in two places diverges from the
+moment it exists. One direction, no reconciliation, and provenance means a
+repeated import has nothing left to close.
 
 The hard part of import is that the incoming vocabulary is not yours: a GitHub
 issue is `open` or `closed`, while your project might call those `icebox` and

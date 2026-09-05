@@ -883,6 +883,26 @@ project does not have. Anything that still cannot be placed --- an undeclared
 field, a type with no local equivalent --- is reported as a warning rather than
 dropped in silence. @option{--dry-run} reports without writing.
 
+@section Closing the issue it came from
+
+@cindex inbox, GitHub as
+@option{--close} closes each imported issue upstream, with a comment naming the
+item it became and where that item lives.
+
+@example
+cairn import --from github --repo owner/name --close
+@end example
+
+The repository is the system of record and the tracker is an inbox. If both stay
+open the same work exists in two places and diverges from the moment it is
+imported. This is the whole of what two-way synchronisation was meant to solve,
+and it goes one direction only: no identifier mapping, no reconciliation, no
+update loop.
+
+Issues are closed only after every item is safely on disk. Closing one that
+pointed at something which failed to save would send its reporter to a dead
+link.
+
 @section Repeating an import
 
 @cindex source
