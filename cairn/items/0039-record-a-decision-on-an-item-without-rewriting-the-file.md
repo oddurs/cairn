@@ -2,8 +2,9 @@
 id: 39
 title: Record a decision on an item without rewriting the file
 type: feature
-status: backlog
+status: done
 milestone: v0.2
+assignee: claude
 created: 2026-09-05
 updated: 2026-09-05
 priority: p1
@@ -41,3 +42,7 @@ verb reads better at a terminal and is harder to invoke by accident.
 - [ ] Available over MCP as an append, distinct from replacing the body
 - [ ] Reads from stdin, so an agent can write more than a line
 - [ ] Dropping an item with a reason takes one command
+
+## 2026-09-05
+
+Built. `cairn note` appends under a dated heading; `--bare` omits it; `--stdin` for anything longer than a line. Exposed over MCP as `add_note`, deliberately separate from `update_item`'s body replacement.

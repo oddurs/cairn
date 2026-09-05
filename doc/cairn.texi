@@ -931,6 +931,26 @@ Changes fields: @samp{cairn set 12 status=doing priority=p0}. List fields
 support @samp{+=} and @samp{-=} to add and remove elements. An empty value
 clears a field. Every assignment is validated before anything is written.
 
+@section cairn note
+@cindex notes
+@cindex decisions, recording
+Appends to an item's body, under a dated heading by default.
+
+@example
+cairn note 12 "Dropped: libguile ends the self-contained binary."
+cairn note 12 --heading "Dropped, 2026-09-05" --stdin < reasoning.md
+@end example
+
+A status records what was decided; a note records why. Without somewhere to put
+the reason a backlog becomes a list of things nobody remembers rejecting, and a
+caller with no editor to fall back on --- an agent, a script --- cannot record
+one at all.
+
+The command is append-only by design. Replacing a body is what @command{cairn
+edit} and the MCP @code{update_item} tool are for; a command whose purpose is to
+add to the record should not be able to erase it. @option{--bare} omits the
+heading, and @option{--stdin} reads a note longer than a line.
+
 @section cairn close, cairn reopen
 Move items to the first @code{done} status, or back to the default open
 status. @option{--status} overrides the target.
