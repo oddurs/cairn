@@ -43,14 +43,35 @@ freeform Markdown is not less Markdown but a schema:
 
 ## Install
 
+**A prebuilt binary**, no Rust toolchain needed:
+
 ```sh
-cargo install cairn-md                  # installs a binary named `cairn`
-git clone … && cargo install --path .   # from source
-curl -fsSL https://…/install.sh | sh    # prebuilt binary, no Rust toolchain
+curl -fsSL https://raw.githubusercontent.com/oddurs/cairn/main/install.sh | sh
+```
+
+Detects your platform, verifies the release checksum, and installs to
+`~/.local/bin`. Linux (x86-64, aarch64, static musl) and macOS (both
+architectures); Windows binaries are on the
+[releases page](https://github.com/oddurs/cairn/releases).
+
+**Homebrew.** Recent Homebrew requires third-party taps to be trusted
+explicitly, so it is three commands rather than two:
+
+```sh
+brew tap oddurs/cairn
+brew trust oddurs/cairn
+brew install cairn
+```
+
+**From source:**
+
+```sh
+cargo install --git https://github.com/oddurs/cairn cairn-md
 ```
 
 The package is `cairn-md` because `cairn` is taken on crates.io by an unrelated
-crate; the binary it installs is `cairn`.
+crate; the binary it installs is `cairn`. It is not on crates.io yet — see
+`0001` — so `--git` is the way for now.
 
 Optional, and worth doing:
 
