@@ -168,6 +168,9 @@ pub fn run(args: Args) -> Result<i32> {
     if item.path.exists() {
         bail!("{} already exists", item.path.display());
     }
+    if !item.meta.depends_on.is_empty() {
+        crate::cmd::set::check_no_cycle(&store, &item)?;
+    }
     item.save()?;
 
     if args.quiet {

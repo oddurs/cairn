@@ -72,9 +72,13 @@ pub fn run(args: Args) -> Result<i32> {
     let lock = Lock::acquire(&cfg)?;
     let mut item = store.find(parse_id(&args.id)?)?;
 
+    let before = item.meta.depends_on.clone();
     for raw in &args.assignments {
         let (key, assign) = parse_assignment(raw)?;
         apply(&mut item, &cfg, &key, assign)?;
+    }
+    if item.meta.depends_on != before {
+        check_no_cycle(&store, &item)?;
     }
     item.touch(&today());
     item.save()?;
@@ -145,6 +149,33 @@ fn transition(cfg: &Config, ids: &[String], status: &str, quiet: bool, verb: &st
         hooks::item(cfg, &store, hooks::Event::AfterChange, item);
     }
     Ok(0)
+}
+
+/// Refuse a dependency that would close a cycle.
+///
+/// `cairn check` reports cycles, but an ordinary command should not be able to
+/// create one: a project must not be left in a state the tool itself rejects.
+pub fn check_no_cycle(store: &Store, item: &Item) -> Result<()> {
+    let mut items = store.load_all()?;
+    // Consider the graph as it would be once this change lands.
+    if let Some(existing) = items.iter_mut().find(|i| i.id == item.id) {
+        existing.meta.depends_on = item.meta.depends_on.clone();
+    }
+    for dep in &item.meta.depends_on {
+        if let Some(path) = crate::store::dependency_path(&items, *dep, item.id) {
+            // The item, then the path back to it: `0001 -> 0003 -> 0002 -> 0001`.
+            // A self-dependency reads `0001 -> 0001`, which is also the truth.
+            let shown: Vec<String> = std::iter::once(item.id)
+                .chain(path)
+                .map(|id| store.cfg.format_id(id))
+                .collect();
+            bail!(
+                "that dependency would create a cycle: {}\nnothing could ever be started",
+                shown.join(" -> ")
+            );
+        }
+    }
+    Ok(())
 }
 
 /// Apply one assignment, validating against the schema first. This is the only

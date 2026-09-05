@@ -528,9 +528,17 @@ fn check_rejects_a_dangling_dependency() {
 
 #[test]
 fn check_rejects_a_dependency_cycle() {
+    // The commands refuse to create one, so a cycle now arrives only by hand
+    // editing or by a merge — which is exactly why `check` still looks for it.
     let p = seeded();
-    p.expect(&["set", "1", "depends_on=2", "-q"]);
-    p.expect(&["set", "2", "depends_on=1", "-q"]);
+    p.write(
+        "cairn/items/0060-loop-a.md",
+        "---\nid: 60\ntitle: Loop A\nstatus: backlog\ndepends_on: [61]\n---\nbody\n",
+    );
+    p.write(
+        "cairn/items/0061-loop-b.md",
+        "---\nid: 61\ntitle: Loop B\nstatus: backlog\ndepends_on: [60]\n---\nbody\n",
+    );
     assert_contains(&p.fails(&["check"]).all(), "cycle", "the reason");
 }
 
@@ -2006,4 +2014,34 @@ fn a_new_project_keeps_its_roadmap_current_without_being_told_to() {
     p.expect(&["render", "--check", "-q"]);
     p.expect(&["remove", "1", "--force"]);
     p.expect(&["render", "--check", "-q"]);
+}
+
+#[test]
+fn a_dependency_cycle_is_refused_rather_than_reported_later() {
+    // Found by the soak: `set depends_on` would happily close a cycle, which
+    // `check` then rejected. Same shape as removal leaving dangling references
+    // — an ordinary command must not be able to produce a project the tool
+    // itself calls invalid.
+    let p = Project::new();
+    p.add("A", &[]);
+    p.add("B", &[]);
+    p.add("C", &[]);
+    p.expect(&["set", "2", "depends_on=1", "-q"]);
+    p.expect(&["set", "3", "depends_on=2", "-q"]);
+
+    let out = p.fails(&["set", "1", "depends_on=3"]);
+    assert_contains(&out.all(), "would create a cycle", "the reason");
+    assert_contains(
+        &out.all(),
+        "0001 -> 0003 -> 0002 -> 0001",
+        "the path round it",
+    );
+    p.expect(&["check"]);
+
+    p.fails(&["set", "1", "depends_on=1"]);
+    p.fails(&["set", "1", "depends_on+=3"]);
+    // A dependency that does not close a cycle is still fine.
+    p.expect(&["set", "1", "depends_on=", "-q"]);
+    p.expect(&["new", "D", "-d", "1", "-q"]);
+    p.expect(&["check"]);
 }

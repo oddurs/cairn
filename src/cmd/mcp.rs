@@ -406,6 +406,9 @@ fn create_item(a: &Value) -> Result<String> {
     if item.path.exists() {
         bail!("{} already exists", item.path.display());
     }
+    if !item.meta.depends_on.is_empty() {
+        crate::cmd::set::check_no_cycle(&store, &item)?;
+    }
     item.save()?;
     drop(lock);
     hooks::item(&cfg, &store, hooks::Event::AfterCreate, &item);
@@ -426,8 +429,12 @@ fn update_item(a: &Value) -> Result<String> {
     let Some(fields) = a.get("fields").and_then(Value::as_object) else {
         bail!("`fields` is required: an object of field names to values");
     };
+    let before = item.meta.depends_on.clone();
     for (k, v) in fields {
         apply(&mut item, &cfg, k, Assign::Set(value_to_string(v)))?;
+    }
+    if item.meta.depends_on != before {
+        crate::cmd::set::check_no_cycle(&store, &item)?;
     }
     if let Some(body) = a.get("body").and_then(Value::as_str) {
         item.body = body.to_string();

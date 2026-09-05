@@ -154,6 +154,9 @@ def main():
     try:
         env = dict(os.environ, CAIRN_USER="claude", COLUMNS="88")
         env.pop("NO_COLOR", None)
+        # The default hooks invoke `cairn` by name, as an installed one would be
+        # found. Without this the recording captures a hook-not-found warning.
+        env["PATH"] = os.path.dirname(cairn) + os.pathsep + env.get("PATH", "")
 
         for command in SETUP:
             subprocess.run(

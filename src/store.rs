@@ -249,6 +249,34 @@ pub fn write_atomic(path: &Path, contents: &[u8]) -> Result<()> {
     Ok(())
 }
 
+/// A dependency path from `from` to `to`, if one exists.
+///
+/// Used to refuse an edge that would close a cycle. `cairn check` already
+/// reports cycles, but reporting is not enough: an ordinary command should not
+/// be able to put the project into a state the tool itself calls invalid. The
+/// same principle made `remove` clean up after itself.
+pub fn dependency_path(items: &[Item], from: u32, to: u32) -> Option<Vec<u32>> {
+    let edges: std::collections::HashMap<u32, &Vec<u32>> =
+        items.iter().map(|i| (i.id, &i.meta.depends_on)).collect();
+
+    let mut stack = vec![(from, vec![from])];
+    let mut seen = std::collections::HashSet::new();
+    while let Some((node, path)) = stack.pop() {
+        if !seen.insert(node) {
+            continue;
+        }
+        for next in edges.get(&node).map(|v| v.as_slice()).unwrap_or(&[]) {
+            let mut extended = path.clone();
+            extended.push(*next);
+            if *next == to {
+                return Some(extended);
+            }
+            stack.push((*next, extended));
+        }
+    }
+    None
+}
+
 pub fn today() -> String {
     chrono::Local::now().format("%Y-%m-%d").to_string()
 }
