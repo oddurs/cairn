@@ -1,0 +1,63 @@
+# Supply-chain policy for cairn.
+#
+#   cargo deny check
+#
+# The allowlist below was written from what is actually in the tree, not from a
+# template. Every entry appears in the dependency graph today; nothing is
+# permitted speculatively, so adding a dependency under a new licence is a
+# decision somebody has to make on purpose.
+
+[graph]
+all-features = true
+
+[advisories]
+# Any known vulnerability fails the build. A tool people keep years of project
+# history in does not get to carry an advisory quietly.
+yanked = "deny"
+ignore = []
+
+[licenses]
+# cairn is GPL-3.0-or-later. Permissive dependencies are compatible with that;
+# the reverse would not be, which is why nothing copyleft is listed here.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "ISC",
+    "Unicode-3.0",
+    "Unlicense",
+    "Zlib",
+]
+confidence-threshold = 0.9
+
+# cairn's own licence, and only cairn's. Scoping it as an exception rather than
+# adding GPL to the list above says the thing precisely: this project is
+# copyleft, and a dependency that became copyleft would still be a decision
+# somebody has to make deliberately.
+[[licenses.exceptions]]
+crate = "cairn-md"
+allow = ["GPL-3.0-or-later"]
+
+# `option-ext`, reached through `dirs`, is MIT OR Apache-2.0 OR
+# LGPL-2.1-or-later. The permissive halves are what we take.
+[[licenses.clarify]]
+crate = "option-ext"
+expression = "MIT"
+license-files = []
+
+[bans]
+# Two copies of the same crate is usually a dependency that needs updating
+# rather than a fact of life, so it is worth being told about.
+multiple-versions = "warn"
+wildcards = "deny"
+deny = []
+
+[sources]
+# Nothing from a git revision or a private registry: everything is a published
+# crate anyone can audit.
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

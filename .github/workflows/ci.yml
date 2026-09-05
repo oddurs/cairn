@@ -88,6 +88,18 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --test soak --release -- --ignored --nocapture
 
+  supply-chain:
+    # Advisories, licences, and where crates came from. A tool people keep years
+    # of project history in should not carry a known vulnerability quietly, and
+    # a GPL project should not acquire an incompatible transitive licence
+    # without somebody deciding to.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
+
   doc:
     runs-on: ubuntu-latest
     steps:

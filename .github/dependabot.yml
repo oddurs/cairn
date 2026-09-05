@@ -1,0 +1,23 @@
+# Dependency updates arrive as pull requests, so they go through the same tests
+# and the same supply-chain check as anything else.
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    # Patch bumps for twelve direct dependencies would be noise; a single
+    # grouped pull request per week is reviewable.
+    groups:
+      cargo:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
