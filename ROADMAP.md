@@ -59,13 +59,9 @@ The rough edges that only show up after a few weeks of daily use.
 
 ## v1.0 — Stable
 
-`########··` 80% · 4 of 5 done · due 2027-03-01
+`##########` 100% · 5 of 5 done · due 2027-03-01
 
 Documented, packaged, and safe to depend on. The file format stops moving.
-
-### backlog
-
-- [ ] [`0036`](https://github.com/oddurs/cairn/blob/main/cairn/items/0036-publish-the-item-format-as-a-document-in-its-own-right.md) Publish the item format as a document in its own right <sup>docs · p1</sup>
 
 ### done
 
@@ -73,6 +69,7 @@ Documented, packaged, and safe to depend on. The file format stops moving.
 - [x] [`0026`](https://github.com/oddurs/cairn/blob/main/cairn/items/0026-specify-the-item-file-format.md) Specify the item file format <sup>docs · p0 · s4</sup>
 - [x] [`0027`](https://github.com/oddurs/cairn/blob/main/cairn/items/0027-version-the-format-and-promise-compatibility.md) Version the format and promise compatibility <sup>feature · p0 · s4</sup>
 - [x] [`0028`](https://github.com/oddurs/cairn/blob/main/cairn/items/0028-keep-a-golden-corpus-of-items-that-must-always-parse.md) Keep a golden corpus of items that must always parse <sup>chore · p0 · s4</sup>
+- [x] [`0036`](https://github.com/oddurs/cairn/blob/main/cairn/items/0036-publish-the-item-format-as-a-document-in-its-own-right.md) Publish the item format as a document in its own right <sup>docs · p1</sup>
 
 ## later — Someday
 
