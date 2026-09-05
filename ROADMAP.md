@@ -37,14 +37,13 @@ Enough to run a real project's roadmap without reaching for anything else.
 
 ## v0.2 — Comfortable
 
-`#########·` 85% · 11 of 13 done · due 2026-12-01
+`##########` 92% · 12 of 13 done · due 2026-12-01
 
 The rough edges that only show up after a few weeks of daily use.
 
 ### backlog
 
 - [ ] [`0029`](https://github.com/oddurs/cairn/blob/main/cairn/items/0029-audit-dependencies-and-licences-continuously.md) Audit dependencies and licences continuously <sup>chore · p1 · s5</sup>
-- [ ] [`0038`](https://github.com/oddurs/cairn/blob/main/cairn/items/0038-close-an-imported-issue-with-a-pointer-to-the-item.md) Close an imported issue with a pointer to the item <sup>feature · p1</sup>
 
 ### done
 
@@ -58,6 +57,7 @@ The rough edges that only show up after a few weeks of daily use.
 - [x] [`0031`](https://github.com/oddurs/cairn/blob/main/cairn/items/0031-write-the-project-s-contribution-and-security-files.md) Write the project's contribution and security files <sup>docs · p2 · s5</sup>
 - [x] [`0032`](https://github.com/oddurs/cairn/blob/main/cairn/items/0032-soak-test-cairn-against-long-random-sequences.md) Soak-test cairn against long random sequences <sup>chore · p1 · s2</sup>
 - [x] [`0035`](https://github.com/oddurs/cairn/blob/main/cairn/items/0035-teach-git-to-resolve-the-files-cairn-generates.md) Teach git to resolve the files cairn generates <sup>feature · p0</sup>
+- [x] [`0038`](https://github.com/oddurs/cairn/blob/main/cairn/items/0038-close-an-imported-issue-with-a-pointer-to-the-item.md) Close an imported issue with a pointer to the item <sup>feature · p1</sup>
 - [x] [`0039`](https://github.com/oddurs/cairn/blob/main/cairn/items/0039-record-a-decision-on-an-item-without-rewriting-the-file.md) Record a decision on an item without rewriting the file <sup>feature · p1</sup>
 
 ## v1.0 — Stable

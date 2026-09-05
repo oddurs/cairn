@@ -82,6 +82,10 @@ pub struct Args {
     #[arg(long, action = ArgAction::SetTrue)]
     pub update: bool,
 
+    /// Close each imported issue upstream, pointing at the item it became
+    #[arg(long, action = ArgAction::SetTrue)]
+    pub close: bool,
+
     /// Report what would happen and write nothing
     #[arg(short = 'n', long, action = ArgAction::SetTrue)]
     pub dry_run: bool,
@@ -102,6 +106,9 @@ pub fn run(args: Args) -> Result<i32> {
     // Arguments are validated before any input is read, so a typo in --map is
     // reported even when the document turns out to be empty.
     let map = parse_map(&args.map)?;
+    if args.close && args.source != Source::Github {
+        bail!("--close only applies to --from github");
+    }
 
     let (incoming, origin) = match args.source {
         Source::Json => (read_json(&cfg, &args)?, "json".to_string()),
@@ -244,8 +251,69 @@ pub fn run(args: Args) -> Result<i32> {
     for item in &written {
         item.save()?;
     }
+
+    // Only after every item is safely on disk. Closing an issue that points at
+    // something that failed to save would send a reporter to a dead link.
+    if args.close {
+        close_upstream(&cfg, &store, &written, &mut warnings);
+    }
+
     report(&warnings, created, updated, skipped, false);
     Ok(0)
+}
+
+/// Close each imported issue, pointing at the item it became.
+///
+/// The repository is the system of record and the tracker is an inbox, so the
+/// two must not both stay open: the same work in two places diverges from the
+/// moment it exists. This is the whole of what two-way synchronisation was
+/// meant to solve, and it goes one direction only.
+fn close_upstream(cfg: &Config, store: &Store, items: &[Item], warnings: &mut Vec<String>) {
+    for item in items {
+        let Some(source) = item.meta.source.as_deref() else {
+            continue;
+        };
+        // `github:owner/repo#12`
+        let Some(rest) = source.strip_prefix("github:") else {
+            continue;
+        };
+        let Some((repo, number)) = rest.rsplit_once('#') else {
+            continue;
+        };
+
+        let mut body = format!(
+            "Tracked as `{}` — {}.\n\nThis project keeps its backlog in the repository, so \
+             the work now lives at `{}`.",
+            cfg.format_id(item.id),
+            item.title(),
+            store.rel(&item.path)
+        );
+        if let Some(url) = &cfg.project.url {
+            body.push_str(&format!(
+                "\n\n{}/{}",
+                url.trim_end_matches('/'),
+                store.rel(&item.path)
+            ));
+        }
+
+        let out = std::process::Command::new("gh")
+            .args(["issue", "close", number, "--repo", repo, "--comment", &body])
+            .output();
+        match out {
+            Ok(o) if o.status.success() => {
+                println!(
+                    "  {} {repo}#{number} -> {}",
+                    style::yellow("closed"),
+                    cfg.format_id(item.id)
+                );
+            }
+            Ok(o) => warnings.push(format!(
+                "could not close {repo}#{number}: {}",
+                String::from_utf8_lossy(&o.stderr).trim()
+            )),
+            Err(e) => warnings.push(format!("could not run gh to close {repo}#{number}: {e}")),
+        }
+    }
 }
 
 fn report(warnings: &[String], created: usize, updated: usize, skipped: usize, dry: bool) {

@@ -2383,3 +2383,29 @@ fn outside_a_repository_the_setup_says_so() {
         "rather than failing obscurely",
     );
 }
+
+#[test]
+fn closing_upstream_only_applies_to_a_tracker() {
+    // --close reaches out to GitHub through `gh`; asking for it on a JSON
+    // document is a mistake worth catching before anything is written.
+    let p = Project::new();
+    p.write("items.json", r#"[{"title": "From a file"}]"#);
+    let out = p.fails(&["import", "--from", "json", "items.json", "--close"]);
+    assert_contains(&out.all(), "only applies to", "it says why");
+    assert_eq!(p.count_all(), 0, "and nothing was imported");
+}
+
+#[test]
+fn a_repeated_import_has_nothing_left_to_close() {
+    // Provenance makes the second run a no-op, so no issue is commented twice.
+    // This is why idempotence and --close compose without extra bookkeeping.
+    let p = Project::new();
+    p.write(
+        "items.json",
+        r#"[{"title": "Once", "source": "github:owner/repo#1"}]"#,
+    );
+    p.expect(&["import", "--from", "json", "items.json", "-q"]);
+    let second = p.expect(&["import", "--from", "json", "items.json"]);
+    assert_contains(&second.all(), "1 already present", "nothing to do");
+    assert_eq!(p.count_all(), 1);
+}

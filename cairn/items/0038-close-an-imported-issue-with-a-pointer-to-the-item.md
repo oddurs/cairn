@@ -2,8 +2,9 @@
 id: 38
 title: Close an imported issue with a pointer to the item
 type: feature
-status: backlog
+status: done
 milestone: v0.2
+assignee: claude
 created: 2026-09-05
 updated: 2026-09-05
 priority: p1
@@ -33,3 +34,7 @@ lands on the item, in the repository, where the work actually is.
 - [ ] The comment links to the item's file at the current revision
 - [ ] Import stays idempotent: a re-run neither re-imports nor re-comments
 - [ ] Without `--close`, behaviour is exactly as it is today
+
+## 2026-09-05
+
+Built and verified against a real issue: oddurs/cairn#4 was imported, closed upstream, and commented with a pointer to the item file. Idempotence falls out of provenance — a repeated import creates nothing, so there is nothing left to close.
