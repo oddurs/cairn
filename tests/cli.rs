@@ -449,10 +449,16 @@ fn a_milestone_in_use_is_protected() {
     p.expect(&["milestone", "add", "v0.9"]);
     p.expect(&["set", "3", "milestone=v0.9", "-q"]);
     p.fails(&["milestone", "remove", "v0.9"]);
-    p.expect(&["milestone", "remove", "v0.9", "--force"]);
-    p.fails(&["check"]);
-    p.expect(&["set", "3", "milestone=", "-q"]);
+
+    // Forcing it clears the milestone from whatever referenced it, rather than
+    // leaving items pointing at a name that no longer exists.
+    let out = p.expect(&["milestone", "remove", "v0.9", "--force"]);
+    assert_contains(&out.all(), "milestone cleared", "it says what it did");
     p.expect(&["check"]);
+    assert_eq!(
+        p.json(&["show", "3", "--json"])["milestone"],
+        serde_json::Value::Null
+    );
 }
 
 #[test]
@@ -1870,4 +1876,44 @@ fn unknown_frontmatter_keys_survive_being_rewritten() {
         "from_the_future: keep me",
         "an unrecognised key was preserved",
     );
+}
+
+#[test]
+fn removing_an_item_never_leaves_a_dangling_reference() {
+    // Found by the soak test: delete the item something depends on and the
+    // project fails its own `check`, reached through an ordinary operation.
+    let p = Project::new();
+    let blocker = p.add("Depended upon", &[]);
+    let dependent = p.add("Depends on it", &["-d", &blocker]);
+
+    let out = p.expect(&["remove", &blocker, "--force"]);
+    assert_contains(
+        &out.all(),
+        "dropped reference",
+        "it says what else it touched",
+    );
+    p.expect(&["check"]);
+    assert_eq!(
+        p.json(&["show", &dependent, "--json"])["depends_on"],
+        serde_json::json!([]),
+        "the reference went with the item"
+    );
+}
+
+#[test]
+fn plain_output_reports_names_and_the_table_reports_labels() {
+    // `--plain` is for `grep` and `cut`, so it emits the names a filter accepts.
+    // The table is for a person, so it shows the label the schema declared.
+    let p = Project::new();
+    p.add("Something", &[]);
+    p.expect(&["set", "1", "status=doing", "-q"]);
+
+    let plain = p
+        .expect(&["list", "--plain", "--columns", "status"])
+        .trimmed();
+    assert_eq!(plain, "doing", "plain output round-trips into --filter");
+    assert_eq!(p.count_of("status=doing"), 1);
+
+    let table = p.expect(&["list", "--columns", "status"]).stdout;
+    assert_contains(&table, "in progress", "the table shows the label");
 }

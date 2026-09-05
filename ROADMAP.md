@@ -34,7 +34,7 @@ Enough to run a real project's roadmap without reaching for anything else.
 
 ## v0.2 — Comfortable
 
-`#######···` 70% · 7 of 10 done · due 2026-12-01
+`########··` 73% · 8 of 11 done · due 2026-12-01
 
 The rough edges that only show up after a few weeks of daily use.
 
@@ -53,6 +53,7 @@ The rough edges that only show up after a few weeks of daily use.
 - [x] [`0023`](https://github.com/oddurs/cairn/blob/main/cairn/items/0023-lock-the-repository-for-mutating-commands.md) Lock the repository for mutating commands <sup>feature · p0 · s3</sup>
 - [x] [`0024`](https://github.com/oddurs/cairn/blob/main/cairn/items/0024-stress-test-concurrent-writers.md) Stress-test concurrent writers <sup>chore · p0 · s3</sup>
 - [x] [`0025`](https://github.com/oddurs/cairn/blob/main/cairn/items/0025-make-claim-atomic-against-a-concurrent-claimer.md) Make claim atomic against a concurrent claimer <sup>bug · p1 · s3</sup>
+- [x] [`0032`](https://github.com/oddurs/cairn/blob/main/cairn/items/0032-soak-test-cairn-against-long-random-sequences.md) Soak-test cairn against long random sequences <sup>chore · p1 · s2</sup>
 
 ## v1.0 — Stable
 

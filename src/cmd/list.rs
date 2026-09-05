@@ -167,7 +167,7 @@ pub fn run(args: Args) -> Result<i32> {
     }
     if args.plain {
         for i in &items {
-            let cells: Vec<String> = columns.iter().map(|c| plain(&ctx, i, c)).collect();
+            let cells: Vec<String> = columns.iter().map(|c| machine(&ctx, i, c)).collect();
             println!("{}", cells.join("\t"));
         }
         return Ok(0);
@@ -234,7 +234,9 @@ fn resolve_columns(args: &Args, view: Option<&crate::config::View>, cfg: &Config
     cols
 }
 
-fn plain(ctx: &Ctx, item: &Item, column: &str) -> String {
+/// Column text for a person reading a terminal: statuses and types appear as
+/// their labels and icons, which is what the schema declared them to look like.
+fn display(ctx: &Ctx, item: &Item, column: &str) -> String {
     let cfg = ctx.cfg;
     match column {
         "id" => cfg.format_id(item.id),
@@ -246,8 +248,23 @@ fn plain(ctx: &Ctx, item: &Item, column: &str) -> String {
     }
 }
 
+/// Column text for a program. `--plain` exists to be piped into `cut`, `awk` or
+/// `grep`, so it emits the names a filter would accept — not the labels a
+/// person is shown. `cairn list --plain --columns status | grep doing` has to
+/// find the items whose status is `doing`, whatever the schema calls it.
+fn machine(ctx: &Ctx, item: &Item, column: &str) -> String {
+    match column {
+        "id" => ctx.cfg.format_id(item.id),
+        "title" => item.title().to_string(),
+        "status" => item.status().to_string(),
+        "type" => item.kind().unwrap_or("").to_string(),
+        "summary" => item.summary(),
+        _ => resolve(item, ctx, column).display(),
+    }
+}
+
 fn cell(ctx: &Ctx, item: &Item, column: &str) -> Cell {
-    let text = plain(ctx, item, column);
+    let text = display(ctx, item, column);
     match column {
         "id" => Cell::styled(&text, style::dim(&text)),
         "status" => Cell::styled(&text, paint_status(ctx.cfg, item.status())),

@@ -9,7 +9,7 @@ CARGO       ?= cargo
 MAKEINFO    ?= makeinfo
 CAIRN       := target/release/cairn
 
-.PHONY: all build check test doc info html pdf demo install install-bin \
+.PHONY: all build check test soak doc info html pdf demo install install-bin \
         install-man install-info clean roadmap
 
 all: build doc
@@ -30,6 +30,12 @@ test:
 
 # The demo runs the real commands and renders their real output, so it cannot
 # drift from the program.
+# Drives cairn through a long random sequence of ordinary operations, checking
+# after every step that the backlog still holds together. Prints its seed;
+# reproduce a failure with CAIRN_SOAK_SEED=<seed>.
+soak:
+	$(CARGO) test --test soak --release -- --ignored --nocapture
+
 demo: build
 	python3 doc/demo.py --cairn $(CAIRN)
 

@@ -21,7 +21,7 @@ use crate::cmd::{count_done, progress_bar};
 use crate::config::{CONFIG_FILE, Config};
 use crate::item::Item;
 use crate::lock::Lock;
-use crate::store::Store;
+use crate::store::{Store, today};
 use crate::style;
 use anyhow::{Result, bail};
 use clap::Subcommand;
@@ -237,7 +237,8 @@ fn remove(name: &str, force: bool) -> Result<i32> {
     if !users.is_empty() && !force {
         let refs: Vec<String> = users.iter().map(|i| cfg.format_id(*i)).collect();
         bail!(
-            "{} item(s) still reference `{name}`: {}\nre-file them first, or pass --force",
+            "{} item(s) still reference `{name}`: {}\nre-file them first, or pass --force \
+             to clear the milestone from them",
             users.len(),
             refs.join(", ")
         );
@@ -250,11 +251,21 @@ fn remove(name: &str, force: bool) -> Result<i32> {
         aot.retain(|t| t.get("name").and_then(|v| v.as_str()) != Some(name));
     }
     crate::store::write_atomic(&path, doc.to_string().as_bytes())?;
+
+    // Same rule as removing an item: a destructive command always leaves a
+    // project that still validates. Forcing the removal clears the milestone
+    // from whatever referenced it rather than leaving a dangling name behind.
+    for id in &users {
+        let mut item = store.find(*id)?;
+        item.meta.milestone = None;
+        item.touch(&today());
+        item.save()?;
+    }
     println!("{} milestone {}", style::red("removed"), style::bold(name));
     if !users.is_empty() {
-        eprintln!(
-            "{} {} item(s) now reference a milestone that no longer exists; `cairn check` will flag them",
-            style::yellow("warning:"),
+        println!(
+            "{} {} item(s) had their milestone cleared",
+            style::yellow("updated"),
             users.len()
         );
     }

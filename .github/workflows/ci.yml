@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    # Nightly, so the soak explores sequences a per-push run has no time for.
+    - cron: "17 4 * * *"
 
 env:
   CARGO_TERM_COLOR: always
@@ -70,6 +73,20 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo build
       - run: ./target/debug/cairn check --render --strict
+
+  soak:
+    # Drives cairn through a long random sequence of ordinary operations and
+    # checks the backlog after every step. Short on a push, long overnight.
+    # The seed is printed; a failure is reproduced by passing it back.
+    runs-on: ubuntu-latest
+    env:
+      CAIRN_SOAK_SEED: ${{ github.run_id }}
+      CAIRN_SOAK_OPS: ${{ github.event_name == 'schedule' && 4000 || 400 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --test soak --release -- --ignored --nocapture
 
   doc:
     runs-on: ubuntu-latest

@@ -18,9 +18,9 @@
 use crate::cmd::{item_json, paint_status, paint_type};
 use crate::config::Config;
 use crate::filter::{Ctx, resolve};
-use crate::item::parse_id;
+use crate::item::{Item, parse_id};
 use crate::lock::Lock;
-use crate::store::Store;
+use crate::store::{Store, today};
 use crate::{hooks, style};
 use anyhow::{Context, Result, bail};
 use clap::ArgAction;
@@ -185,9 +185,33 @@ pub fn remove(args: RemoveArgs) -> Result<i32> {
         targets.push(store.find(parse_id(raw)?)?);
     }
 
+    // Deleting an item that others depend on would leave references pointing at
+    // nothing — a project cairn's own `check` calls invalid, reached through an
+    // ordinary operation. The rule is that a destructive command always leaves a
+    // valid project and says what else it touched; there is no option to leave
+    // the wreckage, because no one wants it.
+    let doomed: Vec<u32> = targets.iter().map(|t| t.id).collect();
+    let mut dependents: Vec<Item> = store
+        .load_all()?
+        .into_iter()
+        .filter(|i| !doomed.contains(&i.id))
+        .filter(|i| i.meta.depends_on.iter().any(|d| doomed.contains(d)))
+        .collect();
+
     if !args.force {
         for t in &targets {
             println!("  {}  {}", cfg.format_id(t.id), t.title());
+        }
+        // Say up front what else this will touch, so the confirmation is
+        // informed rather than nominal.
+        if !dependents.is_empty() {
+            println!(
+                "  {}",
+                style::yellow(&format!(
+                    "{} other item(s) depend on these; their references will be dropped",
+                    dependents.len()
+                ))
+            );
         }
         eprint!("delete {} item(s)? [y/N] ", targets.len());
         use std::io::Write;
@@ -210,10 +234,23 @@ pub fn remove(args: RemoveArgs) -> Result<i32> {
             t.title()
         );
     }
+    for dep in dependents.iter_mut() {
+        dep.meta.depends_on.retain(|d| !doomed.contains(d));
+        dep.touch(&today());
+        dep.save()?;
+        println!(
+            "{} {}  dropped reference(s) to the removed item(s)",
+            style::yellow("updated"),
+            style::bold(&cfg.format_id(dep.id))
+        );
+    }
     drop(lock);
 
     for t in &targets {
         hooks::item(&cfg, &store, hooks::Event::AfterRemove, t);
+    }
+    for dep in &dependents {
+        hooks::item(&cfg, &store, hooks::Event::AfterChange, dep);
     }
     Ok(0)
 }
