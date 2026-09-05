@@ -1,5 +1,6 @@
 ---
 import Base from "../layouts/Base.astro";
+import Terminal from "../components/Terminal.astro";
 const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 ---
 
@@ -8,7 +9,8 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
   description="cairn keeps a project's roadmap and issues as Markdown files in the repository, under a schema you define, with tools that let coding agents work the backlog."
   wide
 >
-  <!-- The artefact is the argument: an item is a file, so show the file. -->
+  <!-- The artefact is the argument: an item is a file, so lead with the file,
+       read straight off disk rather than typed to look right. -->
   <section class="hero">
     <div class="wrap hero__inner">
       <div class="hero__claim">
@@ -27,44 +29,64 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
           </p>
         </div>
 
-        <p class="hero__links">
+        <p class="actions">
           <a class="cta" href={`${base}/docs`}>Read the docs</a>
           <a href="https://github.com/oddurs/cairn">Source on GitHub</a>
         </p>
       </div>
 
-      <figure class="hero__file slab">
-        <figcaption>cairn/items/0001-support-oauth-login.md</figcaption>
-        <pre><code><span class="d">---</span>
-<span class="b">id</span>: 1
-<span class="b">title</span>: Support OAuth login
-<span class="b">type</span>: feature
-<span class="b">status</span>: doing
-<span class="b">milestone</span>: v0.1
-<span class="b">priority</span>: p0
-<span class="d">---</span>
-
-<span class="k">## Problem</span>
-
-Password auth is the only option, and
-enterprise users keep asking for SSO.
-
-<span class="k">## Acceptance criteria</span>
-
-- [ ] Authorization code flow with PKCE
-- [ ] Refresh tokens survive a restart</code></pre>
-      </figure>
+      <div class="hero__file">
+        <Terminal name="item" />
+      </div>
     </div>
   </section>
 
-  <!-- Recorded from real command output, so it cannot drift into flattery. -->
+  <!-- The board is the most distinctive thing the program prints, so it gets a
+       band of its own rather than a corner of a grid. -->
   <section class="band band--deep">
     <div class="wrap">
-      <h2>What using it looks like</h2>
+      <div class="split">
+        <div>
+          <h2>See the whole thing at a glance</h2>
+          <p class="lede">
+            Columns come from the statuses you declared, in the order you
+            declared them. Width follows content, so an empty column does not
+            take a full share. A leading <code>!</code> marks work that cannot
+            be started because something else is unfinished.
+          </p>
+        </div>
+      </div>
+      <div class="board">
+        <Terminal name="board" />
+      </div>
+    </div>
+  </section>
+
+  <!-- Two commands carry the day, so they get equal weight side by side. -->
+  <section class="band">
+    <div class="wrap">
+      <h2>The loop is two commands</h2>
+      <div class="duo">
+        <Terminal
+          name="next"
+          caption="Work that is genuinely startable. Anything waiting on unfinished work is excluded, and what is already under way comes first — the most useful next action is usually finishing something."
+        />
+        <Terminal
+          name="claim"
+          caption="Takes the top-ranked unclaimed item, writes your name into it, and prints its body so work can begin. It refuses an item somebody else holds, and one that is blocked."
+        />
+      </div>
+    </div>
+  </section>
+
+  <section class="band band--deep">
+    <div class="wrap">
+      <h2>Recorded, not illustrated</h2>
       <p class="lede">
-        Every frame below is real output, recorded by running the commands. It
-        is regenerated on every change, and continuous integration fails if it
-        no longer matches.
+        Every terminal on this page — the file, the board, the listings, the
+        rejected tool call — was captured by running the real thing. So was the
+        session below. All of it is regenerated on each change, and continuous
+        integration fails if any of it stops matching what the program does.
       </p>
       <img
         class="demo"
@@ -73,68 +95,55 @@ enterprise users keep asking for SSO.
         loading="lazy"
         decoding="async"
       />
-      <p class="note">
-        Note the third command. <code>0002</code> depends on <code>0001</code>,
-        so it stays off the list until <code>0001</code> closes.
-        <code>cairn next</code> shows work that is genuinely startable, not everything
-        that is open.
-      </p>
     </div>
   </section>
 
-  <!-- Strata rather than three identical cards: each idea is a full band with
-       its own weight, separated by hairlines. -->
+  <!-- Strata rather than three identical cards. -->
   <section class="band">
     <div class="wrap strata">
       <article class="stratum">
-        <h3>The schema is yours</h3>
-        <div class="stratum__body">
+        <div class="stratum__lede">
+          <h3>The schema is yours</h3>
           <p>
             Item types, statuses, custom fields, milestones and saved views are
-            declared in one file. Rename <code>doing</code> to
-            <code>on the pass</code> if that is what your team says — every
-            status belongs to a fixed category, so progress bars and
-            <code>cairn close</code> keep working whatever you call things.
+            declared in one file. Rename <code>doing</code> to whatever your
+            team says — every status belongs to a fixed category, so progress
+            bars and <code>cairn close</code> keep working regardless.
           </p>
         </div>
         <pre class="stratum__code slab"><code><span class="d">[[status]]</span>
-<span class="b">name</span> = "doing"
-<span class="b">label</span> = "in progress"
+<span class="b">name</span>     = "doing"
+<span class="b">label</span>    = "in progress"
 <span class="b">category</span> = "active"
-<span class="b">color</span> = "yellow"</code></pre>
+<span class="b">color</span>    = "yellow"</code></pre>
       </article>
 
       <article class="stratum">
-        <h3>Agents work the backlog</h3>
-        <div class="stratum__body">
+        <div class="stratum__lede">
+          <h3>Agents get tools, not instructions</h3>
           <p>
             <code>cairn mcp</code> serves the backlog over the Model Context
-            Protocol. An agent gets typed tools rather than instructions it can
-            forget, and a rejected write comes back as something it can act on.
+            Protocol. A rejected write comes back as something the model can act
+            on, so it corrects itself instead of inventing a format.
           </p>
         </div>
-        <pre class="stratum__code slab"><code>update_item <span class="d">&#123;"status": "in progress"&#125;</span>
-
-<span class="r">unknown status `in progress`</span>
-<span class="d">known: backlog, planned, doing,
-       blocked, done, dropped</span></code></pre>
+        <div class="stratum__code">
+          <Terminal name="mcp" />
+        </div>
       </article>
 
       <article class="stratum">
-        <h3>Nothing drifts</h3>
-        <div class="stratum__body">
+        <div class="stratum__lede">
+          <h3>Nothing drifts</h3>
           <p>
-            <code>ROADMAP.md</code> is generated, and re-rendered whenever an
-            item changes. <code>cairn check</code> validates every item against
-            the schema and proves the committed roadmap still matches, which is
-            one line in continuous integration.
+            <code>ROADMAP.md</code> is generated and re-rendered whenever an item
+            changes. One line in continuous integration validates every item and
+            proves the committed roadmap still matches them.
           </p>
         </div>
-        <pre class="stratum__code slab"><code>$ cairn check
-<span class="r">cairn</span>: <span class="d">items/0009-bad.md:4:</span>
-  unknown status `nope`
-
-<span class="r">failed</span>: 1 error across 4 items</code></pre>
+        <div class="stratum__code">
+          <Terminal name="check" />
+        </div>
       </article>
     </div>
   </section>
@@ -181,24 +190,25 @@ enterprise users keep asking for SSO.
   </section>
 
   <section class="band close">
-    <div class="wrap">
-      <h2>Start in one command</h2>
-      <pre class="slab"><code>$ cairn init
-<span class="g">created</span> cairn.toml
-<span class="g">created</span> cairn/items/
-
-$ cairn new <span class="y">"Support OAuth login"</span> --type feature --milestone v0.1
-<span class="g">created</span> 0001  Support OAuth login</code></pre>
-      <p class="hero__links">
-        <a class="cta" href={`${base}/docs`}>Read the docs</a>
-        <a href={`${base}/docs/agents`}>Set it up for an agent</a>
-      </p>
+    <div class="wrap close__inner">
+      <div>
+        <h2>Milestones, from the same files</h2>
+        <p class="lede">
+          The roadmap is derived from the items, so it cannot describe a plan
+          nobody is working on.
+        </p>
+        <p class="actions">
+          <a class="cta" href={`${base}/docs`}>Read the docs</a>
+          <a href={`${base}/docs/agents`}>Set it up for an agent</a>
+        </p>
+      </div>
+      <Terminal name="roadmap" />
     </div>
   </section>
 
   <style>
     .hero {
-      padding-block: clamp(2.5rem, 7vw, 5.5rem);
+      padding-block: clamp(2.5rem, 7vw, 5rem);
     }
     .hero__inner {
       display: grid;
@@ -206,16 +216,16 @@ $ cairn new <span class="y">"Support OAuth login"</span> --type feature --milest
       grid-template-columns: 1fr;
       align-items: start;
     }
-    @media (min-width: 62rem) {
+    @media (min-width: 64rem) {
       .hero__inner {
-        grid-template-columns: 1.05fr 0.95fr;
+        grid-template-columns: 1fr 1fr;
       }
     }
     .hero__claim h1 {
       margin-bottom: 1.1rem;
     }
     .hero__claim .lede {
-      max-width: 44ch;
+      max-width: 46ch;
     }
 
     .install {
@@ -226,7 +236,7 @@ $ cairn new <span class="y">"Support OAuth login"</span> --type feature --milest
       border: 1px solid var(--hairline);
       border-left: 2px solid var(--lichen);
       border-radius: 3px;
-      font-size: 0.78rem;
+      font-size: 0.8125rem;
     }
     .install__alt {
       margin: 0.7rem 0 0;
@@ -238,7 +248,7 @@ $ cairn new <span class="y">"Support OAuth login"</span> --type feature --milest
       font-size: 0.85em;
     }
 
-    .hero__links {
+    .actions {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
@@ -259,37 +269,44 @@ $ cairn new <span class="y">"Support OAuth login"</span> --type feature --milest
       background: #c8d84f;
     }
 
-    .hero__file figcaption {
-      font-family: var(--mono);
-      font-size: 0.75rem;
-      color: var(--moss);
-      padding: 0.6rem 1.25rem;
-      border-bottom: 1px solid var(--hairline);
-      background: var(--slate);
+    .split h2 {
+      margin-bottom: 0.9rem;
+    }
+    .split .lede {
+      max-width: 62ch;
+    }
+    .board {
+      margin-top: 1.75rem;
+    }
+
+    .duo {
+      display: grid;
+      gap: 2.25rem;
+      margin-top: 1.75rem;
+    }
+    @media (min-width: 64rem) {
+      .duo {
+        grid-template-columns: 1fr 1fr;
+        align-items: start;
+      }
     }
 
     .demo {
       width: 100%;
       height: auto;
       display: block;
-      margin-block: 2rem 1.25rem;
+      margin-top: 2rem;
       border: 1px solid var(--hairline);
       border-radius: 4px;
-    }
-    .note {
-      color: var(--moss);
-      font-size: 0.9375rem;
-      max-width: 62ch;
     }
 
     .strata {
       display: grid;
-      gap: 0;
     }
     .stratum {
       display: grid;
-      gap: 1.25rem 3rem;
-      padding-block: 2.25rem;
+      gap: 1.5rem 3.5rem;
+      padding-block: 2.5rem;
       border-bottom: 1px solid var(--hairline);
       align-items: start;
     }
@@ -300,21 +317,20 @@ $ cairn new <span class="y">"Support OAuth login"</span> --type feature --milest
       border-bottom: 0;
       padding-bottom: 0;
     }
-    @media (min-width: 54rem) {
+    @media (min-width: 58rem) {
       .stratum {
-        grid-template-columns: 14rem minmax(0, 1fr) minmax(0, 20rem);
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
       }
     }
     .stratum h3 {
-      margin: 0;
-      color: var(--chalk);
+      margin: 0 0 0.5rem;
     }
-    .stratum__body p {
+    .stratum__lede p {
       margin: 0;
       color: var(--moss);
     }
     .stratum__code {
-      font-size: 0.78rem;
+      font-size: 0.8125rem;
     }
 
     .pairs {
@@ -335,12 +351,15 @@ $ cairn new <span class="y">"Support OAuth login"</span> --type feature --milest
       color: var(--moss);
     }
 
-    .close pre {
-      max-width: 52rem;
-      font-size: 0.8125rem;
+    .close__inner {
+      display: grid;
+      gap: clamp(2rem, 5vw, 4rem);
+      align-items: center;
     }
-    .close h2 {
-      margin-bottom: 1.25rem;
+    @media (min-width: 64rem) {
+      .close__inner {
+        grid-template-columns: 0.85fr 1.15fr;
+      }
     }
   </style>
 </Base>

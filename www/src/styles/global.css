@@ -24,6 +24,8 @@
   --term-blue: #7aa2c4;
   --term-green: #94b566;
   --term-red: #cc7a6b;
+  --term-magenta: #b08cc4;
+  --term-cyan: #6fb0ad;
 
   --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   --sans: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
@@ -176,4 +178,7 @@ pre {
 .b { color: var(--term-blue); }
 .g { color: var(--term-green); }
 .r { color: var(--term-red); }
+.m { color: var(--term-magenta); }
+.c { color: var(--term-cyan); }
 .k { color: var(--lichen); }
+.bold { font-weight: 600; color: var(--chalk); }

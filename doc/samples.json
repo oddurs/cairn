@@ -1,0 +1,30 @@
+{
+  "next": {
+    "cmd": "cairn next",
+    "html": "<span class=\"d\">ID    PRIORITY  STATUS       MILESTONE  TITLE</span>\n<span class=\"d\">0001</span>  p0        <span class=\"y\">in progress</span>  v0.1       Support OAuth login\n<span class=\"d\">0003</span>  p1        <span class=\"b\">planned</span>      v0.1       Board shears on narrow terminals\n<span class=\"d\">0004</span>  p2        <span class=\"d\">backlog</span>      v0.2       Document the export format\n\n<span class=\"d\">3 ready · 1 in progress · 1 blocked</span>"
+  },
+  "board": {
+    "cmd": "cairn board",
+    "html": "<span class=\"d\">backlog</span> <span class=\"d\">2</span>                      <span class=\"b\">planned</span> <span class=\"d\">1</span>                           <span class=\"y\">in progress</span> <span class=\"d\">1</span>            <span class=\"r\">blocked</span> <span class=\"d\">0</span>\n<span class=\"d\">─────────────────────────────  ──────────────────────────────────  ───────────────────────  ─────────</span>\n<span class=\"y\">!</span><span class=\"d\">0002</span> p1 Rate-limit the publ…   <span class=\"d\">0003</span> p1 Board shears on narrow t…   <span class=\"d\">0001</span> p0 Support OAuth…\n <span class=\"d\">0004</span> p2 Document the export…\n\n<span class=\"d\">3 ready · 1 in progress · 1 blocked</span>"
+  },
+  "roadmap": {
+    "cmd": "cairn roadmap",
+    "html": "<span class=\"bold\">Nimbus</span>\n\n<span class=\"bold\">v0.1</span>  <span class=\"d\">First usable version</span>\n  [--------------------]   0%  0/2<span class=\"d\">   due 2026-12-01</span>\n  <span class=\"d\">Enough to dogfood in a real project.</span>\n\n<span class=\"bold\">v0.2</span>  <span class=\"d\">Hardening</span>\n  [--------------------]   0%  0/2<span class=\"d\">   due 2027-02-01</span>\n\n<span class=\"bold\">v1.0</span>  <span class=\"d\">Stable release</span>\n  [--------------------]   —  0/0<span class=\"d\">   due 2027-03-01</span>\n  <span class=\"d\">Documented, tested, and safe to depend on.</span>\n\n<span class=\"bold\">later</span>  <span class=\"d\">Someday</span>\n  [--------------------]   —  0/0\n  <span class=\"d\">Good ideas without a date yet.</span>"
+  },
+  "claim": {
+    "cmd": "cairn claim --next",
+    "html": "<span class=\"g\">claimed</span> <span class=\"bold\">0001</span>  Support OAuth login\n<span class=\"d\">  you · doing · cairn/items/0001-support-oauth-login.md</span>"
+  },
+  "item": {
+    "path": "cairn/items/0001-support-oauth-login.md",
+    "html": "---\nid: 1\ntitle: Support OAuth login\ntype: feature\nstatus: doing\nmilestone: v0.1\nassignee: you\ncreated: 2026-09-05\nupdated: 2026-09-05\npriority: p0\n---\n\n## Problem\n\n## Proposal\n\n## Acceptance criteria\n\n- [ ]"
+  },
+  "mcp": {
+    "cmd": "cairn mcp",
+    "html": "<span class=\"d\">update_item {\"id\": 1, \"fields\": {\"status\": \"in progress\"}}</span>\n\n<span class=\"r\">unknown status `in progress`</span>\n<span class=\"d\">known: backlog, planned, doing, blocked, done, dropped</span>"
+  },
+  "check": {
+    "cmd": "cairn check",
+    "html": "<span class=\"r\">cairn</span>: cairn/items/0009-bad.md:4: unknown status `nope`\n\n<span class=\"r\">failed:</span> 1 error(s), 0 warning(s) across 5 item(s)"
+  }
+}

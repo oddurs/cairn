@@ -3,4 +3,5 @@ dist/
 .astro/
 # Synced from the repository by sync.mjs; the sources are ../spec and ../doc.
 src/content/format.md
+src/content/samples.json
 public/demo.svg

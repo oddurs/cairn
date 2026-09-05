@@ -9,7 +9,7 @@ CARGO       ?= cargo
 MAKEINFO    ?= makeinfo
 CAIRN       := target/release/cairn
 
-.PHONY: all build check test soak audit doc info html pdf demo install install-bin \
+.PHONY: all build check test soak audit doc info html pdf record demo install install-bin \
         install-man install-info clean roadmap
 
 all: build doc

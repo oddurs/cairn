@@ -10,5 +10,6 @@ mkdirSync("public", { recursive: true });
 
 copyFileSync("../spec/README.md", "src/content/format.md");
 copyFileSync("../doc/demo.svg", "public/demo.svg");
+copyFileSync("../doc/samples.json", "src/content/samples.json");
 
-console.log("synced: format specification, recorded demo");
+console.log("synced: format specification, recorded demo, terminal samples");

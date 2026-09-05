@@ -34,7 +34,7 @@ Enough to run a real project's roadmap without reaching for anything else.
 
 ## v0.2 — Comfortable
 
-`##########` 100% · 16 of 16 done · due 2026-12-01
+`##########` 100% · 17 of 17 done · due 2026-12-01
 
 The rough edges that only show up after a few weeks of daily use.
 
@@ -56,6 +56,7 @@ The rough edges that only show up after a few weeks of daily use.
 - [x] [`0040`](https://github.com/oddurs/cairn/blob/main/cairn/items/0040-cairn-next-hides-the-thing-it-ranks-by.md) cairn next hides the thing it ranks by <sup>bug · p1</sup>
 - [x] [`0041`](https://github.com/oddurs/cairn/blob/main/cairn/items/0041-make-the-printed-board-worth-looking-at.md) Make the printed board worth looking at <sup>feature · p1</sup>
 - [x] [`0042`](https://github.com/oddurs/cairn/blob/main/cairn/items/0042-a-website.md) A website <sup>docs · p1</sup>
+- [x] [`0043`](https://github.com/oddurs/cairn/blob/main/cairn/items/0043-generate-the-site-s-terminal-samples-instead-of-hand-colouring-them.md) Generate the site's terminal samples instead of hand-colouring them <sup>bug · p1</sup>
 
 ## v1.0 — Stable
 
