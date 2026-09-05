@@ -2,10 +2,11 @@
 id: 30
 title: Cut a release candidate and verify every install path
 type: chore
-status: backlog
+status: doing
 milestone: v0.1
+assignee: claude
 created: 2026-09-04
-updated: 2026-09-04
+updated: 2026-09-05
 priority: p0
 sprint: s5
 effort: m

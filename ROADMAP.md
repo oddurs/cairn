@@ -12,13 +12,13 @@ Enough to run a real project's roadmap without reaching for anything else.
 
 ### backlog
 
-- [ ] [`0030`](https://github.com/oddurs/cairn/blob/main/cairn/items/0030-cut-a-release-candidate-and-verify-every-install-path.md) Cut a release candidate and verify every install path <sup>chore · p0 · s5</sup>
 - [ ] [`0037`](https://github.com/oddurs/cairn/blob/main/cairn/items/0037-point-a-real-agent-at-the-mcp-server-and-watch-it-work.md) Point a real agent at the MCP server and watch it work <sup>chore · p0</sup>
 
 ### in progress
 
 - [ ] [`0001`](https://github.com/oddurs/cairn/blob/main/cairn/items/0001-publish-to-crates-io-and-homebrew.md) Publish to crates.io and Homebrew <sup>chore · p0</sup>
 - [ ] [`0012`](https://github.com/oddurs/cairn/blob/main/cairn/items/0012-ship-prebuilt-binaries.md) Ship prebuilt binaries <sup>chore · p0</sup>
+- [ ] [`0030`](https://github.com/oddurs/cairn/blob/main/cairn/items/0030-cut-a-release-candidate-and-verify-every-install-path.md) Cut a release candidate and verify every install path <sup>chore · p0 · s5</sup>
 
 ### done
 

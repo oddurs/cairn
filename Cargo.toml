@@ -2,7 +2,7 @@
 # `cairn` and `cairn-cli` are both taken on crates.io by unrelated crates, so the
 # package is published as `cairn-md`. The binary it installs is still `cairn`.
 name = "cairn-md"
-version = "0.1.0"
+version = "0.1.0-rc.1"
 edition = "2024"
 # let-chains (`if let ... && let ...`) stabilised in 1.88; edition 2024 alone
 # would only need 1.85.
