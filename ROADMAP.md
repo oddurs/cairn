@@ -37,13 +37,9 @@ Enough to run a real project's roadmap without reaching for anything else.
 
 ## v0.2 — Comfortable
 
-`##########` 92% · 12 of 13 done · due 2026-12-01
+`##########` 100% · 13 of 13 done · due 2026-12-01
 
 The rough edges that only show up after a few weeks of daily use.
-
-### backlog
-
-- [ ] [`0029`](https://github.com/oddurs/cairn/blob/main/cairn/items/0029-audit-dependencies-and-licences-continuously.md) Audit dependencies and licences continuously <sup>chore · p1 · s5</sup>
 
 ### done
 
@@ -54,6 +50,7 @@ The rough edges that only show up after a few weeks of daily use.
 - [x] [`0023`](https://github.com/oddurs/cairn/blob/main/cairn/items/0023-lock-the-repository-for-mutating-commands.md) Lock the repository for mutating commands <sup>feature · p0 · s3</sup>
 - [x] [`0024`](https://github.com/oddurs/cairn/blob/main/cairn/items/0024-stress-test-concurrent-writers.md) Stress-test concurrent writers <sup>chore · p0 · s3</sup>
 - [x] [`0025`](https://github.com/oddurs/cairn/blob/main/cairn/items/0025-make-claim-atomic-against-a-concurrent-claimer.md) Make claim atomic against a concurrent claimer <sup>bug · p1 · s3</sup>
+- [x] [`0029`](https://github.com/oddurs/cairn/blob/main/cairn/items/0029-audit-dependencies-and-licences-continuously.md) Audit dependencies and licences continuously <sup>chore · p1 · s5</sup>
 - [x] [`0031`](https://github.com/oddurs/cairn/blob/main/cairn/items/0031-write-the-project-s-contribution-and-security-files.md) Write the project's contribution and security files <sup>docs · p2 · s5</sup>
 - [x] [`0032`](https://github.com/oddurs/cairn/blob/main/cairn/items/0032-soak-test-cairn-against-long-random-sequences.md) Soak-test cairn against long random sequences <sup>chore · p1 · s2</sup>
 - [x] [`0035`](https://github.com/oddurs/cairn/blob/main/cairn/items/0035-teach-git-to-resolve-the-files-cairn-generates.md) Teach git to resolve the files cairn generates <sup>feature · p0</sup>

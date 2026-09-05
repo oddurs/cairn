@@ -9,7 +9,7 @@ CARGO       ?= cargo
 MAKEINFO    ?= makeinfo
 CAIRN       := target/release/cairn
 
-.PHONY: all build check test soak doc info html pdf demo install install-bin \
+.PHONY: all build check test soak audit doc info html pdf demo install install-bin \
         install-man install-info clean roadmap
 
 all: build doc
@@ -22,6 +22,10 @@ check: test
 	$(CARGO) fmt --check
 	$(CARGO) clippy --all-targets -- -D warnings
 	$(CAIRN) check --render --strict
+
+# Advisories, licences and sources. Needs `cargo install cargo-deny`.
+audit:
+	$(CARGO) deny check
 
 # One entry point. The end-to-end suite drives the built binary from Rust, so
 # it runs identically on every supported platform.

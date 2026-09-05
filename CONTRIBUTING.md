@@ -36,7 +36,8 @@ cairn edit 23        # opens $EDITOR on the item itself
 ## Before you send it
 
 ```sh
-make check
+make check     # fmt, clippy, tests, and cairn's own roadmap
+make audit     # advisories, licences and sources (needs cargo-deny)
 ```
 
 That runs `cargo fmt --check`, `cargo clippy -- -D warnings`, the full test
