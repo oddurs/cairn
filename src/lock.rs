@@ -55,7 +55,7 @@ impl Lock {
         loop {
             match Self::try_create(&path) {
                 Ok(()) => return Ok(Lock { path }),
-                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+                Err(e) if contended(&e) => {}
                 Err(e) => {
                     return Err(e).with_context(|| format!("creating {}", path.display()));
                 }
@@ -89,6 +89,7 @@ impl Lock {
 
     /// Inside the item directory, where dotfiles are already ignored by the
     /// item scan and by the `.gitignore` that `cairn init` writes.
+    ///
     pub fn path(cfg: &Config) -> PathBuf {
         cfg.items_dir().join(".lock")
     }
@@ -124,6 +125,23 @@ impl Drop for Lock {
     fn drop(&mut self) {
         let _ = std::fs::remove_file(&self.path);
     }
+}
+
+/// Whether a failed creation means somebody else holds the lock, rather than
+/// something being genuinely wrong.
+///
+/// `AlreadyExists` is the ordinary case. `PermissionDenied` is the Windows one:
+/// a deleted file stays in a "pending delete" state until the last handle to it
+/// closes, and opens during that window fail with access denied rather than
+/// with anything resembling "it exists". Treating that as fatal made a writer
+/// give up while the previous holder was still letting go — which is precisely
+/// what forty concurrent writers on Windows produce, and what a Linux-only test
+/// run never shows.
+fn contended(e: &std::io::Error) -> bool {
+    matches!(
+        e.kind(),
+        std::io::ErrorKind::AlreadyExists | std::io::ErrorKind::PermissionDenied
+    )
 }
 
 fn now_seconds() -> u64 {
