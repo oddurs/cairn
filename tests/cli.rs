@@ -182,15 +182,21 @@ impl Project {
         std::fs::write(path, contents).unwrap();
     }
 
-    /// The standard preset already declares an empty `[hooks]` table, so hook
-    /// configuration is filled in rather than appended — a second `[hooks]`
-    /// header is a duplicate key.
+    /// Replace the whole `[hooks]` table. The standard preset ships with render
+    /// hooks enabled, so a test that wants its own must displace them rather
+    /// than add to them — two `after-create` keys is a duplicate-key error.
     fn set_hooks(&self, body: &str) {
         let toml = self.read("cairn.toml");
         let filled = match toml.find("[hooks]") {
             Some(at) => {
-                let (head, tail) = toml.split_at(at + "[hooks]".len());
-                format!("{head}\n{body}{tail}")
+                let after = &toml[at + "[hooks]".len()..];
+                // The section runs to the next table header, or to end of file.
+                let end = after
+                    .match_indices('[')
+                    .find(|(i, _)| after[..*i].ends_with('\n'))
+                    .map(|(i, _)| at + "[hooks]".len() + i)
+                    .unwrap_or(toml.len());
+                format!("{}[hooks]\n{body}\n{}", &toml[..at], &toml[end..])
             }
             None => format!("{toml}\n[hooks]\n{body}"),
         };
@@ -533,7 +539,11 @@ fn render_generates_the_roadmap_and_detects_drift() {
     assert!(p.exists("ROADMAP.md"));
     assert_contains(&p.read("ROADMAP.md"), "First item", "items are rendered");
     p.expect(&["render", "--check", "-q"]);
-    p.add("Fourth item", &[]);
+
+    // Drift has to be caused deliberately now that the render hooks ship
+    // enabled — which is the point of them. --no-hooks is how a project that
+    // renders by hand behaves.
+    p.expect(&["--no-hooks", "new", "Fourth item", "-q"]);
     p.fails(&["render", "--check"]);
     p.expect(&["render", "-q"]);
     p.expect(&["render", "--check", "-q"]);
@@ -544,7 +554,7 @@ fn check_can_verify_the_rendered_roadmap() {
     let p = seeded();
     p.expect(&["render", "-q"]);
     p.expect(&["check", "--render", "-q"]);
-    p.add("Unrendered", &[]);
+    p.expect(&["--no-hooks", "new", "Unrendered", "-q"]);
     p.fails(&["check", "--render"]);
 }
 
@@ -1916,4 +1926,70 @@ fn plain_output_reports_names_and_the_table_reports_labels() {
 
     let table = p.expect(&["list", "--columns", "status"]).stdout;
     assert_contains(&table, "in progress", "the table shows the label");
+}
+
+// --- lessons from real use --------------------------------------------------
+
+#[test]
+fn an_undated_milestone_keeps_the_position_it_was_declared_in() {
+    // From dogfooding: a project declared `m0-proof` first, undated, ahead of a
+    // dated `m1-device`. Sorting undated milestones to the end put m0 last —
+    // overriding an ordering its author had already expressed unambiguously.
+    let p = Project::new();
+    let toml = p.read("cairn.toml");
+    let head = &toml[..toml.find("[[milestone]]").unwrap()];
+    let tail = &toml[toml.rfind("# ─── Saved views").unwrap()..];
+    p.write(
+        "cairn.toml",
+        &format!(
+            "{head}\
+             [[milestone]]\nname = \"m0-proof\"\n\n\
+             [[milestone]]\nname = \"m1-device\"\ndue = \"2026-11-01\"\n\n\
+             [[milestone]]\nname = \"m2-firmware\"\ndue = \"2027-01-15\"\n\n\
+             [[milestone]]\nname = \"later\"\n\n{tail}"
+        ),
+    );
+
+    let listed = p.expect(&["milestone", "list"]).stdout;
+    let order: Vec<&str> = ["m0-proof", "m1-device", "m2-firmware", "later"]
+        .into_iter()
+        .filter(|m| listed.contains(m))
+        .collect();
+    let positions: Vec<usize> = order.iter().map(|m| listed.find(m).unwrap()).collect();
+    assert!(
+        positions.windows(2).all(|w| w[0] < w[1]),
+        "milestones came out in the wrong order:\n{listed}"
+    );
+
+    // And the same order reaches the rendered roadmap.
+    p.add("Something", &["--milestone", "m0-proof"]);
+    p.add("Something else", &["--milestone", "m1-device"]);
+    p.expect(&["render", "-q"]);
+    let roadmap = p.read("ROADMAP.md");
+    assert!(
+        roadmap.find("m0-proof").unwrap() < roadmap.find("m1-device").unwrap(),
+        "the rendered roadmap disagrees with the milestone list"
+    );
+}
+
+#[test]
+fn a_new_project_keeps_its_roadmap_current_without_being_told_to() {
+    // Also from dogfooding: a project a day old already had a stale ROADMAP.md,
+    // because rendering was left to discipline. It is now done by hooks that
+    // ship enabled.
+    let p = Project::new();
+    p.add("First", &[]);
+    assert!(
+        p.exists("ROADMAP.md"),
+        "creating an item rendered the roadmap"
+    );
+    assert_contains(&p.read("ROADMAP.md"), "First", "and it has the item in it");
+
+    p.expect(&["set", "1", "status=doing", "-q"]);
+    p.expect(&["render", "--check", "-q"]);
+
+    p.add("Second", &[]);
+    p.expect(&["render", "--check", "-q"]);
+    p.expect(&["remove", "1", "--force"]);
+    p.expect(&["render", "--check", "-q"]);
 }

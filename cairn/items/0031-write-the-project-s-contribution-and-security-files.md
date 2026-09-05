@@ -2,10 +2,10 @@
 id: 31
 title: Write the project's contribution and security files
 type: docs
-status: backlog
+status: done
 milestone: v0.2
 created: 2026-09-04
-updated: 2026-09-04
+updated: 2026-09-05
 priority: p2
 sprint: s5
 effort: s

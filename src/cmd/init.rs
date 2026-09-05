@@ -360,10 +360,15 @@ columns = ["id", "type", "title", "created"]
 # Hooks run after the change is on disk, so a failing hook warns but never rolls
 # anything back. Suppress them with --no-hooks or CAIRN_NO_HOOKS=1.
 
+# Keeping the rendered roadmap current is the tool's whole point, so it is done
+# for you. Comment these out if you would rather render by hand — but a roadmap
+# that drifts from the items is the rot cairn exists to prevent, and leaving it
+# to discipline is how it starts.
+
 [hooks]
-# after-create = "cairn render -q"
-# after-change = "cairn render -q"
-# after-remove = "cairn render -q"
+after-create = "cairn render -q"
+after-change = "cairn render -q"
+after-remove = "cairn render -q"
 # after-render = "git add ROADMAP.md"
 # after-change = ["python3", "scripts/notify.py"]   # portable form
 

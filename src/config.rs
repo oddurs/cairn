@@ -525,13 +525,33 @@ impl Config {
         )
     }
 
-    /// Milestones in due-date order; undated ones keep config order at the end.
+    /// Milestones in the order a reader should meet them.
+    ///
+    /// Dates order the ones that have them. An undated milestone keeps the
+    /// position it was declared in, by taking the date of the next dated
+    /// milestone after it — so an `m0-proof` written above a dated `m1-device`
+    /// comes first, as its author plainly meant, while a trailing `later` with
+    /// nothing dated after it stays at the end.
+    ///
+    /// Sorting undated milestones to the end unconditionally, as this once did,
+    /// overrode an ordering the author had already expressed. Found by real use.
     pub fn milestones_ordered(&self) -> Vec<&Milestone> {
-        let mut dated: Vec<&Milestone> =
-            self.milestones.iter().filter(|m| m.due.is_some()).collect();
-        dated.sort_by(|a, b| a.due.cmp(&b.due));
-        let undated = self.milestones.iter().filter(|m| m.due.is_none());
-        dated.into_iter().chain(undated).collect()
+        // Walking backwards lets each undated milestone inherit the date of the
+        // nearest dated one that follows it.
+        let mut inherited: Vec<Option<&str>> = vec![None; self.milestones.len()];
+        let mut next_dated: Option<&str> = None;
+        for (i, m) in self.milestones.iter().enumerate().rev() {
+            if let Some(d) = m.due.as_deref() {
+                next_dated = Some(d);
+            }
+            inherited[i] = m.due.as_deref().or(next_dated);
+        }
+
+        let mut ordered: Vec<(usize, &Milestone)> = self.milestones.iter().enumerate().collect();
+        // Undated with nothing dated after it sorts last; declaration order
+        // breaks every remaining tie, so the result is stable and explicable.
+        ordered.sort_by_key(|(i, _)| (inherited[*i].is_none(), inherited[*i], *i));
+        ordered.into_iter().map(|(_, m)| m).collect()
     }
 }
 

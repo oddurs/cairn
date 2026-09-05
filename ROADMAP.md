@@ -6,13 +6,15 @@ A markdown-native roadmap and issue manager that lives in your repository.
 
 ## v0.1 — Usable in anger
 
-`########··` 77% · 10 of 13 done · due 2026-10-15
+`#######···` 67% · 10 of 15 done · due 2026-10-15
 
 Enough to run a real project's roadmap without reaching for anything else.
 
 ### backlog
 
 - [ ] [`0030`](https://github.com/oddurs/cairn/blob/main/cairn/items/0030-cut-a-release-candidate-and-verify-every-install-path.md) Cut a release candidate and verify every install path <sup>chore · p0 · s5</sup>
+- [ ] [`0033`](https://github.com/oddurs/cairn/blob/main/cairn/items/0033-order-milestones-the-way-their-author-declared-them.md) Order milestones the way their author declared them <sup>bug · p1</sup>
+- [ ] [`0034`](https://github.com/oddurs/cairn/blob/main/cairn/items/0034-render-the-roadmap-by-default-rather-than-by-discipline.md) Render the roadmap by default rather than by discipline <sup>bug · p1</sup>
 
 ### in progress
 
@@ -34,7 +36,7 @@ Enough to run a real project's roadmap without reaching for anything else.
 
 ## v0.2 — Comfortable
 
-`########··` 73% · 8 of 11 done · due 2026-12-01
+`#########·` 82% · 9 of 11 done · due 2026-12-01
 
 The rough edges that only show up after a few weeks of daily use.
 
@@ -42,7 +44,6 @@ The rough edges that only show up after a few weeks of daily use.
 
 - [ ] [`0004`](https://github.com/oddurs/cairn/blob/main/cairn/items/0004-export-items-to-github-issues.md) Export items to GitHub issues <sup>feature · p2</sup>
 - [ ] [`0029`](https://github.com/oddurs/cairn/blob/main/cairn/items/0029-audit-dependencies-and-licences-continuously.md) Audit dependencies and licences continuously <sup>chore · p1 · s5</sup>
-- [ ] [`0031`](https://github.com/oddurs/cairn/blob/main/cairn/items/0031-write-the-project-s-contribution-and-security-files.md) Write the project's contribution and security files <sup>docs · p2 · s5</sup>
 
 ### done
 
@@ -53,20 +54,18 @@ The rough edges that only show up after a few weeks of daily use.
 - [x] [`0023`](https://github.com/oddurs/cairn/blob/main/cairn/items/0023-lock-the-repository-for-mutating-commands.md) Lock the repository for mutating commands <sup>feature · p0 · s3</sup>
 - [x] [`0024`](https://github.com/oddurs/cairn/blob/main/cairn/items/0024-stress-test-concurrent-writers.md) Stress-test concurrent writers <sup>chore · p0 · s3</sup>
 - [x] [`0025`](https://github.com/oddurs/cairn/blob/main/cairn/items/0025-make-claim-atomic-against-a-concurrent-claimer.md) Make claim atomic against a concurrent claimer <sup>bug · p1 · s3</sup>
+- [x] [`0031`](https://github.com/oddurs/cairn/blob/main/cairn/items/0031-write-the-project-s-contribution-and-security-files.md) Write the project's contribution and security files <sup>docs · p2 · s5</sup>
 - [x] [`0032`](https://github.com/oddurs/cairn/blob/main/cairn/items/0032-soak-test-cairn-against-long-random-sequences.md) Soak-test cairn against long random sequences <sup>chore · p1 · s2</sup>
 
 ## v1.0 — Stable
 
-`########··` 75% · 3 of 4 done · due 2027-03-01
+`##########` 100% · 4 of 4 done · due 2027-03-01
 
 Documented, packaged, and safe to depend on. The file format stops moving.
 
-### planned
-
-- [ ] [`0005`](https://github.com/oddurs/cairn/blob/main/cairn/items/0005-freeze-the-item-file-format.md) Freeze the item file format <sup>docs · p0</sup>
-
 ### done
 
+- [x] [`0005`](https://github.com/oddurs/cairn/blob/main/cairn/items/0005-freeze-the-item-file-format.md) Freeze the item file format <sup>docs · p0</sup>
 - [x] [`0026`](https://github.com/oddurs/cairn/blob/main/cairn/items/0026-specify-the-item-file-format.md) Specify the item file format <sup>docs · p0 · s4</sup>
 - [x] [`0027`](https://github.com/oddurs/cairn/blob/main/cairn/items/0027-version-the-format-and-promise-compatibility.md) Version the format and promise compatibility <sup>feature · p0 · s4</sup>
 - [x] [`0028`](https://github.com/oddurs/cairn/blob/main/cairn/items/0028-keep-a-golden-corpus-of-items-that-must-always-parse.md) Keep a golden corpus of items that must always parse <sup>chore · p0 · s4</sup>
