@@ -10,9 +10,16 @@
 use std::fs;
 use std::path::PathBuf;
 
+/// A repository file, with line endings normalised.
+///
+/// A Windows checkout may hold every one of these files with CRLF endings —
+/// which is a supported thing for a checkout to do, and is how this function
+/// came to exist: the enum parser below looked for "\n}\n" and found nothing.
 fn repo(rel: &str) -> String {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
-    fs::read_to_string(&path).unwrap_or_else(|e| panic!("reading {}: {e}", path.display()))
+    let text =
+        fs::read_to_string(&path).unwrap_or_else(|e| panic!("reading {}: {e}", path.display()));
+    text.replace("\r\n", "\n")
 }
 
 /// Text between two markers, with every run of whitespace collapsed to one
@@ -94,7 +101,15 @@ fn there_is_no_library_target() {
 /// The variants of `enum Command`, in source order, with the `hide` attribute
 /// that precedes each.
 fn commands() -> Vec<(String, bool)> {
-    let src = repo("src/main.rs");
+    commands_in(&repo("src/main.rs"))
+}
+
+/// Parses arbitrary text rather than trusting `repo` to have normalised it —
+/// the first version of this trusted its caller, and the caller on Windows was
+/// a CRLF checkout.
+fn commands_in(src: &str) -> Vec<(String, bool)> {
+    let src = src.replace("\r\n", "\n");
+    let src = src.as_str();
     let start = src.find("enum Command {").expect("enum Command");
     let body = &src[start..];
     let end = body.find("\n}\n").expect("end of enum Command");
@@ -119,6 +134,35 @@ fn commands() -> Vec<(String, bool)> {
     }
     assert!(out.len() > 20, "failed to parse the command enum");
     out
+}
+
+/// The helpers above must work against a checkout with CRLF endings, because
+/// that is a thing a Windows checkout legitimately is.
+///
+/// This test exists because it was not here: `commands` looked for a literal
+/// "\n}\n" and found nothing on Windows, so two rules passed vacuously for as
+/// long as it took CI to run. A rule that cannot fail is worse than no rule,
+/// and a rule that stops being able to fail on one platform is the same thing
+/// wearing a disguise.
+#[test]
+fn the_parsers_survive_a_crlf_checkout() {
+    let crlf = repo("src/main.rs").replace('\n', "\r\n");
+    assert!(
+        commands_in(&crlf).len() > 20,
+        "the command enum is unparseable when the checkout uses CRLF endings"
+    );
+
+    let crlf = repo("PROMISE.md").replace('\n', "\r\n");
+    let promise = between(
+        &crlf,
+        "<!-- promise:begin -->",
+        "<!-- promise:end -->",
+        "PROMISE.md",
+    );
+    assert!(
+        promise.contains("accounts, authentication, or remotes"),
+        "the promise is unreadable when the checkout uses CRLF endings"
+    );
 }
 
 /// cairn will never grow accounts, authentication, or remotes.
