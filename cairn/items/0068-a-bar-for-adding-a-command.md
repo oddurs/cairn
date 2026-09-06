@@ -2,7 +2,7 @@
 id: 68
 title: A bar for adding a command
 type: chore
-status: backlog
+status: done
 milestone: v0.2
 created: 2026-09-06
 updated: 2026-09-06

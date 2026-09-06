@@ -6,6 +6,41 @@ See the end of the file for copying conditions.
 Please send bug reports and suggestions through the project's issue tracker.
 
 
+* Noteworthy changes in release 0.1.0-rc.2 (unreleased)
+
+** The promise
+
+PROMISE.md states what cairn will always do and where its boundary falls: every
+capability a single repository has is part of cairn and is free, and cairn will
+never grow accounts, authentication or remotes.  The same words appear in the
+README, the manual and the website, and `cargo test --test rules` fails if any
+copy drifts from another.
+
+It is written now, while cairn has no users and nothing to sell, because that
+is the only moment at which making the promise costs nothing.
+
+** Integrating
+
+A new manual chapter, "Integrating", documents the two supported ways to build
+on cairn: read the specified file format, or run the binary and parse its JSON.
+There is deliberately no library target, because linking cairn makes the caller
+a derivative work and reading its files does not.  A test fails if a [lib]
+appears in Cargo.toml.
+
+** Rules that check themselves
+
+CONTRIBUTING.md now carries three rules, each enforced by tests/rules.rs: a new
+command must make a real task harder to do without it, a change to what is
+written to disk edits spec/README.md first, and there is never a library
+target.
+
+`cairn migrate` is hidden from --help.  It exists so that the migration path is
+exercised before anybody needs it, which is a good reason to have the command
+and a poor reason to spend a line of help output on it; it remains documented
+in the manual, and the test says to unhide it as soon as there is genuinely a
+format to migrate from.
+
+
 * Noteworthy changes in release 0.1.0-rc.1 (2026-09-05)
 
 ** Storage

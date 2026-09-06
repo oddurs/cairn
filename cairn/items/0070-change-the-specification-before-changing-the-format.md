@@ -2,7 +2,7 @@
 id: 70
 title: Change the specification before changing the format
 type: chore
-status: backlog
+status: done
 milestone: v0.2
 created: 2026-09-06
 updated: 2026-09-06

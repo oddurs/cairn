@@ -2,7 +2,7 @@
 id: 60
 title: Never ship a library target
 type: chore
-status: backlog
+status: done
 milestone: v0.2
 created: 2026-09-06
 updated: 2026-09-06

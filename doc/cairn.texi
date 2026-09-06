@@ -50,6 +50,8 @@ Sections, no Front-Cover Texts, and no Back-Cover Texts.
 * Durability::              What happens when things go wrong.
 * File format::             The normative specification.
 * Compatibility::           What may change, and when.
+* The promise::             What cairn will always do, and will never do.
+* Integrating::             Building on cairn, without linking it.
 * Getting started::         A first project, end to end.
 * Items::                   The file format.
 * Configuration::           The schema, in @file{cairn.toml}.
@@ -456,6 +458,149 @@ must parse to. It includes files cairn would not write itself: bare strings
 where a sequence belongs, a missing id, CRLF endings, keys from a version that
 does not exist. Every run checks them. Changing one of those expectations is a
 deliberate act, and by the rules above it is a format change.
+
+@node The promise
+@chapter The promise
+
+@cindex promise
+@cindex boundary
+@cindex free software
+The previous chapter is a promise about the data. This one is the promise about
+the project. It is reproduced word for word in @file{PROMISE.md} and in the
+README, and a test fails if the three ever disagree.
+
+@quotation
+@c promise:begin
+cairn is free software under the GNU General Public Licence, and will remain so.
+
+Everything a single repository can do is part of cairn, and is free: items, the
+schema, the board, the roadmap, agents, merging, import and export. No
+capability that belongs in cairn will be held back for something else. If
+anything ever built beside cairn disappeared tomorrow, no cairn user would be
+affected.
+
+cairn does everything a single repository can do, and nothing beyond it. That
+is not a policy but a description. A repository cannot see other repositories.
+It cannot serve somebody who has not cloned it. It has no notion of who is
+permitted to close an item, and it cannot tell you something changed while you
+were not looking. Those are not capabilities withheld from cairn; they are
+capabilities a directory of files does not have.
+
+So cairn will never grow accounts, authentication, or remotes. The day that
+cairn login exists, this promise has been broken.
+@c promise:end
+@end quotation
+
+@section Why it is written down this early
+
+Every project that changed its licence did so after it had something to lose.
+The line moved once the old position became expensive, and the people who had
+built on the old position mostly forked rather than follow. What those projects
+had in common was declaring the boundary late.
+
+cairn has no users and nothing to sell, so declaring it now costs nothing, which
+is precisely what makes it worth something.
+
+@section The boundary is a design constraint, not a price list
+
+@cindex accounts
+@cindex authentication
+@cindex remotes
+The three things cairn will never grow --- accounts, authentication, remotes ---
+are not withheld features. They are the features a directory of files cannot
+have, and naming them turns a recurring argument into a settled question.
+
+@table @asis
+@item Can cairn notify me when an item changes?
+No. A program that runs when you invoke it cannot notice anything while you are
+not running it. What you want is whatever watches your repository.
+
+@item Can cairn show me work across all my repositories?
+No. Run it in each, or write something that reads the format. Several backlogs
+can be combined with @command{cairn export} without cairn needing a concept of
+more than one project.
+
+@item Can cairn tell me who is allowed to close this?
+No. A repository has no notion of permission. The thing that does is whatever
+governs writes to it, which is your forge, not your tracker.
+@end table
+
+@noindent
+The practical guard is that @command{cairn login} must never exist. A command
+line that acquires a session is a client for a service, and everything above
+has already been given away by the time anybody notices.
+
+@section What should be built instead
+
+@cindex integrating with cairn
+Those needs are real. They are met by something that reads the format rather
+than something that links this code --- which is why cairn ships no library
+target (@pxref{Integrating}), and why the format is specified independently of
+the program that writes it.
+
+@node Integrating
+@chapter Integrating
+
+@cindex integrating
+@cindex library
+@cindex no library target
+cairn ships a program and a specification. It deliberately ships no library.
+
+A program that links cairn as a library is a derivative work and inherits the
+GNU General Public Licence. A program that reads cairn's documented file format
+is not, and inherits nothing. That difference is the whole reason the
+specification exists: it is what lets somebody build on cairn's conventions
+without adopting cairn's licence.
+
+So the absence of a @code{[lib]} target in @file{Cargo.toml} is not an
+oversight, and a test fails if one appears. There are two supported ways in.
+
+@section Read the files
+
+@cindex file format, reading
+The file format (@pxref{File format}) is normative and standalone: an
+implementation can be written from it without consulting cairn's source, and
+the corpus in @file{tests/golden} --- which includes files cairn would never
+write, because those are what other tools produce --- doubles as a conformance
+suite.
+
+This is the right choice when you want the data: a dashboard, a static site, a
+report, a second implementation in another language.
+
+@section Run the program
+
+@cindex JSON output
+@cindex exit codes
+When you want cairn's behaviour rather than its bytes, run the binary.
+@command{export} writes the whole backlog as an interchange document;
+@command{list}, @command{next}, @command{search}, @command{show} and
+@command{config} take @option{--json}; and every command's exit status
+distinguishes success from a project that does not validate.
+
+@example
+cairn export                                  # the whole backlog, as JSON
+cairn list --json --filter 'category=open,priority=p0'
+cairn next --json                             # only what is startable
+cairn check --quiet || echo "the backlog does not validate"
+@end example
+
+@noindent
+Note that this is not a uniform surface: most commands have no @option{--json},
+because most of them exist to change something rather than to report it. If you
+find yourself wanting machine-readable output from a command that lacks it,
+that is worth reporting --- it is a gap rather than a decision.
+
+@noindent
+For a program that wants to work the backlog rather than report on it, the
+Model Context Protocol server (@pxref{Working the backlog}) offers the same
+operations over a JSON-RPC transport.
+
+@section What is not offered
+
+There is no plugin interface, no daemon to connect to, and no way to have cairn
+call your code. Those all invert the relationship: they make cairn the host and
+you the guest, which is the shape that eventually needs accounts and a session.
+@xref{The promise}.
 
 @node Getting started
 @chapter Getting started
