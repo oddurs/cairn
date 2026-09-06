@@ -647,6 +647,7 @@ Laid out the way a GNU project is, so the files are where you expect:
 | `www/` | The website — landing page and docs, built with Astro |
 | `CONTRIBUTING.md` | How to get started; the backlog is the guide |
 | `SECURITY.md` | How to report a vulnerability |
+| `CLA.md` | The contributor licence agreement, and why it exists |
 | `cairn/items/` | The project's own roadmap, in cairn |
 | `ROADMAP.md` | Generated from it by `cairn render` |
 

@@ -73,8 +73,33 @@ the constraint, the trade-off, the failure it prevents — not what the next lin
 does. If a decision cost you an hour to reach, write down the reason so nobody
 spends that hour again.
 
-## Copyright
+## Copyright, and the agreement
 
-cairn is GPL-3.0-or-later. By contributing you agree your work is licensed the
-same way. There is no copyright assignment. Add yourself to `AUTHORS` with your
-first accepted change.
+cairn is distributed under the GNU General Public Licence, version 3 or later,
+and that is not changing.
+
+Before your first pull request is merged you will be asked to agree to a
+[contributor licence agreement](CLA.md). It is short. **You keep the copyright
+in everything you write** — it is a licence, not an assignment, and nothing in
+it stops you using your own work however you like, including elsewhere.
+
+Add yourself to `AUTHORS` with your first accepted change.
+
+### Why there is an agreement
+
+Because you are entitled to know what you are signing.
+
+Today the maintainer is the sole copyright holder, and can therefore offer cairn
+under terms other than the GPL — for instance a commercial licence alongside it,
+if a hosted version for teams ever makes sense. The moment a contribution lands
+without an agreement in place, that stops being possible: changing terms would
+require finding every contributor and asking permission, and one refusal or one
+unreachable person settles it for good.
+
+The agreement keeps that option open. It does not commit anyone to exercising
+it, and it does not affect the GPL you receive cairn under: that licence, once
+given, cannot be withdrawn from you or from anybody else.
+
+If you would rather not sign, say so on the pull request. Small fixes can often
+be reimplemented independently, and a bug report costs you nothing and is worth
+a great deal.
