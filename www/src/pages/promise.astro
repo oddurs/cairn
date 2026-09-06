@@ -1,0 +1,23 @@
+---
+import Doc from "../layouts/Doc.astro";
+// Rendered from PROMISE.md in the repository. The same words appear in the
+// README and the manual, and `cargo test --test rules` fails if any of them
+// drifts — a promise that is worded differently in each place it appears is
+// not one.
+import { Content } from "../content/promise.md";
+---
+
+<Doc
+  title="The promise"
+  description="What cairn will always do, where its boundary falls, and why both were written down before there was anything to lose."
+  summary="Made now, while cairn has no users and nothing to sell, because that is the only moment at which making it costs nothing."
+>
+  <div class="promise"><Content /></div>
+
+  <style>
+    /* The document carries its own title; the page heading above says it. */
+    .promise :global(> h1:first-child) {
+      display: none;
+    }
+  </style>
+</Doc>

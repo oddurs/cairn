@@ -613,6 +613,36 @@ The corpus in [`tests/golden`](tests/golden) — which includes files cairn woul
 never write, because those are what people and other tools produce — doubles as
 a conformance suite for a second implementation.
 
+## The promise
+
+The specification above is a promise about the data. This is the promise about
+the project, written down now — while cairn has no users and nothing to sell,
+which is the only moment at which making it costs nothing.
+
+<!-- promise:begin -->
+cairn is free software under the GNU General Public Licence, and will remain so.
+
+Everything a single repository can do is part of cairn, and is free: items, the
+schema, the board, the roadmap, agents, merging, import and export. No
+capability that belongs in cairn will be held back for something else. If
+anything ever built beside cairn disappeared tomorrow, no cairn user would be
+affected.
+
+cairn does everything a single repository can do, and nothing beyond it. That
+is not a policy but a description. A repository cannot see other repositories.
+It cannot serve somebody who has not cloned it. It has no notion of who is
+permitted to close an item, and it cannot tell you something changed while you
+were not looking. Those are not capabilities withheld from cairn; they are
+capabilities a directory of files does not have.
+
+So cairn will never grow accounts, authentication, or remotes. The day that
+cairn login exists, this promise has been broken.
+<!-- promise:end -->
+
+It is not a promise never to charge for anything; it is a promise about where
+the line falls, and that the line does not move. The full reasoning, and what it
+means for feature requests, is in [PROMISE.md](PROMISE.md).
+
 ## Prior art
 
 cairn is not the only tool in this space, and it is not always the right one.
@@ -639,6 +669,7 @@ Laid out the way a GNU project is, so the files are where you expect:
 | | |
 | --- | --- |
 | `COPYING` | The GNU General Public License, version 3 |
+| `PROMISE.md` | What cairn will always do, and where its boundary is |
 | `AUTHORS` | Who has contributed |
 | `NEWS` | User-visible changes, newest first |
 | `README.md` | This tour |
@@ -665,4 +696,5 @@ reasoning that produced it. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-GNU General Public License v3.0 or later. See [COPYING](COPYING).
+GNU General Public License v3.0 or later. See [COPYING](COPYING), and
+[PROMISE.md](PROMISE.md) for what that is intended to mean in practice.

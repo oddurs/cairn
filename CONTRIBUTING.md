@@ -53,6 +53,63 @@ Open a GitHub issue. You are not expected to learn cairn to report a problem
 with it — write it however is natural, and a maintainer will bring it into the
 backlog with `cairn import --from github`.
 
+## Three rules
+
+These are short because each of them was learned the expensive way, and each is
+enforced by a test in `tests/rules.rs` so that it cannot be quietly undone.
+
+### A new command has to earn its line
+
+> A new command earns its place if removing it would make a real task *harder*,
+> not merely different. If an existing command with a flag would do, that is the
+> answer.
+
+cairn has twenty-eight commands, written over three days, each locally
+justified and collectively more than anybody needs. There was never a bar;
+every one of them seemed reasonable at the moment it was written, which is how
+surfaces grow. Applying the bar before the code is written is much cheaper than
+pruning afterwards.
+
+> A command that exists to be tested rather than used is hidden from `--help`.
+
+`merge-driver` is called by git, not by people. `migrate` exists so that the
+migration path is exercised long before it is needed — a good reason for the
+command to exist and a poor reason for it to occupy a line in the help output.
+Both are hidden and both are documented in the manual: hidden is not the same
+as undocumented. When there is genuinely something to migrate, `migrate` stops
+being a command that exists to be tested, and the test in `tests/rules.rs` will
+tell you to unhide it.
+
+### The specification changes first
+
+> A change to what cairn writes to disk edits `spec/README.md` first, in the
+> same pull request, before the code.
+
+A specification written after the code is a description. Written before it, it
+is a design tool — and it has already earned that: writing down that `id` is an
+unsigned integer is what made a later identifier design obviously wrong, by
+ruling out the answer that looked right.
+
+Two things follow from doing it in that order. Somebody has to decide whether
+the change is additive, and therefore free under the compatibility rules,
+*before* building it rather than after. And the pull request shows the intended
+contract next to the code implementing it, which is where a reviewer can
+disagree with it cheaply.
+
+### There is never a library target
+
+> `Cargo.toml` has a `[[bin]]` and no `[lib]`, and that is a decision.
+
+A program that links cairn is a derivative work and inherits the GPL. A program
+that reads cairn's documented file format is not. That difference is the entire
+reason the specification exists — it is what lets other people build on cairn's
+conventions without adopting cairn's licence, and the specification is this
+project's strongest asset.
+
+So when a second program wants to read items, the answer is the format, or the
+binary's JSON output and exit codes. Both are documented under "Integrating" in
+the manual. Adding a `[lib]` fails the build.
+
 ## What the tests are for
 
 The suite is not decoration. It encodes decisions that are easy to undo by

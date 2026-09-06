@@ -150,6 +150,13 @@ enum Command {
     Renumber(cmd::renumber::Args),
 
     /// Bring a project up to the current on-disk format
+    ///
+    /// Hidden while format 1 is the only format there has ever been: today this
+    /// command exists so the migration path is exercised before it is needed,
+    /// which is a good reason to have it and a poor reason to spend a line of
+    /// `--help` on it. `tests/rules.rs` fails if `CURRENT_FORMAT` rises without
+    /// this becoming visible again.
+    #[command(hide = true)]
     Migrate(cmd::migrate::Args),
 
     /// Resolve a generated file during a merge (used by git, not by people)
