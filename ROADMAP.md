@@ -34,7 +34,7 @@ Enough to run a real project's roadmap without reaching for anything else.
 
 ## v0.2 — Comfortable
 
-`########··` 78% · 18 of 23 done · due 2026-12-01
+`########··` 79% · 19 of 24 done · due 2026-12-01
 
 The rough edges that show up after a few weeks of daily use, and the pieces that make the central claim true rather than merely stated.
 
@@ -66,6 +66,7 @@ The rough edges that show up after a few weeks of daily use, and the pieces that
 - [x] [`0042`](https://github.com/oddurs/cairn/blob/main/cairn/items/0042-a-website.md) A website <sup>docs · p1</sup>
 - [x] [`0043`](https://github.com/oddurs/cairn/blob/main/cairn/items/0043-generate-the-site-s-terminal-samples-instead-of-hand-colouring-them.md) Generate the site's terminal samples instead of hand-colouring them <sup>bug · p1</sup>
 - [x] [`0044`](https://github.com/oddurs/cairn/blob/main/cairn/items/0044-back-the-site-with-a-design-system.md) Back the site with a design system <sup>chore · p1</sup>
+- [x] [`0055`](https://github.com/oddurs/cairn/blob/main/cairn/items/0055-recordings-embedded-the-day-they-were-made.md) Recordings embedded the day they were made <sup>bug · p1</sup>
 
 ## v1.0 — Stable
 

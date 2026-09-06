@@ -277,7 +277,21 @@ pub fn dependency_path(items: &[Item], from: u32, to: u32) -> Option<Vec<u32>> {
     None
 }
 
+/// Today's date, or the one a reproducible build asked for.
+///
+/// `SOURCE_DATE_EPOCH` is the reproducible-builds convention: a Unix timestamp
+/// that stands in for "now" so a build run twice produces the same bytes. cairn
+/// honours it because the recorded demo and the website's samples embed the
+/// dates of the items they create, and without this the committed recordings
+/// differ from a fresh run every day at midnight — a check that fails for
+/// reasons unrelated to what it guards is a check people learn to ignore.
 pub fn today() -> String {
+    if let Ok(raw) = std::env::var("SOURCE_DATE_EPOCH")
+        && let Ok(secs) = raw.trim().parse::<i64>()
+        && let Some(at) = chrono::DateTime::from_timestamp(secs, 0)
+    {
+        return at.format("%Y-%m-%d").to_string();
+    }
     chrono::Local::now().format("%Y-%m-%d").to_string()
 }
 

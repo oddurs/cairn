@@ -156,6 +156,9 @@ def main():
     session = []
     try:
         env = dict(os.environ, CAIRN_USER="claude", COLUMNS="88")
+        # Pin the clock. Items record the date they were created, so without
+        # this a recording differs from the committed one every day.
+        env["SOURCE_DATE_EPOCH"] = "1788566400"  # 2026-09-05
         env.pop("NO_COLOR", None)
         # The default hooks invoke `cairn` by name, as an installed one would be
         # found. Without this the recording captures a hook-not-found warning.
