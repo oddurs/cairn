@@ -2630,3 +2630,39 @@ fn a_dated_milestone_is_filed_among_the_dated_ones() {
         "in the order they were declared"
     );
 }
+
+#[test]
+fn the_clock_can_be_pinned_for_a_reproducible_run() {
+    // Items record the date they were created, so the recorded demo and the
+    // website's samples embedded whatever day they were made — and the check
+    // guarding them failed every night at midnight, for no reason connected to
+    // the code. SOURCE_DATE_EPOCH is the reproducible-builds convention for
+    // exactly this.
+    let p = Project::new();
+    let out = Command::new(bin())
+        .args(["new", "Pinned", "-q"])
+        .current_dir(p.root())
+        .env("NO_COLOR", "1")
+        .env("PATH", path_with_binary())
+        .env("SOURCE_DATE_EPOCH", "1788566400") // 2026-09-05 UTC
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+
+    let item = p.json(&["show", "1", "--json"]);
+    assert_eq!(item["created"], "2026-09-05");
+    assert_eq!(item["updated"], "2026-09-05");
+
+    // Nonsense in the variable is ignored rather than fatal: a build system
+    // setting it oddly should not stop anybody creating an item.
+    let out = Command::new(bin())
+        .args(["new", "Unpinned", "-q"])
+        .current_dir(p.root())
+        .env("NO_COLOR", "1")
+        .env("PATH", path_with_binary())
+        .env("SOURCE_DATE_EPOCH", "not-a-timestamp")
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "a malformed value is not fatal");
+    assert!(p.json(&["show", "2", "--json"])["created"].is_string());
+}

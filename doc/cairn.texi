@@ -948,6 +948,17 @@ Do not run configured hooks. @xref{Hooks}.
 Print version, copyright and licence.
 @end table
 
+@cindex SOURCE_DATE_EPOCH
+@cindex reproducible builds
+@vindex SOURCE_DATE_EPOCH
+If @env{SOURCE_DATE_EPOCH} is set to a Unix timestamp, cairn uses that date
+instead of today's when stamping @code{created} and @code{updated}. It is the
+reproducible-builds convention, and it exists here because cairn's own recorded
+documentation embeds the dates of the items it creates: without it, a recording
+made today differs from the one committed yesterday, and the check guarding
+them fails for a reason unconnected to the program. A value that is not a
+timestamp is ignored.
+
 @section cairn init
 Writes @file{cairn.toml} and the item directory. @option{--preset} selects
 @code{standard} or @code{minimal}; @option{--bare} skips the example item;

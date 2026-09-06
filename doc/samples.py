@@ -60,6 +60,9 @@ def main():
 
     work = tempfile.mkdtemp(prefix="cairn-samples-")
     env = dict(os.environ, CAIRN_USER="you", COLUMNS="96")
+    # Pin the clock. Items record the date they were created, so without this a
+    # recording differs from the committed one every day.
+    env["SOURCE_DATE_EPOCH"] = "1788566400"  # 2026-09-05
     env.pop("NO_COLOR", None)
     env["PATH"] = os.path.dirname(cairn) + os.pathsep + env.get("PATH", "")
 
