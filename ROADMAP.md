@@ -6,9 +6,13 @@ A markdown-native roadmap and issue manager that lives in your repository.
 
 ## v0.1 — Usable in anger
 
-`##########` 94% · 15 of 16 done · due 2026-10-15
+`#########·` 88% · 15 of 17 done · due 2026-10-15
 
 Enough to run a real project's roadmap without reaching for anything else.
+
+### backlog
+
+- [ ] [`0066`](https://github.com/oddurs/cairn/blob/main/cairn/items/0066-find-three-people-who-are-not-the-author.md) Find three people who are not the author <sup>chore · p0 · s7</sup>
 
 ### in progress
 
@@ -34,7 +38,7 @@ Enough to run a real project's roadmap without reaching for anything else.
 
 ## v0.2 — Comfortable
 
-`######····` 58% · 19 of 33 done · due 2026-12-01
+`######····` 53% · 19 of 36 done · due 2026-12-01
 
 The rough edges that show up after a few weeks of daily use, and the pieces that make the central claim true rather than merely stated.
 
@@ -54,6 +58,9 @@ The rough edges that show up after a few weeks of daily use, and the pieces that
 - [ ] [`0063`](https://github.com/oddurs/cairn/blob/main/cairn/items/0063-filenames-follow-the-identifier-format.md) Filenames follow the identifier format <sup>feature · p0 · s6</sup>
 - [ ] [`0064`](https://github.com/oddurs/cairn/blob/main/cairn/items/0064-start-numbering-somewhere-other-than-one.md) Start numbering somewhere other than one <sup>feature · p2 · s6</sup>
 - [ ] [`0065`](https://github.com/oddurs/cairn/blob/main/cairn/items/0065-say-in-the-specification-that-a-key-is-a-rendering.md) Say in the specification that a key is a rendering <sup>docs · p0 · s6</sup>
+- [ ] [`0068`](https://github.com/oddurs/cairn/blob/main/cairn/items/0068-a-bar-for-adding-a-command.md) A bar for adding a command <sup>chore · p1 · s7</sup>
+- [ ] [`0069`](https://github.com/oddurs/cairn/blob/main/cairn/items/0069-test-the-way-that-has-actually-been-finding-things.md) Test the way that has actually been finding things <sup>chore · p1 · s7</sup>
+- [ ] [`0070`](https://github.com/oddurs/cairn/blob/main/cairn/items/0070-change-the-specification-before-changing-the-format.md) Change the specification before changing the format <sup>chore · p2 · s7</sup>
 
 ### done
 
@@ -79,7 +86,7 @@ The rough edges that show up after a few weeks of daily use, and the pieces that
 
 ## v1.0 — Stable
 
-`#####·····` 45% · 5 of 11 done · due 2027-03-01
+`#####·····` 42% · 5 of 12 done · due 2027-03-01
 
 Safe to depend on: every scriptable surface carries a promise, the command surface has been reviewed and pruned rather than accumulated, releases can be verified, and it installs from a package manager people already use.
 
@@ -91,6 +98,7 @@ Safe to depend on: every scriptable surface carries a promise, the command surfa
 - [ ] [`0053`](https://github.com/oddurs/cairn/blob/main/cairn/items/0053-be-in-a-package-manager-people-already-use.md) Be in a package manager people already use <sup>chore · p0</sup>
 - [ ] [`0054`](https://github.com/oddurs/cairn/blob/main/cairn/items/0054-decide-about-translation-and-write-the-decision-down.md) Decide about translation, and write the decision down <sup>docs · p2</sup>
 - [ ] [`0061`](https://github.com/oddurs/cairn/blob/main/cairn/items/0061-a-second-implementation-of-the-reader.md) A second implementation of the reader <sup>feature · p1</sup>
+- [ ] [`0067`](https://github.com/oddurs/cairn/blob/main/cairn/items/0067-decide-whether-identifiers-should-be-collision-free-by-construction.md) Decide whether identifiers should be collision-free by construction <sup>feature · p1 · s7</sup>
 
 ### done
 
