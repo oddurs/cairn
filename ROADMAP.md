@@ -34,7 +34,7 @@ Enough to run a real project's roadmap without reaching for anything else.
 
 ## v0.2 — Comfortable
 
-`#######···` 66% · 19 of 29 done · due 2026-12-01
+`######····` 58% · 19 of 33 done · due 2026-12-01
 
 The rough edges that show up after a few weeks of daily use, and the pieces that make the central claim true rather than merely stated.
 
@@ -50,6 +50,10 @@ The rough edges that show up after a few weeks of daily use, and the pieces that
 - [ ] [`0058`](https://github.com/oddurs/cairn/blob/main/cairn/items/0058-write-down-what-cairn-will-always-do-before-anyone-is-watching.md) Write down what cairn will always do, before anyone is watching <sup>docs · p0</sup>
 - [ ] [`0059`](https://github.com/oddurs/cairn/blob/main/cairn/items/0059-declare-cairn-s-boundary-what-one-repository-can-do.md) Declare cairn's boundary: what one repository can do <sup>docs · p0</sup>
 - [ ] [`0060`](https://github.com/oddurs/cairn/blob/main/cairn/items/0060-never-ship-a-library-target.md) Never ship a library target <sup>chore · p1</sup>
+- [ ] [`0062`](https://github.com/oddurs/cairn/blob/main/cairn/items/0062-one-template-for-how-identifiers-are-written-and-read.md) One template for how identifiers are written and read <sup>feature · p0 · s6</sup>
+- [ ] [`0063`](https://github.com/oddurs/cairn/blob/main/cairn/items/0063-filenames-follow-the-identifier-format.md) Filenames follow the identifier format <sup>feature · p0 · s6</sup>
+- [ ] [`0064`](https://github.com/oddurs/cairn/blob/main/cairn/items/0064-start-numbering-somewhere-other-than-one.md) Start numbering somewhere other than one <sup>feature · p2 · s6</sup>
+- [ ] [`0065`](https://github.com/oddurs/cairn/blob/main/cairn/items/0065-say-in-the-specification-that-a-key-is-a-rendering.md) Say in the specification that a key is a rendering <sup>docs · p0 · s6</sup>
 
 ### done
 
