@@ -59,6 +59,7 @@ Sections, no Front-Cover Texts, and no Back-Cover Texts.
 * Working the backlog::     Finding, claiming and finishing work.
 * Interchange::             Moving a backlog in and out.
 * Stability::               What may be scripted against.
+* Cookbook::                Recipes for what people arrive wanting.
 * Commands::                Every subcommand.
 * Hooks::                   Running your own programs on events.
 * Coding agents::           Keeping generated work inside the schema.
@@ -1280,6 +1281,162 @@ withdrawn without a major release, so adding one is a decision rather than a
 convenience. That is the intended effect. @file{tests/stability.rs} asserts that
 every documented field is present, so removing one fails the build rather than
 somebody's script.
+
+@section Translation
+
+@cindex translation
+@cindex internationalisation
+@cindex i18n
+cairn is not translated, and will not be before 1.0. That is a decision rather
+than an oversight, so here is the reasoning and what would reverse it.
+
+A GNU-shaped project is normally translatable, and cairn borrows its manners
+from that tradition. The gap is real. But most of what cairn prints is not
+labels; it is prose. A diagnostic names a file and a line and says what would
+have worked. An agent instruction block is generated from the project's own
+schema. An error message's whole job is to be precise about what went wrong.
+
+Translating those well is a sustained editorial commitment rather than a one-off
+extraction, and a half-translated diagnostic is worse than an English one,
+because it can no longer be searched for --- which is how people actually
+resolve errors. A translated error is also harder for a maintainer to act on
+when it arrives in a bug report.
+
+So the cost here is maintenance, not extraction, and it is not a cost a project
+should take on before it has anybody to bear it.
+
+@subsection What would change this
+
+A contributor volunteering to own a language --- not to produce one
+translation, but to keep it current as messages change. On that, the answer
+becomes yes and the work is a message catalogue plus @emph{one complete}
+language rather than several partial ones, for the reason above.
+
+Until then, English messages sit alongside the English that git, cargo and the
+compiler already print to the same person.
+
+@node Cookbook
+@chapter Cookbook
+
+@cindex cookbook
+@cindex recipes
+Recipes for the things people actually arrive wanting to do. Every command here
+is checked by @file{tests/manual.rs}, which extracts them and refuses any the
+program would reject --- the manual having twice claimed a flag that was never
+implemented.
+
+@section Adopt cairn where GitHub issues already exist
+
+@cindex adopting cairn
+@example
+cairn init --name Nimbus
+cairn import --from github --repo owner/name --dry-run
+cairn import --from github --repo owner/name
+cairn check --strict
+cairn render
+@end example
+
+@noindent
+The dry run first, because an import is the one operation that creates a hundred
+files at once. GitHub is read through @command{gh}, which you have already
+authenticated, so cairn never handles a token. Importing again later updates
+rather than duplicates: provenance travels in @code{source}.
+
+@section Triage a week's arrivals without typing an identifier twice
+
+@example
+cairn list --filter 'milestone=,category=open' --ids
+cairn set --filter 'milestone=,type=bug' milestone=v0.1 priority=p1
+cairn list --view triage
+@end example
+
+@noindent
+The first line is the reading pass. The second changes everything it matched,
+after showing you the list and asking. @xref{Filters}. If you find yourself
+running the same query weekly, put it in @file{cairn.toml} as a view and give it
+a name.
+
+@section Make the roadmap unable to drift
+
+@cindex continuous integration
+@example
+cairn check --strict --render
+@end example
+
+@noindent
+One line in CI. @option{--strict} makes warnings fail, and @option{--render}
+additionally fails when the committed @file{ROADMAP.md} does not match what the
+items now say. Locally, the hooks in @file{cairn.toml} keep it current so the
+check never fires. @xref{Continuous integration}.
+
+@section Give an agent a scoped slice of the backlog
+
+@cindex agents
+@example
+cairn agent --write AGENTS.md
+cairn next --filter 'milestone=v0.1' --json
+cairn claim --next --filter 'type=bug'
+@end example
+
+@noindent
+The instruction block is generated from your schema, so it cannot describe a
+workflow you do not have. An agent that speaks the Model Context Protocol should
+be given @command{cairn mcp} instead, which is the same operations without any
+command lines to get wrong. @xref{Working the backlog}.
+
+@section Move a backlog between two different schemas
+
+@example
+cairn export > backlog.json
+cairn import --from json backlog.json --dry-run
+@end example
+
+@noindent
+The document carries the schema alongside the items, so the receiving project
+can interpret status names it has never seen. Names that do not exist there are
+mapped by @emph{category} --- one project's @code{shipped} is another's
+@code{done} --- which is the reason categories are a fixed axis under the names
+you choose. @xref{Interchange}.
+
+@section Find everything one person is holding
+
+@example
+cairn list --assignee alice --filter 'category=active'
+cairn list --filter 'assignee=,category=active'
+cairn release 12
+@end example
+
+@noindent
+The second line is the more useful one: work that is in progress and assigned to
+nobody, which is what a stalled item looks like. An empty value means unset.
+
+@section Recover after a bad merge
+
+@cindex merge
+@example
+cairn check
+cairn renumber --dry-run
+cairn renumber
+cairn render
+@end example
+
+@noindent
+Two branches that each created an item allocate the same identifier, because no
+branch can know what the other did. @command{renumber} repairs it, keeping the
+identifier on the side that was already published. The dry run first, always:
+this rewrites files. @xref{Identifiers}.
+
+@section Find out what happened to an item
+
+@example
+cairn log 12
+cairn log 12 --patch
+cairn show 12
+@end example
+
+@noindent
+Read from the repository the item lives in, and reported as field transitions
+rather than as a patch. @xref{Commands}.
 
 @node Commands
 @chapter Commands

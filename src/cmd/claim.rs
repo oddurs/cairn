@@ -38,6 +38,15 @@ pub struct ClaimArgs {
     #[arg(long, action = ArgAction::SetTrue)]
     pub next: bool,
 
+    /// Narrow what `--next` may pick: `--filter 'type=bug'`
+    ///
+    /// Scoping the claim rather than the listing is what makes it safe. Doing
+    /// it in two commands — list, then claim the first — leaves a gap in which
+    /// another claimer can take the item, and the whole reason claiming holds
+    /// the lock is to close exactly that gap.
+    #[arg(long, value_name = "EXPR", requires = "next")]
+    pub filter: Option<String>,
+
     /// Claim on behalf of someone else (default: you)
     #[arg(long = "as", value_name = "WHO")]
     pub who: Option<String>,
@@ -97,7 +106,7 @@ pub fn claim(args: ClaimArgs) -> Result<i32> {
                     unassigned: true,
                     milestone: None,
                     kind: None,
-                    filter: None,
+                    filter: args.filter.clone(),
                     blocked: false,
                     json: false,
                     ids: false,

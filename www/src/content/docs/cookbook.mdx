@@ -1,0 +1,98 @@
+---
+title: Cookbook
+description: Recipes for the things people arrive wanting to do — adopting cairn, triaging, wiring it into CI, and scoping a slice of the backlog for an agent.
+summary: Every command here is extracted and run against the real program by the test suite, because a manual that claims a flag nobody implemented is worse than no manual.
+order: 5
+---
+
+Short recipes for what people actually arrive wanting. Each is a sequence you
+can paste.
+
+Every command on this page is extracted by `tests/manual.rs` and run against the
+real binary, which refuses any the program would reject. That test exists
+because the manual twice claimed a flag that was never implemented.
+
+## Adopt cairn where GitHub issues already exist
+
+```sh
+cairn init --name Nimbus
+cairn import --from github --repo owner/name --dry-run
+cairn import --from github --repo owner/name
+cairn check --strict
+```
+
+The dry run first, because an import is the one operation that creates a hundred
+files at once. GitHub is read through `gh`, which you have already
+authenticated, so cairn never handles a token. Importing again later updates
+rather than duplicates — provenance travels in `source`.
+
+## Triage a week's arrivals without typing an identifier twice
+
+```sh
+cairn list --filter 'milestone=,category=open' --ids
+cairn set --filter 'milestone=,type=bug' milestone=v0.1 priority=p1
+```
+
+The first line is the reading pass. The second changes everything it matched,
+after showing you the list and asking. If you run the same query weekly, put it
+in `cairn.toml` as a view and give it a name.
+
+## Make the roadmap unable to drift
+
+```sh
+cairn check --strict --render
+```
+
+One line in CI. `--strict` makes warnings fail; `--render` additionally fails
+when the committed `ROADMAP.md` no longer matches what the items say.
+
+## Give an agent a scoped slice
+
+```sh
+cairn agent --write AGENTS.md
+cairn next --filter 'milestone=v0.1' --json
+cairn claim --next --filter 'type=bug'
+```
+
+The instruction block is generated from your schema, so it cannot describe a
+workflow you do not have. Scoping the *claim* rather than the listing is what
+makes the last line safe: doing it as list-then-claim leaves a gap in which
+another agent can take the item.
+
+An agent that speaks the Model Context Protocol should be given `cairn mcp`
+instead — the same operations, with no command lines to get wrong.
+
+## Move a backlog between two different schemas
+
+```sh
+cairn export > backlog.json
+cairn import --from json backlog.json --dry-run
+```
+
+The document carries the schema alongside the items, so the receiving project
+can interpret status names it has never seen. Names that do not exist there map
+by **category** — one project's `shipped` is another's `done` — which is why
+categories are a fixed axis under the names you choose.
+
+## Find everything one person is holding
+
+```sh
+cairn list --assignee alice --filter 'category=active'
+cairn list --filter 'assignee=,category=active'
+```
+
+The second line is the more useful one: work in progress and assigned to nobody,
+which is what a stalled item looks like. An empty value means unset.
+
+## Recover after a bad merge
+
+```sh
+cairn check
+cairn renumber --dry-run
+cairn renumber
+```
+
+Two branches that each created an item allocate the same identifier, because no
+branch can know what the other did. `renumber` repairs it, keeping the
+identifier on the side that was already published. The dry run first, always —
+this rewrites files.
