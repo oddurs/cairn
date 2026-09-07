@@ -268,16 +268,26 @@ impl Item {
                 continue;
             };
             let rest = rest.trim_start();
-            if let Some(after) = rest.strip_prefix("[ ]") {
-                if after.is_empty() || after.starts_with(char::is_whitespace) {
-                    total += 1;
-                }
+            let (ticked, after) = if let Some(after) = rest.strip_prefix("[ ]") {
+                (false, after)
             } else if let Some(after) = rest
                 .strip_prefix("[x]")
                 .or_else(|| rest.strip_prefix("[X]"))
-                && (after.is_empty() || after.starts_with(char::is_whitespace))
             {
-                total += 1;
+                (true, after)
+            } else {
+                continue;
+            };
+            // A box with nothing after it is a placeholder, not a criterion.
+            // The type template cairn ships ends with a bare `- [ ]` prompting
+            // the author to write one, so counting it would make every item
+            // ever created report one unticked criterion forever — which is
+            // exactly the noise that gets a feature switched off.
+            if !after.starts_with(char::is_whitespace) || after.trim().is_empty() {
+                continue;
+            }
+            total += 1;
+            if ticked {
                 done += 1;
             }
         }
@@ -889,12 +899,24 @@ mod criteria_tests {
         }
     }
 
+    /// The type template cairn ships ends with a bare `- [ ]`, prompting the
+    /// author to write a criterion. It is a placeholder, and counting it would
+    /// make every item ever created report one unticked criterion for the rest
+    /// of its life.
+    ///
+    /// This test asserted the opposite first, on the reasoning that the
+    /// template emits it so it must be meant. Re-recording the README demo is
+    /// what showed that backwards: the demo closed an untouched item and the
+    /// tool announced "1 of 1 acceptance criteria are unticked".
     #[test]
-    fn a_box_with_nothing_after_it_still_counts() {
-        // The template cairn ships emits exactly this, so if it did not count,
-        // every new item would understate itself.
-        assert_eq!(item("- [ ]\n").criteria(None).total, 1);
-        assert_eq!(item("- [x]\n").criteria(None).done, 1);
+    fn an_empty_box_is_a_placeholder_rather_than_a_criterion() {
+        for body in ["- [ ]\n", "- [x]\n", "- [ ]   \n", "- [x]\t\n"] {
+            assert!(
+                !item(body).criteria(None).any(),
+                "counted an empty box in {body:?}"
+            );
+        }
+        assert_eq!(item("- [ ] a real one\n").criteria(None).total, 1);
     }
 
     #[test]

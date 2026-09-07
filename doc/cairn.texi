@@ -1365,6 +1365,15 @@ what it said done would mean. Again without refusing --- the agent may be right
 and the criteria stale.
 @end table
 
+@section What is not a criterion
+
+@cindex placeholder
+A box with nothing written after it is a placeholder, not a criterion. The type
+template cairn ships ends with a bare @code{- [ ]} prompting the author to write
+one, so counting it would make every item ever created report one unticked
+criterion for the rest of its life --- which is the noise that gets a feature
+switched off within a week.
+
 @section An item that states none
 
 @noindent
