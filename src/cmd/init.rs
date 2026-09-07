@@ -306,6 +306,23 @@ board = false             # hide this column on `cairn board`
 # ─── Custom fields ───────────────────────────────────────────────────────────
 # kind = text | enum | list | date | number | bool
 # `column = true` puts the field in the default `cairn list` table.
+# Composition. `part_of` is a reference: its values name other items rather than
+# describing this one. Many-valued on purpose — an item can belong to two larger
+# efforts at once, which a `parent` field could not express and which is why
+# there is no such field.
+#
+# Nothing requires it. `cairn new` still takes only a title, and structure is
+# added afterwards: `cairn set 12 part_of=7`.
+[[field]]
+name = "part_of"
+kind = "ref"
+target = "*"
+cardinality = "many"
+acyclic = true
+rollup = true
+inverse = "contains"
+description = "a larger piece of work this belongs to"
+
 # Enum values are ordered: `cairn list --sort priority` respects that order.
 
 [[field]]

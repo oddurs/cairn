@@ -1435,6 +1435,100 @@ It settles a second problem too. Containers naturally depend on one another ---
 a roadmap is a sequence --- and without this they would read as blocked work and
 crowd out the real thing.
 
+@section Composition
+
+@cindex composition
+@cindex part_of
+@cindex hierarchy
+Large work is made of small work, and @code{part_of} is how an item says which
+larger effort it belongs to. @command{cairn init} scaffolds it, so a new project
+composes without configuring anything.
+
+@example
+cairn new "Ship OAuth"
+cairn new "Token endpoint"
+cairn set 2 part_of=1
+@end example
+
+@noindent
+It is scaffolded rather than built in. Hardcoding a second relationship would
+re-create the problem declarable fields exist to remove, and composition is
+genuinely optional in a way ordering is not --- many backlogs are flat. An
+existing project adds the four lines from @file{cairn.toml} and has it.
+
+@subsection Why there is no parent field
+
+@cindex parent
+@code{part_of} is many-valued, and that is the point. An item belongs to the
+authentication work and to the quarter's security push at once, and a tree makes
+you choose one and then makes you wrong later.
+
+There is a second reason specific to files in a repository. A scalar has no
+correct merge: when two branches file the same item under different parents, one
+of them simply loses and nobody can tell which was meant. A set has an obvious
+answer --- keep both --- so the disagreement becomes a merge somebody can
+finish rather than a decision the format already made for them.
+
+That is not the same as merging cleanly, and it is worth being exact. Two
+branches appending to the same sequence still produce a textual conflict today,
+because git merges text; @code{depends_on} has always behaved this way.
+Resolving such a conflict by union is a job for the merge driver, and it is not
+done yet.
+
+@subsection How deep
+
+@cindex depth
+Unbounded. A limit is a decision that will be wrong for somebody.
+
+Past about four levels @command{cairn check} says so, as a warning rather than
+an error, because a hierarchy that deep is usually a taxonomy where a plan was
+wanted. It is a remark, not a rule.
+
+@subsection Filing stays free
+
+@command{cairn new} takes a title and nothing else, always. Structure is added
+afterwards, by a second command, and never demanded at the moment somebody is
+trying to write something down.
+
+@section Level names
+
+@cindex initiative
+@cindex epic
+cairn ships no @code{initiative}, no @code{epic}, no @code{story}. A project
+that wants them declares them:
+
+@example
+[[type]]
+name = "initiative"
+@end example
+
+@noindent
+That is the whole mechanism, and cairn has no opinion about it.
+
+Naming a level is where tools in this category begin to mislead their users. The
+moment @code{epic} exists in the program, people argue about whether something
+is an epic --- an argument with no answer in it, because levels are not facts
+about work but a vocabulary imposed on it, and the vocabulary fits some projects
+and not others. Then the tool's word and the team's word diverge and everybody
+carries a translation table.
+
+Levels are also unstable in a way the tool cannot see. Something filed as an
+epic turns out to be an afternoon; something filed as a task grows six items
+beneath it. The label does not update, and within a quarter the field is
+decoration.
+
+None of it is necessary. Size is a fact about the graph: an item with fourteen
+things @code{part_of} it is observably large, and that cannot go stale.
+
+@subsection What would reverse this
+
+A behaviour that genuinely needs a declared level rather than a derived one ---
+a query, a view, a rollup that cannot be written against @code{part_of}. That
+would be a fact rather than a preference, and it would settle the question.
+
+Wanting the word is not that. The word is available; it is a type name, and it
+belongs to the project rather than to this program.
+
 @section What this does not change
 
 Nothing on disk. @code{kind = "ref"} and its properties are new optional keys in

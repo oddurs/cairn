@@ -268,6 +268,19 @@ fn collect_inner(
             r.error_at(&at, item, "key", problem);
         }
 
+        // Unbounded, but past a handful this is usually a taxonomy rather than
+        // a plan. A warning says "look at this", which is all that is wanted.
+        const DEEP: usize = 4;
+        let depth = crate::refs::depth(items, cfg, item);
+        if depth > DEEP {
+            r.warn(
+                &at,
+                format!(
+                    "{depth} levels of composition above this item; past {DEEP}, a hierarchy is usually a taxonomy rather than a plan"
+                ),
+            );
+        }
+
         for def in cfg.ref_fields() {
             for value in crate::refs::values(item, def) {
                 if crate::refs::resolve(items, def, &value).is_none() {
