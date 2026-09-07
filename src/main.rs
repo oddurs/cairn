@@ -137,6 +137,9 @@ enum Command {
     /// Show one item in full
     Show(cmd::show::Args),
 
+    /// Show how an item changed, from the repository's own history
+    Log(cmd::log::Args),
+
     /// Change fields on an item: `cairn set 12 status=doing priority=p0`
     Set(cmd::set::Args),
 
@@ -267,6 +270,7 @@ fn run(command: Command) -> Result<i32> {
         Command::Claim(a) => cmd::claim::claim(a),
         Command::Release(a) => cmd::claim::release(a),
         Command::Show(a) => cmd::show::run(a),
+        Command::Log(a) => cmd::log::run(a),
         Command::Set(a) => cmd::set::run(a),
         Command::Note(a) => cmd::note::run(a),
         Command::Close(a) => cmd::set::close(a),
