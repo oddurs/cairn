@@ -3265,3 +3265,64 @@ fn set_still_takes_exactly_one_id() {
         "both assignments landed on the one item named"
     );
 }
+
+/// Found by the interchange round-trip property, which generated a backlog with
+/// dependencies and noticed they were gone on the other side.
+///
+/// `import` matched each written item back to the record that produced it by
+/// comparing `source` — and on a cairn export that field is absent, so it was
+/// synthesised locally for the item and left `None` on the record. The two
+/// never compared equal, and every dependency was silently dropped. Silently is
+/// the operative word: nothing failed, `check` passed, and the backlog was
+/// simply missing the thing `next` uses to decide what is startable.
+#[test]
+fn dependencies_survive_an_export_and_import() {
+    let source = Project::new();
+    source.add("Foundation", &[]);
+    source.add("Depends on the foundation", &[]);
+    source.add("Also depends on it", &[]);
+    source.expect(&["set", "2", "3", "depends_on+=1"]);
+
+    let document = source.expect(&["export"]).stdout;
+
+    let mirror = Project::new();
+    std::fs::write(mirror.path("in.json"), &document).expect("writing the document");
+    mirror.expect(&["import", "--from", "json", "in.json"]);
+
+    let items: serde_json::Value =
+        serde_json::from_str(&mirror.expect(&["list", "-A", "--json"]).stdout).expect("JSON");
+    let items = items.as_array().expect("an array");
+
+    let foundation = items
+        .iter()
+        .find(|i| i["title"] == "Foundation")
+        .expect("the foundation came back");
+    let foundation_id = foundation["id"].as_u64().expect("id");
+
+    for title in ["Depends on the foundation", "Also depends on it"] {
+        let item = items
+            .iter()
+            .find(|i| i["title"] == title)
+            .unwrap_or_else(|| panic!("`{title}` came back"));
+        let deps: Vec<u64> = item["depends_on"]
+            .as_array()
+            .expect("depends_on")
+            .iter()
+            .filter_map(|v| v.as_u64())
+            .collect();
+        assert_eq!(
+            deps,
+            vec![foundation_id],
+            "`{title}` lost its dependency in the round trip"
+        );
+    }
+
+    // And the consequence that made it worth finding: `next` has to still know
+    // what is blocked.
+    let ready = mirror.expect(&["next", "--ids"]).lines();
+    assert_eq!(
+        ready.len(),
+        1,
+        "everything looks startable, so the dependencies did not survive"
+    );
+}

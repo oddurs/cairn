@@ -9,7 +9,7 @@ CARGO       ?= cargo
 MAKEINFO    ?= makeinfo
 CAIRN       := target/release/cairn
 
-.PHONY: all build check test soak audit doc info html pdf record demo install install-bin \
+.PHONY: all build check test soak fuzz audit doc info html pdf record demo install install-bin \
         install-man install-info clean roadmap
 
 all: build doc
@@ -39,6 +39,11 @@ test:
 # reproduce a failure with CAIRN_SOAK_SEED=<seed>.
 soak:
 	$(CARGO) test --test soak --release -- --ignored --nocapture
+
+# Arbitrary argument vectors against the real binary. Runs a short pass as part
+# of `make check`; this is the long one.
+fuzz:
+	CAIRN_FUZZ_ROUNDS=20000 $(CARGO) test --release --test fuzz_args -- --nocapture
 
 demo: build
 	python3 doc/demo.py --cairn $(CAIRN)

@@ -118,10 +118,35 @@ accident:
 - `tests/golden/` pins how item files parse. Changing an expectation there is a
   format change and needs a format number and a migration. See "Compatibility"
   in the manual.
+- `tests/rules.rs` guards the three rules above, and the promise.
 - The concurrency tests race real processes. If you touch the lock, the write
   path, or identifier allocation, they are the ones that matter.
 - The property tests generate adversarial titles and bodies. If you touch the
   parser, expect them to find something.
+
+### Where to spend a new test
+
+Worth knowing before you write one, because it is not what you would guess.
+**Close to none of the defects found in cairn so far came from example tests** —
+the kind written in advance, describing a situation somebody had already thought
+of. They came from the soak test, from a platform nobody here can run, from an
+adversarial reader, and from attempting a release.
+
+Example tests are still the regression net, and every defect found another way
+leaves one behind. But if you are adding coverage rather than pinning a fix,
+these have the better return:
+
+```sh
+make soak                                        # a long arbitrary sequence
+CAIRN_SOAK_SEED=7 CAIRN_SOAK_OPS=2000 make soak  # reproduce or go deeper
+cargo test --release --test fuzz_args            # arbitrary argument vectors
+```
+
+And if the thing you are testing is true of *every* input rather than of one
+you chose, state it as a property. `tests/interchange.rs` and
+`tests/filter_laws.rs` are the shape to copy: the first found that `import` was
+silently dropping every dependency, which nothing failed on and `check` was
+perfectly happy with.
 
 ## Style
 

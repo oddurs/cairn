@@ -459,6 +459,66 @@ where a sequence belongs, a missing id, CRLF endings, keys from a version that
 does not exist. Every run checks them. Changing one of those expectations is a
 deliberate act, and by the rules above it is a format change.
 
+@section Where the defects have actually come from
+
+@cindex testing
+@cindex soak test
+@cindex fuzzing
+This is recorded because it decided how the suite is built. Of the defects
+found in cairn so far, close to none were found by the example tests --- the
+ones written in advance, describing a situation somebody had already thought
+of. They came from a soak test, from a platform the author cannot run, from an
+adversarial reader, and from attempting a release.
+
+Example tests are not therefore worthless: they are the regression net, and
+every defect found by another method leaves one behind. But they only ever check
+what somebody already imagined, and the bugs have been elsewhere. So the suite
+spends where the returns have been.
+
+@table @asis
+@item The soak test
+@file{tests/soak.rs} drives cairn through a long arbitrary sequence of ordinary
+operations --- every mutating command, the MCP server, an export and import
+round trip --- and checks after every single step that the backlog still holds
+together. It prints its seed, and a failure is reproduced by passing that seed
+back.
+
+A second test races several processes writing at once, because identifiers are
+allocated as one more than the highest in use and that is only safe while a lock
+makes the read and the write one step.
+
+@example
+make soak
+CAIRN_SOAK_SEED=7 CAIRN_SOAK_OPS=2000 make soak
+@end example
+
+@item Properties
+Some things are true of every input rather than of a chosen one. What cairn
+writes it reads back unchanged; a body carrying CRLF is normalised on write; a
+backlog that leaves through @command{export} comes back through
+@command{import} with its dependencies still pointing at the same items; and
+the filter grammar obeys laws --- negation partitions the backlog, alternation
+is union, a comma is intersection and does not care about order.
+
+The dependency property earned its place immediately: it found that
+@command{import} was silently dropping every dependency, which nothing failed
+on and @command{check} was perfectly happy with.
+
+@item Fuzzing the command line
+Every argument surface takes text from a person or from a model, and a model
+gets them wrong in ways a person would not think to try.
+@file{tests/fuzz_args.rs} drives the real binary with arbitrary argument
+vectors and asserts one thing: cairn may refuse anything, but it may not panic.
+
+@example
+CAIRN_FUZZ_ROUNDS=20000 cargo test --release --test fuzz_args
+@end example
+
+@item Rules
+@file{tests/rules.rs} guards decisions that are invisible in the code --- an
+absence, or an agreement between files. @xref{The promise}.
+@end table
+
 @node The promise
 @chapter The promise
 

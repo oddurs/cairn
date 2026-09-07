@@ -2,7 +2,7 @@
 id: 69
 title: Test the way that has actually been finding things
 type: chore
-status: backlog
+status: done
 milestone: v0.2
 created: 2026-09-06
 updated: 2026-09-06

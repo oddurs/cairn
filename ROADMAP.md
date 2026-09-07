@@ -38,7 +38,7 @@ Enough to run a real project's roadmap without reaching for anything else.
 
 ## v0.2 — Comfortable
 
-`########··` 78% · 28 of 36 done · due 2026-12-01
+`#########·` 81% · 29 of 36 done · due 2026-12-01
 
 The rough edges that show up after a few weeks of daily use, and the pieces that make the central claim true rather than merely stated.
 
@@ -51,7 +51,6 @@ The rough edges that show up after a few weeks of daily use, and the pieces that
 - [ ] [`0063`](https://github.com/oddurs/cairn/blob/main/cairn/items/0063-filenames-follow-the-identifier-format.md) Filenames follow the identifier format <sup>feature · p0 · s6</sup>
 - [ ] [`0064`](https://github.com/oddurs/cairn/blob/main/cairn/items/0064-start-numbering-somewhere-other-than-one.md) Start numbering somewhere other than one <sup>feature · p2 · s6</sup>
 - [ ] [`0065`](https://github.com/oddurs/cairn/blob/main/cairn/items/0065-say-in-the-specification-that-a-key-is-a-rendering.md) Say in the specification that a key is a rendering <sup>docs · p0 · s6</sup>
-- [ ] [`0069`](https://github.com/oddurs/cairn/blob/main/cairn/items/0069-test-the-way-that-has-actually-been-finding-things.md) Test the way that has actually been finding things <sup>chore · p1 · s7</sup>
 
 ### done
 
@@ -82,6 +81,7 @@ The rough edges that show up after a few weeks of daily use, and the pieces that
 - [x] [`0059`](https://github.com/oddurs/cairn/blob/main/cairn/items/0059-declare-cairn-s-boundary-what-one-repository-can-do.md) Declare cairn's boundary: what one repository can do <sup>docs · p0</sup>
 - [x] [`0060`](https://github.com/oddurs/cairn/blob/main/cairn/items/0060-never-ship-a-library-target.md) Never ship a library target <sup>chore · p1</sup>
 - [x] [`0068`](https://github.com/oddurs/cairn/blob/main/cairn/items/0068-a-bar-for-adding-a-command.md) A bar for adding a command <sup>chore · p1 · s7</sup>
+- [x] [`0069`](https://github.com/oddurs/cairn/blob/main/cairn/items/0069-test-the-way-that-has-actually-been-finding-things.md) Test the way that has actually been finding things <sup>chore · p1 · s7</sup>
 - [x] [`0070`](https://github.com/oddurs/cairn/blob/main/cairn/items/0070-change-the-specification-before-changing-the-format.md) Change the specification before changing the format <sup>chore · p2 · s7</sup>
 
 ## v1.0 — Stable

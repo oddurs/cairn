@@ -131,10 +131,15 @@ pub fn run(args: Args) -> Result<i32> {
     let mut next_id = store.next_id(&existing);
     // Incoming ids are not local ids; dependencies are rewritten through this.
     let mut id_map: HashMap<u32, u32> = HashMap::new();
-    let mut written: Vec<Item> = Vec::new();
+    // Each created item is kept beside the index of the incoming record that
+    // produced it. Matching them up afterwards by any *field* is what broke
+    // this before: the obvious key, `source`, is absent on a cairn export and
+    // synthesised locally, so the two sides never compared equal and every
+    // dependency was silently dropped.
+    let mut written: Vec<(usize, Item)> = Vec::new();
     let mut new_milestones: HashSet<String> = HashSet::new();
 
-    for inc in &incoming {
+    for (index, inc) in incoming.iter().enumerate() {
         let title = inc
             .title
             .clone()
@@ -212,30 +217,30 @@ pub fn run(args: Args) -> Result<i32> {
             );
         }
         created += 1;
-        written.push(item);
+        written.push((index, item));
     }
 
-    // Dependencies are rewritten once every incoming id has a local one.
-    for item in written.iter_mut() {
-        if let Some(inc) = incoming
-            .iter()
-            .find(|c| c.source.as_deref() == item.meta.source.as_deref())
-            && !inc.depends_on.is_empty()
-        {
-            let mapped: Vec<u32> = inc
-                .depends_on
-                .iter()
-                .filter_map(|d| id_map.get(d).copied())
-                .collect();
-            let lost = inc.depends_on.len() - mapped.len();
-            if lost > 0 {
-                warnings.push(format!(
-                    "{}: dropped {lost} dependency reference(s) not present in the import",
-                    cfg.format_id(item.id)
-                ));
-            }
-            item.meta.depends_on = mapped;
+    // Dependencies are rewritten once every incoming id has a local one, which
+    // is why this cannot happen inside the loop above: an item may depend on
+    // one that appears later in the document.
+    for (index, item) in written.iter_mut() {
+        let inc = &incoming[*index];
+        if inc.depends_on.is_empty() {
+            continue;
         }
+        let mapped: Vec<u32> = inc
+            .depends_on
+            .iter()
+            .filter_map(|d| id_map.get(d).copied())
+            .collect();
+        let lost = inc.depends_on.len() - mapped.len();
+        if lost > 0 {
+            warnings.push(format!(
+                "{}: dropped {lost} dependency reference(s) not present in the import",
+                cfg.format_id(item.id)
+            ));
+        }
+        item.meta.depends_on = mapped;
     }
 
     if args.dry_run {
@@ -248,14 +253,15 @@ pub fn run(args: Args) -> Result<i32> {
         names.sort();
         crate::cmd::milestone::add_many(&cfg, &names)?;
     }
-    for item in &written {
+    for (_, item) in &written {
         item.save()?;
     }
 
     // Only after every item is safely on disk. Closing an issue that points at
     // something that failed to save would send a reporter to a dead link.
     if args.close {
-        close_upstream(&cfg, &store, &written, &mut warnings);
+        let created_items: Vec<Item> = written.iter().map(|(_, i)| i.clone()).collect();
+        close_upstream(&cfg, &store, &created_items, &mut warnings);
     }
 
     report(&warnings, created, updated, skipped, false);
