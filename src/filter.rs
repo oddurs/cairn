@@ -18,7 +18,7 @@ use crate::config::Config;
 use crate::item::{Field, Item};
 use anyhow::{Result, bail};
 use std::cmp::Ordering;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 /// Query context: the schema plus whatever needs knowledge of the whole item
 /// set. Dependency state is the reason this exists — whether an item is blocked
@@ -28,6 +28,15 @@ pub struct Ctx<'a> {
     pub cfg: &'a Config,
     closed: HashSet<u32>,
     known: HashSet<u32>,
+    /// What each item directly contains, through every field marked `rollup`.
+    ///
+    /// Derived once here rather than on each query. Position in a hierarchy is
+    /// a fact about the whole set, and computing it per comparison would turn a
+    /// filter into a graph walk for every item it looks at.
+    contains: HashMap<u32, Vec<u32>>,
+    /// Everything beneath an item at any depth, and how much of it is finished.
+    beneath: HashMap<u32, (usize, usize)>,
+    depth: HashMap<u32, usize>,
 }
 
 impl<'a> Ctx<'a> {
@@ -40,7 +49,57 @@ impl<'a> Ctx<'a> {
                 closed.insert(i.id);
             }
         }
-        Ctx { cfg, closed, known }
+
+        // The composition graph, from every field a project marked `rollup`.
+        // One derivation over however many fields point in, rather than a
+        // second mechanism for each.
+        let mut contains: HashMap<u32, Vec<u32>> = HashMap::new();
+        let mut above: HashMap<u32, Vec<u32>> = HashMap::new();
+        for def in cfg.ref_fields().filter(|f| f.rollup) {
+            for item in items {
+                for parent in crate::refs::targets(items, item, def) {
+                    contains.entry(parent.id).or_default().push(item.id);
+                    above.entry(item.id).or_default().push(parent.id);
+                }
+            }
+        }
+        for v in contains.values_mut() {
+            v.sort_unstable();
+            v.dedup();
+        }
+
+        let beneath = items
+            .iter()
+            .map(|i| (i.id, count_beneath(&contains, &closed, i.id)))
+            .collect();
+        let depth = items
+            .iter()
+            .map(|i| (i.id, height_above(&above, i.id)))
+            .collect();
+
+        Ctx {
+            cfg,
+            closed,
+            known,
+            contains,
+            beneath,
+            depth,
+        }
+    }
+
+    /// What this item directly contains.
+    pub fn contains(&self, item: &Item) -> Vec<u32> {
+        self.contains.get(&item.id).cloned().unwrap_or_default()
+    }
+
+    /// Everything beneath it at any depth, and how much of that is finished.
+    pub fn beneath(&self, item: &Item) -> (usize, usize) {
+        self.beneath.get(&item.id).copied().unwrap_or((0, 0))
+    }
+
+    /// How far below a root this sits.
+    pub fn depth(&self, item: &Item) -> usize {
+        self.depth.get(&item.id).copied().unwrap_or(0)
     }
 
     /// Dependencies that exist and are not finished. A reference to an item
@@ -192,6 +251,28 @@ pub fn resolve(item: &Item, ctx: &Ctx, key: &str) -> Field {
         "blocked" => Field::Text(ctx.is_blocked(item).to_string()),
         "ready" => Field::Text(ctx.is_ready(item).to_string()),
         "blockers" => Field::List(ctx.blockers(item).iter().map(u32::to_string).collect()),
+        // Position in the hierarchy, derived rather than declared. A `scale`
+        // field would be a claim that goes stale; "has fourteen things beneath
+        // it" cannot be wrong.
+        "contains" => Field::List(
+            ctx.contains(item)
+                .iter()
+                .map(|id| ctx.cfg.format_id(*id))
+                .collect(),
+        ),
+        "descendants" => Field::Text(ctx.beneath(item).0.to_string()),
+        "depth" => Field::Text(ctx.depth(item).to_string()),
+        "leaf" => Field::Text(ctx.contains(item).is_empty().to_string()),
+        "progress" => {
+            let (total, done) = ctx.beneath(item);
+            // Missing rather than zero for an item containing nothing: a leaf
+            // has no progress to report, and reporting 0 would put every
+            // ordinary item at the bottom of `--sort progress`.
+            match (done * 100).checked_div(total) {
+                Some(percent) => Field::Text(percent.to_string()),
+                None => Field::Missing,
+            }
+        }
         // Derived from the body rather than stored, so they cannot go stale and
         // there is nothing to keep in step.
         "criteria" => Field::Text(
@@ -398,4 +479,55 @@ mod properties {
             prop_assert_eq!(&filter.clauses[0].key, &key);
         }
     }
+}
+
+/// Everything beneath an item, and how much of it is finished.
+///
+/// Breadth-first with a visited set, so a cycle that reached disk by hand
+/// cannot make this run forever — `cairn check` reports the cycle separately,
+/// and a query is the wrong place to discover it.
+fn count_beneath(
+    contains: &HashMap<u32, Vec<u32>>,
+    closed: &HashSet<u32>,
+    root: u32,
+) -> (usize, usize) {
+    let mut seen = HashSet::from([root]);
+    let mut stack = vec![root];
+    let (mut total, mut done) = (0usize, 0usize);
+    while let Some(id) = stack.pop() {
+        for child in contains.get(&id).into_iter().flatten() {
+            if !seen.insert(*child) {
+                continue;
+            }
+            total += 1;
+            if closed.contains(child) {
+                done += 1;
+            }
+            stack.push(*child);
+        }
+    }
+    (total, done)
+}
+
+/// How many levels of composition sit above an item.
+fn height_above(above: &HashMap<u32, Vec<u32>>, start: u32) -> usize {
+    let mut seen = HashSet::from([start]);
+    let mut frontier = vec![start];
+    let mut depth = 0;
+    while !frontier.is_empty() {
+        let mut next = Vec::new();
+        for id in frontier {
+            for parent in above.get(&id).into_iter().flatten() {
+                if seen.insert(*parent) {
+                    next.push(*parent);
+                }
+            }
+        }
+        if next.is_empty() {
+            break;
+        }
+        depth += 1;
+        frontier = next;
+    }
+    depth
 }
