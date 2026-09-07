@@ -59,6 +59,7 @@ Sections, no Front-Cover Texts, and no Back-Cover Texts.
 * Working the backlog::     Finding, claiming and finishing work.
 * Interchange::             Moving a backlog in and out.
 * Stability::               What may be scripted against.
+* Verifying a release::     Checksums, provenance and signatures.
 * Cookbook::                Recipes for what people arrive wanting.
 * Commands::                Every subcommand.
 * Hooks::                   Running your own programs on events.
@@ -1314,6 +1315,93 @@ language rather than several partial ones, for the reason above.
 
 Until then, English messages sit alongside the English that git, cargo and the
 compiler already print to the same person.
+
+@node Verifying a release
+@chapter Verifying a release
+
+@cindex verification
+@cindex signatures
+@cindex provenance
+@cindex source tarball
+A backlog is years of a project's history, and the program that reads it is
+worth checking before it is trusted with them. This chapter is written for
+somebody who has not done this before; each step says what it proves and what it
+does not.
+
+Every release carries, for each platform, an archive and its SHA-256 checksum,
+plus @file{SHA256SUMS} listing all of them, and a source tarball.
+
+@section What a checksum proves
+
+@example
+sha256sum -c SHA256SUMS
+@end example
+
+@noindent
+This proves the file arrived intact. It proves nothing about who made it: the
+checksums are produced by the same workflow as the archives, so anybody able to
+tamper with one could tamper with the other. It catches a truncated download and
+a broken mirror, which is worth having and is not the same as trust.
+
+@section What the attestation proves
+
+@cindex build provenance
+GitHub signs a statement saying which workflow, from which commit, produced each
+file. That is the guarantee a checksum cannot give, and it needs no key of ours.
+
+@example
+gh attestation verify cairn-0.1.0-x86_64-unknown-linux-musl.tar.gz \
+   --repo oddurs/cairn
+@end example
+
+@noindent
+It says: this file came out of that repository's release workflow, at that
+commit. It relies on GitHub's signing infrastructure, which is a party you are
+choosing to trust --- an honest description of what it is, rather than a claim
+of independence it does not have.
+
+@section What a signature proves
+
+@cindex GPG
+When a signing key is configured, every artefact has a detached
+@file{.asc} beside it.
+
+@example
+gpg --verify cairn-0.1.0-x86_64-unknown-linux-musl.tar.gz.asc \
+             cairn-0.1.0-x86_64-unknown-linux-musl.tar.gz
+@end example
+
+@noindent
+This is worth exactly as much as your confidence that the key is the right one,
+which is why the fingerprint is published in the repository and on the website
+rather than only in the release --- a fingerprint distributed alongside the
+thing it signs proves nothing at all. Compare what @command{gpg} reports against
+both.
+
+@section Building it yourself
+
+@cindex reproducing a release
+The strongest check available is not to verify the archive but to reproduce it.
+
+@example
+make dist
+sha256sum cairn-0.1.0.tar.gz
+@end example
+
+@noindent
+The source tarball is built with @command{git archive}, which is deterministic:
+file order comes from the tree and timestamps from the commit. The tarball
+attached to a release and the one this command produces from the same tag are
+the same bytes, and a difference is worth reporting.
+
+Binaries are a different matter. They are not currently reproducible --- that is
+a property nobody has established, and claiming it without having checked would
+be worse than not offering it.
+
+@section If a check fails
+
+Report it (@pxref{Introduction}) with the artefact name, the release, and what
+the command printed. Do not install the file.
 
 @node Cookbook
 @chapter Cookbook

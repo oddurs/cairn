@@ -568,6 +568,25 @@ committed `ROADMAP.md` matches the items. It exits non-zero on errors, and with
 has all of it. `-C DIR` runs as if started elsewhere; `--color` takes `auto`,
 `always` or `never`, and `NO_COLOR` is honoured; `--no-hooks` disables hooks.
 
+## Verifying what you downloaded
+
+Every release carries a checksum for each archive, a source tarball, and a
+GitHub build-provenance attestation saying which workflow and which commit
+produced each file — the one thing a checksum cannot tell you, since the
+checksums come from the same workflow as the binaries.
+
+```sh
+sha256sum -c SHA256SUMS
+gh attestation verify cairn-0.1.0-x86_64-unknown-linux-musl.tar.gz --repo oddurs/cairn
+make dist && sha256sum cairn-0.1.0.tar.gz   # reproduce the source tarball yourself
+```
+
+The source tarball is built with `git archive`, so the one attached to a release
+and the one `make dist` produces from the same tag are the same bytes. The
+binaries are **not** currently reproducible — nobody has established that, and
+claiming it unchecked would be worse than not offering it. See "Verifying a
+release" in the manual for what each check proves and what it does not.
+
 ## Durability
 
 The repository is the database, so the write path is the part that has to be

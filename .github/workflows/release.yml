@@ -10,6 +10,13 @@ on:
 
 permissions:
   contents: write
+  # Build provenance: GitHub signs an attestation saying which workflow, from
+  # which commit, produced which file. It needs no key of ours, and it is the
+  # one guarantee checksums cannot give — they come from the same workflow as
+  # the artefacts, so they prove the download arrived intact and nothing about
+  # where it came from.
+  id-token: write
+  attestations: write
 
 jobs:
   build:
@@ -87,8 +94,27 @@ jobs:
             dist/*.zip
             dist/*.sha256
 
+  source:
+    # A tarball built from the tag, for packagers and for anybody auditing a
+    # release without depending on the forge staying up. `git archive` is
+    # deterministic, so `make dist` on your own machine produces these same
+    # bytes — which is the only version of that claim worth making.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: make dist
+      - run: |
+          f=$(ls cairn-*.tar.gz)
+          sha256sum "$f" | cut -d' ' -f1 > "$f.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: source
+          path: |
+            cairn-*.tar.gz
+            cairn-*.tar.gz.sha256
+
   publish:
-    needs: build
+    needs: [build, source]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -105,6 +131,38 @@ jobs:
           done > SHA256SUMS
           rm -f *.sha256
           cat SHA256SUMS
+
+      - name: Attest what built these
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.zip
+
+      # Detached signatures, when there is a key to make them with. Absent, the
+      # release still happens: a workflow that fails on a missing secret is a
+      # workflow that stops a fork from tagging, and the checksums and the
+      # attestation above stand on their own. Add GPG_PRIVATE_KEY and
+      # GPG_PASSPHRASE and every artefact gains a .asc without another change
+      # here.
+      - name: Sign the artefacts
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          if [ -z "${GPG_PRIVATE_KEY:-}" ]; then
+            echo "No GPG_PRIVATE_KEY set; releasing without signatures."
+            echo "See doc/cairn.texi, \"Verifying a release\", for what this costs."
+            exit 0
+          fi
+          printf '%s' "$GPG_PRIVATE_KEY" | gpg --batch --import
+          for f in dist/*.tar.gz dist/*.zip dist/SHA256SUMS; do
+            [ -e "$f" ] || continue
+            gpg --batch --yes --pinentry-mode loopback \
+                --passphrase "$GPG_PASSPHRASE" \
+                --armor --detach-sign "$f"
+          done
+          gpg --list-keys --with-colons | awk -F: '/^fpr:/ {print $10; exit}'
 
       - uses: softprops/action-gh-release@v2
         with:

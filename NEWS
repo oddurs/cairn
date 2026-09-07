@@ -27,6 +27,24 @@ There is deliberately no library target, because linking cairn makes the caller
 a derivative work and reading its files does not.  A test fails if a [lib]
 appears in Cargo.toml.
 
+** Releases can be verified
+
+Every release now carries a source tarball, built with `git archive` and
+therefore reproducible: `make dist` from the same tag produces the same bytes.
+Packagers have a stable artefact that does not depend on the forge staying up.
+
+GitHub build-provenance attestation is emitted for every archive, saying which
+workflow and which commit produced it — the one thing a checksum cannot tell
+you, since the checksums come from the same workflow as the binaries.
+
+Detached GPG signatures are produced when a signing key is configured, and the
+release proceeds without them when there is not, so a fork can still tag.
+
+A new manual chapter, "Verifying a release", explains each check in steps
+somebody who has not done this before can follow, and is explicit about what
+each one does not prove.  The binaries are not reproducible and it says so
+rather than implying otherwise.
+
 ** A cookbook, and a test that the manual is true
 
 A new Cookbook chapter, and a page on the site, with recipes for what people
