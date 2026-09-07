@@ -1166,9 +1166,44 @@ Prints one item in full. @option{--json} includes the body; @option{--raw}
 prints the file unchanged; @option{--path} prints only its location.
 
 @section cairn set
-Changes fields: @samp{cairn set 12 status=doing priority=p0}. List fields
-support @samp{+=} and @samp{-=} to add and remove elements. An empty value
-clears a field. Every assignment is validated before anything is written.
+@cindex set
+Changes fields on one or more items.
+
+@example
+cairn set 12 status=doing
+cairn set 1 2 3 priority=p0
+cairn set 12 labels+=auth labels-=stale assignee=
+@end example
+
+@noindent
+Ids come first and assignments after. They share one list because an assignment
+always contains @samp{=} and an id never can, so the split is unambiguous; an id
+appearing after an assignment is refused rather than guessed at.
+
+@table @option
+@item --filter=@var{expr}
+Change every item matching @var{expr} instead of naming ids. @xref{Filters}.
+
+@item -y
+@itemx --yes
+Do not ask before a filtered change.
+@end table
+
+@example
+cairn set --filter 'milestone=v0.1,status=backlog' priority=p1
+@end example
+
+@noindent
+A filtered write is the dangerous one, because the person running it has not
+seen the list. So the matched items are printed and the change is confirmed
+before anything is touched, in the same shape @command{cairn remove} uses. A
+question nobody answers --- a script with no terminal --- is answered no.
+
+Everything is parsed before anything is written, so a typo in the last
+assignment does not leave the first ones applied to half the items. The whole
+operation takes one lock: a bulk edit is not a window during which the backlog
+is half-changed. If a write does fail part-way, the error names the items
+already written.
 
 @section cairn note
 @cindex notes
