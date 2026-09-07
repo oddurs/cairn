@@ -15,6 +15,7 @@
 // You should have received a copy of the GNU General Public License along with
 // this program.  If not, see <https://www.gnu.org/licenses/>.
 // cairn config / agent / completions / man.
+use crate::BUG_ADDRESS;
 use crate::config::{CONFIG_FILE, Config, FieldKind};
 use crate::style;
 use anyhow::Result;
@@ -409,5 +410,54 @@ pub fn man<C: CommandFactory>(args: ManArgs) -> Result<i32> {
             clap_mangen::Man::new(cmd).render(&mut out)?;
         }
     }
+    Ok(0)
+}
+
+/// The environment a maintainer asks for, printed so it can be pasted into an
+/// issue without a conversation first.
+///
+/// Deliberately says nothing a reporter would not want to publish: no paths
+/// outside the project, no environment beyond the platform, no item titles.
+/// Somebody pastes this into a public tracker, and a diagnostic that leaks is
+/// a diagnostic nobody runs twice.
+pub fn bug_report() -> Result<i32> {
+    println!("cairn {}", env!("CARGO_PKG_VERSION"));
+    println!(
+        "platform: {} {} ({})",
+        std::env::consts::OS,
+        std::env::consts::ARCH,
+        std::env::consts::FAMILY
+    );
+
+    match std::env::current_dir().ok().and_then(|d| Config::find(&d)) {
+        None => println!("project: none found from the current directory"),
+        Some(path) => match Config::load(&path) {
+            // A project that will not load is the interesting case, so say so
+            // rather than failing: this command runs when something is wrong.
+            Err(e) => println!("project: {CONFIG_FILE} present, but will not load: {e:#}"),
+            Ok(cfg) => {
+                println!("format: {}", cfg.format());
+                println!(
+                    "schema: {} type(s), {} status(es), {} extra field(s)",
+                    cfg.types.len(),
+                    cfg.statuses.len(),
+                    cfg.fields.len()
+                );
+                match crate::store::Store::new(&cfg).load_lenient() {
+                    Ok((items, bad)) => {
+                        println!("items: {}", items.len());
+                        if !bad.is_empty() {
+                            println!("unreadable items: {}", bad.len());
+                        }
+                    }
+                    Err(e) => println!("items: could not be read: {e:#}"),
+                }
+                println!("hooks: {} configured", cfg.hooks.count());
+            }
+        },
+    }
+
+    println!();
+    println!("Report bugs to: {BUG_ADDRESS}");
     Ok(0)
 }

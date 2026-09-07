@@ -38,7 +38,7 @@ Enough to run a real project's roadmap without reaching for anything else.
 
 ## v0.2 — Comfortable
 
-`#######···` 67% · 24 of 36 done · due 2026-12-01
+`########··` 72% · 26 of 36 done · due 2026-12-01
 
 The rough edges that show up after a few weeks of daily use, and the pieces that make the central claim true rather than merely stated.
 
@@ -46,8 +46,6 @@ The rough edges that show up after a few weeks of daily use, and the pieces that
 
 - [ ] [`0045`](https://github.com/oddurs/cairn/blob/main/cairn/items/0045-show-an-item-s-history.md) Show an item's history <sup>feature · p0</sup>
 - [ ] [`0046`](https://github.com/oddurs/cairn/blob/main/cairn/items/0046-change-several-items-in-one-command.md) Change several items in one command <sup>bug · p1</sup>
-- [ ] [`0047`](https://github.com/oddurs/cairn/blob/main/cairn/items/0047-say-where-to-report-bugs-in-the-program-itself.md) Say where to report bugs, in the program itself <sup>bug · p1</sup>
-- [ ] [`0048`](https://github.com/oddurs/cairn/blob/main/cairn/items/0048-choose-an-editor-that-exists-on-the-platform.md) Choose an editor that exists on the platform <sup>bug · p1</sup>
 - [ ] [`0049`](https://github.com/oddurs/cairn/blob/main/cairn/items/0049-a-cookbook-of-things-people-actually-want-to-do.md) A cookbook of things people actually want to do <sup>docs · p2</sup>
 - [ ] [`0056`](https://github.com/oddurs/cairn/blob/main/cairn/items/0056-collect-a-contributor-licence-agreement.md) Collect a contributor licence agreement <sup>chore · p0</sup>
 - [ ] [`0057`](https://github.com/oddurs/cairn/blob/main/cairn/items/0057-renumber-should-keep-the-identifier-the-published-side-already-has.md) Renumber should keep the identifier the published side already has <sup>bug · p1</sup>
@@ -77,6 +75,8 @@ The rough edges that show up after a few weeks of daily use, and the pieces that
 - [x] [`0042`](https://github.com/oddurs/cairn/blob/main/cairn/items/0042-a-website.md) A website <sup>docs · p1</sup>
 - [x] [`0043`](https://github.com/oddurs/cairn/blob/main/cairn/items/0043-generate-the-site-s-terminal-samples-instead-of-hand-colouring-them.md) Generate the site's terminal samples instead of hand-colouring them <sup>bug · p1</sup>
 - [x] [`0044`](https://github.com/oddurs/cairn/blob/main/cairn/items/0044-back-the-site-with-a-design-system.md) Back the site with a design system <sup>chore · p1</sup>
+- [x] [`0047`](https://github.com/oddurs/cairn/blob/main/cairn/items/0047-say-where-to-report-bugs-in-the-program-itself.md) Say where to report bugs, in the program itself <sup>bug · p1</sup>
+- [x] [`0048`](https://github.com/oddurs/cairn/blob/main/cairn/items/0048-choose-an-editor-that-exists-on-the-platform.md) Choose an editor that exists on the platform <sup>bug · p1</sup>
 - [x] [`0055`](https://github.com/oddurs/cairn/blob/main/cairn/items/0055-recordings-embedded-the-day-they-were-made.md) Recordings embedded the day they were made <sup>bug · p1</sup>
 - [x] [`0058`](https://github.com/oddurs/cairn/blob/main/cairn/items/0058-write-down-what-cairn-will-always-do-before-anyone-is-watching.md) Write down what cairn will always do, before anyone is watching <sup>docs · p0</sup>
 - [x] [`0059`](https://github.com/oddurs/cairn/blob/main/cairn/items/0059-declare-cairn-s-boundary-what-one-repository-can-do.md) Declare cairn's boundary: what one repository can do <sup>docs · p0</sup>

@@ -34,6 +34,25 @@ use std::path::PathBuf;
 /// and version, copyright, licence, and the warranty disclaimer.
 ///
 /// clap prints the package name ahead of this, so it begins with the version.
+/// Where a bug goes. Named once, so `--help`, the manual page and
+/// `--bug-report` cannot disagree about it.
+pub const BUG_ADDRESS: &str = "https://github.com/oddurs/cairn/issues";
+
+/// The closing block of `--help`, in the shape the GNU Coding Standards ask
+/// for: a program should tell you where to take a problem, because the person
+/// having one has the program in front of them and nothing else.
+///
+/// The standards' third line, "General help using GNU software", belongs to
+/// packages that are part of the GNU project. cairn is GPL but is not one, so
+/// claiming that address would send people somewhere that cannot help them.
+const HELP_FOOTER: &str = concat!(
+    "Report bugs to: https://github.com/oddurs/cairn/issues\n",
+    "cairn home page: https://oddurs.github.io/cairn\n",
+    "Full documentation: `info cairn`, or https://oddurs.github.io/cairn/docs\n",
+    "\n",
+    "`cairn --bug-report` prints the details a maintainer will ask for.",
+);
+
 const VERSION_NOTICE: &str = concat!(
     env!("CARGO_PKG_VERSION"),
     "\n",
@@ -54,9 +73,16 @@ repository itself, under a schema you define in cairn.toml. Items are readable i
 reviewable in a pull request, and manipulable from the command line — so humans and coding agents \
 write into the same structure instead of inventing their own.",
     propagate_version = true,
-    disable_help_subcommand = true
+    disable_help_subcommand = true,
+    after_help = HELP_FOOTER,
+    after_long_help = HELP_FOOTER,
+    arg_required_else_help = true
 )]
 struct Cli {
+    /// Print version, platform and project details for a bug report
+    #[arg(long, action = ArgAction::SetTrue)]
+    bug_report: bool,
+
     /// Control colour output
     #[arg(long, global = true, value_name = "WHEN", default_value = "auto")]
     color: ColorWhen,
@@ -69,8 +95,10 @@ struct Cli {
     #[arg(long, global = true, action = ArgAction::SetTrue)]
     no_hooks: bool,
 
+    /// Absent only for `cairn --bug-report`, which is not a subcommand because
+    /// it is a question about the installation rather than about the backlog.
     #[command(subcommand)]
-    command: Command,
+    command: Option<Command>,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, ValueEnum)]
@@ -200,7 +228,25 @@ fn main() {
         std::process::exit(2);
     }
 
-    match run(cli.command) {
+    if cli.bug_report {
+        match cmd::misc::bug_report() {
+            Ok(code) => std::process::exit(code),
+            Err(e) => {
+                eprintln!("{}: {e:#}", style::red("cairn"));
+                std::process::exit(1);
+            }
+        }
+    }
+
+    let Some(command) = cli.command else {
+        // `arg_required_else_help` covers the bare invocation; this is the
+        // narrower case of global flags with no subcommand after them.
+        use clap::CommandFactory;
+        let _ = Cli::command().print_help();
+        std::process::exit(2);
+    };
+
+    match run(command) {
         Ok(code) => std::process::exit(code),
         Err(e) => {
             eprintln!("{}: {e:#}", style::red("cairn"));

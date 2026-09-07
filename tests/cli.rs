@@ -108,6 +108,32 @@ impl Project {
         }
     }
 
+    /// Run with extra environment. Used by the editor tests, which are about
+    /// what cairn does with VISUAL and EDITOR.
+    fn run_env(&self, args: &[&str], env: &[(&str, Option<&str>)]) -> Out {
+        let mut c = Command::new(bin());
+        c.args(args)
+            .current_dir(self.root())
+            .env("NO_COLOR", "1")
+            .env("CAIRN_USER", "tester")
+            .env("PATH", path_with_binary())
+            .stdin(Stdio::null());
+        for (k, v) in env {
+            match v {
+                Some(v) => c.env(k, v),
+                None => c.env_remove(k),
+            };
+        }
+        let out = c
+            .output()
+            .unwrap_or_else(|e| panic!("running cairn {args:?}: {e}"));
+        Out {
+            code: out.status.code().unwrap_or(-1),
+            stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
+            stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
+        }
+    }
+
     /// Run with something on standard input. Used by the MCP tests, which
     /// speak a request/response protocol over the child's stdio.
     fn run_stdin(&self, args: &[&str], input: &str) -> Out {
@@ -2665,4 +2691,157 @@ fn the_clock_can_be_pinned_for_a_reproducible_run() {
         .unwrap();
     assert!(out.status.success(), "a malformed value is not fatal");
     assert!(p.json(&["show", "2", "--json"])["created"].is_string());
+}
+
+// --- where to take a problem ------------------------------------------------
+
+/// The GNU Coding Standards ask a program to say where a bug goes, because the
+/// person having one has the program in front of them and nothing else.
+#[test]
+fn help_says_where_to_report_a_bug() {
+    let p = Project::empty();
+    for flag in ["--help", "-h"] {
+        let out = p.expect(&[flag]);
+        assert!(
+            out.stdout.contains("Report bugs to:"),
+            "`cairn {flag}` does not say where to report a bug"
+        );
+        assert!(
+            out.stdout.contains("github.com/oddurs/cairn/issues"),
+            "`cairn {flag}` names no address"
+        );
+    }
+}
+
+/// A bug report is most often filed from a project that will not work, so this
+/// has to run without one rather than failing the way every other command does.
+#[test]
+fn bug_report_works_outside_a_project() {
+    let p = Project::empty();
+    let out = p.expect(&["--bug-report"]);
+    assert!(out.stdout.contains("cairn "), "no version");
+    assert!(out.stdout.contains("platform:"), "no platform");
+    assert!(
+        out.stdout.contains("project: none found"),
+        "did not say there was no project: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn bug_report_describes_the_project_it_is_run_in() {
+    let p = Project::new();
+    p.expect(&["new", "One"]);
+    p.expect(&["new", "Two"]);
+
+    let out = p.expect(&["--bug-report"]);
+    assert!(
+        out.stdout.contains("format: 1"),
+        "no format: {}",
+        out.stdout
+    );
+    assert!(out.stdout.contains("items: 2"), "no count: {}", out.stdout);
+    assert!(
+        out.stdout.contains("hooks:"),
+        "no hooks line: {}",
+        out.stdout
+    );
+
+    // Nothing here should be anything a reporter would mind publishing: this
+    // gets pasted into a public tracker, and a diagnostic that leaks is a
+    // diagnostic nobody runs twice.
+    assert!(
+        !out.stdout.contains("One") && !out.stdout.contains("Two"),
+        "the report includes item titles: {}",
+        out.stdout
+    );
+    assert!(
+        !out.stdout.contains(&p.root().display().to_string()),
+        "the report includes an absolute path: {}",
+        out.stdout
+    );
+}
+
+/// A project that will not load is exactly when somebody files a bug, so the
+/// report has to survive one.
+#[test]
+fn bug_report_survives_a_project_that_will_not_load() {
+    let p = Project::new();
+    std::fs::write(p.path("cairn.toml"), "this is not toml at all [[[").unwrap();
+
+    let out = p.expect(&["--bug-report"]);
+    assert!(
+        out.stdout.contains("will not load"),
+        "should have said the project is unreadable: {}",
+        out.stdout
+    );
+}
+
+// --- choosing an editor -----------------------------------------------------
+
+/// The failure is almost never a broken editor. It is no editor — an empty
+/// environment, or a machine without the one cairn guessed — and the fix is
+/// naming a variable, so the message names it.
+#[test]
+fn a_missing_editor_explains_how_to_choose_one() {
+    let p = Project::new();
+    p.expect(&["new", "A thing"]);
+
+    let out = p.run_env(
+        &["edit", "1"],
+        &[("EDITOR", Some("cairn-no-such-editor")), ("VISUAL", None)],
+    );
+    assert!(!out.ok(), "editing with a missing editor should fail");
+    let said = out.all();
+    assert!(
+        said.contains("no editor"),
+        "reported a spawn failure rather than the problem: {said}"
+    );
+    assert!(
+        said.contains("cairn-no-such-editor"),
+        "did not name the editor it tried: {said}"
+    );
+    assert!(
+        said.contains("set EDITOR"),
+        "did not say how to choose one: {said}"
+    );
+}
+
+/// VISUAL wins over EDITOR, which is the convention every other program follows.
+#[test]
+fn visual_is_preferred_to_editor() {
+    let p = Project::new();
+    p.expect(&["new", "A thing"]);
+
+    let out = p.run_env(
+        &["edit", "1"],
+        &[
+            ("VISUAL", Some("cairn-visual-editor")),
+            ("EDITOR", Some("cairn-plain-editor")),
+        ],
+    );
+    let said = out.all();
+    assert!(
+        said.contains("cairn-visual-editor"),
+        "EDITOR was used in preference to VISUAL: {said}"
+    );
+}
+
+/// An empty VISUAL is not a choice of editor. Shell profiles export empty
+/// variables constantly, and treating one as a program name produces a spawn
+/// failure for a name nobody typed.
+#[test]
+fn an_empty_editor_variable_is_ignored() {
+    let p = Project::new();
+    p.expect(&["new", "A thing"]);
+
+    let out = p.run_env(
+        &["edit", "1"],
+        &[("VISUAL", Some("")), ("EDITOR", Some("cairn-real-choice"))],
+    );
+    let said = out.all();
+    assert!(
+        said.contains("cairn-real-choice"),
+        "an empty VISUAL was treated as an editor: {said}"
+    );
 }

@@ -27,6 +27,26 @@ There is deliberately no library target, because linking cairn makes the caller
 a derivative work and reading its files does not.  A test fails if a [lib]
 appears in Cargo.toml.
 
+** Where to report a bug
+
+`cairn --help` now ends with the address, in the shape the GNU Coding
+Standards ask for: a program should tell you where to take a problem, because
+the person having one has the program in front of them and nothing else.
+
+`cairn --bug-report` prints what a maintainer asks for anyway — version,
+platform, format number, schema shape, item count, hook count — and reports
+nothing a reporter would mind publishing.  It runs without a project, and
+describes a cairn.toml that will not parse rather than failing on it, which is
+exactly when somebody reaches for it.
+
+** Choosing an editor
+
+`cairn edit` falls back to notepad on Windows, where there is no vi, rather
+than failing with a message about a missing program.  A variable that is set
+but empty is no longer treated as a choice of editor: an empty VISUAL falls
+through to EDITOR instead of shadowing it.  When the chosen editor is not on
+PATH, cairn says which variable to set.
+
 ** Rules that check themselves
 
 CONTRIBUTING.md now carries three rules, each enforced by tests/rules.rs: a new
