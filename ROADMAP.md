@@ -38,14 +38,13 @@ Enough to run a real project's roadmap without reaching for anything else.
 
 ## v0.2 — Comfortable
 
-`##########` 95% · 36 of 38 done · due 2026-12-01
+`##########` 97% · 37 of 38 done · due 2026-12-01
 
 The rough edges that show up after a few weeks of daily use, and the pieces that make the central claim true rather than merely stated.
 
 ### backlog
 
 - [ ] [`0056`](https://github.com/oddurs/cairn/blob/main/cairn/items/0056-collect-a-contributor-licence-agreement.md) Collect a contributor licence agreement <sup>chore · p0</sup>
-- [ ] [`0071`](https://github.com/oddurs/cairn/blob/main/cairn/items/0071-say-what-cairn-is-a-record-of-intent-that-happens-to-be-schedulable.md) Say what cairn is: a record of intent that happens to be schedulable <sup>docs · p1 · s8</sup>
 
 ### done
 
@@ -84,6 +83,7 @@ The rough edges that show up after a few weeks of daily use, and the pieces that
 - [x] [`0068`](https://github.com/oddurs/cairn/blob/main/cairn/items/0068-a-bar-for-adding-a-command.md) A bar for adding a command <sup>chore · p1 · s7</sup>
 - [x] [`0069`](https://github.com/oddurs/cairn/blob/main/cairn/items/0069-test-the-way-that-has-actually-been-finding-things.md) Test the way that has actually been finding things <sup>chore · p1 · s7</sup>
 - [x] [`0070`](https://github.com/oddurs/cairn/blob/main/cairn/items/0070-change-the-specification-before-changing-the-format.md) Change the specification before changing the format <sup>chore · p2 · s7</sup>
+- [x] [`0071`](https://github.com/oddurs/cairn/blob/main/cairn/items/0071-say-what-cairn-is-a-record-of-intent-that-happens-to-be-schedulable.md) Say what cairn is: a record of intent that happens to be schedulable <sup>docs · p1 · s8</sup>
 - [x] [`0074`](https://github.com/oddurs/cairn/blob/main/cairn/items/0074-read-the-acceptance-criteria.md) Read the acceptance criteria <sup>feature · p0 · s8</sup>
 
 ## v1.0 — Stable

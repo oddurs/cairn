@@ -27,6 +27,23 @@ There is deliberately no library target, because linking cairn makes the caller
 a derivative work and reading its files does not.  A test fails if a [lib]
 appears in Cargo.toml.
 
+** What a cairn item is
+
+The README, the manual and the site now say it: an item is a record of intent
+that happens to be schedulable.  It carries the reasoning that produced it, it
+lives with the code it describes, and it is worth more after it closes than
+before — which is true of an architecture decision record and false of a ticket.
+
+It is written down because it decides things.  Items carry reasoning rather than
+titles, so a template seeding headings is a feature; `cairn log` was worth
+building because a record whose history cannot be read is a worse one; and the
+answer to "can filing be made faster by dropping the body" is no.
+
+It also names what to refuse.  A record of intent does not need comment threads,
+reactions, or a notification when somebody starts typing: those belong to the
+conversation, and the conversation is not the record — it is the thing the
+record exists to survive.
+
 ** What an agent may touch
 
 A field or a status can say what an agent may do with it — `agent =
