@@ -27,6 +27,28 @@ There is deliberately no library target, because linking cairn makes the caller
 a derivative work and reading its files does not.  A test fails if a [lib]
 appears in Cargo.toml.
 
+** Acceptance criteria are read
+
+Every item cairn's templates produce carries `- [ ]` boxes under a heading, and
+nothing read them: an item could close with every box empty and `cairn check
+--strict` was satisfied.
+
+`cairn close` now says what is still unticked, at the moment somebody declares
+the work done against what they wrote down that done would mean.  It never
+refuses — a criterion can stop applying, and a tool that blocked would teach
+people to tick boxes rather than say what is true.  The MCP `close_item` tool
+reports the same to an agent.
+
+`criteria`, `criteria_done` and `criteria_met` are filterable and derived from
+the body, so they cannot go stale.  An item stating no criteria is vacuously
+complete and is never reported.
+
+`[project] criteria_section` restricts counting to one heading.  `[project]
+require_criteria` makes `check` warn about closed items with unticked boxes; it
+is off by default, because an unticked box is a judgement about process rather
+than a schema violation, and a project adopting cairn mid-life would get a wall
+of warnings about work finished years ago and turn it off for good.
+
 ** Releases can be verified
 
 Every release now carries a source tarball, built with `git archive` and

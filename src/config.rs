@@ -81,6 +81,29 @@ pub struct Project {
     #[serde(default = "default_id_width")]
     pub id_width: usize,
 
+    /// Whether `cairn check` reports a closed item whose criteria are unticked.
+    ///
+    /// Off by default, and the reason is not squeamishness. An unticked box is
+    /// not a schema violation the way an undefined status is — it is a judgement
+    /// about process — and a project adopting cairn mid-life would get a wall of
+    /// warnings about work finished years ago, turn the check off, and then it
+    /// would be worth nothing.
+    ///
+    /// The information is actionable at the moment of closing, which is where
+    /// `cairn close` now reports it unconditionally. This is for a project that
+    /// wants it enforced afterwards as well.
+    #[serde(default)]
+    pub require_criteria: bool,
+
+    /// The heading acceptance criteria live under, if the project keeps them
+    /// somewhere specific.
+    ///
+    /// Absent, every checkbox in a body counts — because an item that puts its
+    /// criteria under a different heading still meant them, and a project that
+    /// has not thought about this should not have its criteria silently ignored.
+    #[serde(default)]
+    pub criteria_section: Option<String>,
+
     /// How an identifier is written: `{n}` is the number and `{n:04}` pads it.
     ///
     /// `MP-{n}` gives `MP-1002`; `A{n}` gives `A24`. This is a rendering and
@@ -519,6 +542,8 @@ impl Default for Project {
             description: None,
             dir: default_dir(),
             id_width: default_id_width(),
+            require_criteria: false,
+            criteria_section: None,
             id_format: None,
             id_start: default_id_start(),
             default_type: None,

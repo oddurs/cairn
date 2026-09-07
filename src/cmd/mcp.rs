@@ -623,7 +623,27 @@ fn close_item(a: &Value) -> Result<String> {
     item.save()?;
     drop(lock);
     hooks::item(&cfg, &store, hooks::Event::AfterChange, &item);
-    pretty(&json!({ "closed": cfg.format_id(item.id), "status": item.status() }))
+
+    // Reported, not refused. The agent may be right and the criteria stale, and
+    // a tool that refused would teach models to tick boxes before closing
+    // rather than to say what is still true.
+    let c = item.criteria(cfg.project.criteria_section.as_deref());
+    let mut out = json!({
+        "closed": cfg.format_id(item.id),
+        "status": item.status(),
+    });
+    if c.any() {
+        out["criteria"] = json!({ "done": c.done, "total": c.total });
+        if !c.complete() {
+            out["note"] = json!(format!(
+                "{} of {} acceptance criteria are still unticked. If they are \
+                 done, tick them; if they no longer apply, say so in the item.",
+                c.total - c.done,
+                c.total
+            ));
+        }
+    }
+    pretty(&out)
 }
 
 fn check() -> Result<String> {

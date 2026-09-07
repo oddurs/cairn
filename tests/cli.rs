@@ -3681,3 +3681,201 @@ fn outside_a_repository_renumbering_is_unchanged() {
         "with nothing to consult, the path still breaks the tie"
     );
 }
+
+// --- acceptance criteria ----------------------------------------------------
+
+/// Every item cairn's templates produce carries `- [ ]` boxes, and until this
+/// existed nothing read them: an item could close with every box empty and
+/// `check --strict` was satisfied.
+fn with_criteria(p: &Project, title: &str, done: usize, todo: usize) -> String {
+    let mut body = String::from("\n## Criteria here\n\n");
+    for n in 0..done {
+        body.push_str(&format!("- [x] done {n}\n"));
+    }
+    for n in 0..todo {
+        body.push_str(&format!("- [ ] todo {n}\n"));
+    }
+    set_body(p, title, &body)
+}
+
+/// Create an item and replace its body wholesale.
+///
+/// Replace rather than append: the type template already seeds a body with an
+/// empty `- [ ]` under a heading, so appending leaves a box the test did not ask
+/// for and did not count. The template doing that is correct — it is how items
+/// come to carry criteria at all — which makes it the test's job to be explicit.
+fn set_body(p: &Project, title: &str, body: &str) -> String {
+    let id = p.expect(&["new", title, "-q"]).trimmed();
+    let path = p.expect(&["show", &id, "--path"]).trimmed();
+    let existing = std::fs::read_to_string(&path).expect("read");
+    let front = existing.split("\n---\n").next().expect("frontmatter");
+    std::fs::write(&path, format!("{front}\n---\n{body}")).expect("write");
+    id
+}
+
+#[test]
+fn criteria_are_counted_and_filterable() {
+    let p = Project::new();
+    let met = with_criteria(&p, "All done", 2, 0);
+    let unmet = with_criteria(&p, "Half done", 1, 1);
+    set_body(
+        &p,
+        "No criteria at all",
+        "\nJust prose, and a bullet:\n\n- a thing\n",
+    );
+
+    assert_contains(
+        &p.expect(&["show", &met]).stdout,
+        "criteria",
+        "an item with criteria reports them",
+    );
+
+    // An item stating none is vacuously met, so the common case is quiet.
+    let unmet_ids = p.expect(&["list", "-A", "--ids", "--filter", "criteria_met=false"]);
+    assert_eq!(
+        unmet_ids.lines(),
+        vec![unmet.clone()],
+        "only the item with an unticked box is unmet"
+    );
+
+    assert_eq!(
+        p.expect(&["list", "-A", "--ids", "--filter", "criteria=2"])
+            .lines(),
+        vec![met.clone(), unmet.clone()],
+        "`criteria` counts what an item states"
+    );
+    assert_eq!(
+        p.expect(&["list", "-A", "--ids", "--filter", "criteria_done=1"])
+            .lines(),
+        vec![unmet],
+        "`criteria_done` counts what is ticked"
+    );
+}
+
+/// The moment somebody declares work done is when what they wrote down that
+/// done would mean is worth repeating back.
+#[test]
+fn closing_reports_what_is_still_unticked() {
+    let p = Project::new();
+    let id = with_criteria(&p, "Half done", 1, 2);
+
+    let out = p.expect(&["close", &id]);
+    assert_contains(
+        &out.all(),
+        "2 of 3 acceptance criteria are unticked",
+        "closing should say what remains",
+    );
+    // Reported, never refused: a criterion can stop applying, and a tool that
+    // blocked here would teach people to tick boxes rather than say what is true.
+    assert!(out.ok(), "closing must still succeed: {}", out.all());
+
+    let clean = with_criteria(&p, "Genuinely done", 2, 0);
+    let out = p.expect(&["close", &clean]);
+    assert!(
+        !out.all().contains("unticked"),
+        "an item whose criteria are met should say nothing: {}",
+        out.all()
+    );
+}
+
+/// Off by default, because an unticked box is a judgement about process rather
+/// than a schema violation — and a project adopting cairn mid-life would get a
+/// wall of warnings about work finished years ago, turn it off, and then it
+/// would be worth nothing.
+#[test]
+fn check_reports_unticked_criteria_only_when_the_project_asks() {
+    let p = Project::new();
+    let id = with_criteria(&p, "Half done", 1, 2);
+    p.expect(&["close", &id]);
+
+    let quiet = p.expect(&["check", "--strict"]);
+    assert!(
+        !quiet.all().contains("unticked"),
+        "silent by default: {}",
+        quiet.all()
+    );
+
+    let cfg = p
+        .read("cairn.toml")
+        .replace("[project]", "[project]\nrequire_criteria = true");
+    p.write("cairn.toml", &cfg);
+
+    let loud = p.fails(&["check", "--strict"]);
+    assert_contains(
+        &loud.all(),
+        "closed with 2 of 3 acceptance criteria unticked",
+        "a project that asks for it gets it",
+    );
+
+    // And an open item is never reported: it is not claiming to be finished.
+    p.expect(&["reopen", &id]);
+    let reopened = p.expect(&["check", "--strict"]);
+    assert!(
+        !reopened.all().contains("unticked"),
+        "an open item states intent, not completion: {}",
+        reopened.all()
+    );
+}
+
+#[test]
+fn a_project_can_say_where_its_criteria_live() {
+    let p = Project::new();
+    let id = set_body(
+        &p,
+        "Scoped",
+        "\n## Problem\n\n- [ ] not a criterion\n\n## Acceptance criteria\n\n- [x] one\n",
+    );
+
+    // Without a section, every box counts and this item looks unmet.
+    assert_eq!(
+        p.expect(&["list", "-A", "--ids", "--filter", "criteria_met=false"])
+            .lines(),
+        vec![id.clone()]
+    );
+
+    let cfg = p.read("cairn.toml").replace(
+        "[project]",
+        "[project]\ncriteria_section = \"Acceptance criteria\"",
+    );
+    p.write("cairn.toml", &cfg);
+
+    assert!(
+        p.expect(&["list", "-A", "--ids", "--filter", "criteria_met=false"])
+            .trimmed()
+            .is_empty(),
+        "with a section named, only that section counts"
+    );
+}
+
+#[test]
+fn closing_over_mcp_reports_unticked_criteria_without_refusing() {
+    let p = Project::new();
+    let id = with_criteria(&p, "Half done", 1, 2);
+
+    let request = format!(
+        r#"{{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{{"name":"close_item","arguments":{{"id":{}}}}}}}"#,
+        id.trim_start_matches('0')
+    );
+    let out = p.run_stdin(&["mcp"], &format!("{request}\n"));
+    let reply: serde_json::Value =
+        serde_json::from_str(out.stdout.lines().next_back().expect("a reply")).expect("JSON");
+
+    let text = reply["result"]["content"][0]["text"]
+        .as_str()
+        .expect("content");
+    let body: serde_json::Value = serde_json::from_str(text).expect("the tool returns JSON");
+
+    assert_eq!(body["criteria"]["done"], 1);
+    assert_eq!(body["criteria"]["total"], 3);
+    assert!(
+        body["note"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("unticked"),
+        "the agent is told what remains: {text}"
+    );
+    assert!(
+        reply["result"]["isError"].as_bool() != Some(true),
+        "and is not refused"
+    );
+}

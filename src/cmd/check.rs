@@ -242,6 +242,24 @@ fn collect_inner(
             }
         }
 
+        // An item may legitimately close with a box unticked — the world moved,
+        // the criterion was wrong — so this is a warning. A tool that refused
+        // would teach people to write criteria they can tick rather than
+        // criteria that are true.
+        if cfg.project.require_criteria && cfg.category(item.status()).is_closed() {
+            let c = item.criteria(cfg.project.criteria_section.as_deref());
+            if c.any() && !c.complete() {
+                r.warn(
+                    &at,
+                    format!(
+                        "closed with {} of {} acceptance criteria unticked",
+                        c.total - c.done,
+                        c.total
+                    ),
+                );
+            }
+        }
+
         let expected = cfg.filename_for(item.id, item.title());
         let actual = item
             .path

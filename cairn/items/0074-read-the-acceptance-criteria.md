@@ -2,10 +2,10 @@
 id: 74
 title: Read the acceptance criteria
 type: feature
-status: backlog
+status: done
 milestone: v0.2
 created: 2026-09-06
-updated: 2026-09-06
+updated: 2026-09-07
 priority: p0
 effort: m
 sprint: s8
@@ -13,52 +13,43 @@ sprint: s8
 
 ## Problem
 
-Every item in this project has an `## Acceptance criteria` section full of
-`- [ ]` boxes. Nothing reads them.
+Every item in this project has an `## Acceptance criteria
 
-The only checkbox code in the program renders roadmap lines from an item's
-*status*. The criteria are prose the tool cannot see, so an item can be closed
-with every box unticked and `cairn check --strict` is perfectly happy.
-
-That is the gap between what cairn claims about itself — that items carry the
-thinking, including how you will know when it is done — and what it can
-actually verify.
-
-## Why this matters most for agents
-
-An agent closing an item is the moment a person most wants a second opinion. A
-ticked box is a claim the agent made and can be asked about; an unticked one is
-a question. Machine-checkable criteria turn "is this done" from a judgement into
-a comparison, which is exactly the kind of work to hand to a program.
-
-It also improves what agents write. A criterion nobody can tick is a criterion
-badly written, and having the tool count them makes that visible on the day it
-is written rather than at review.
-
-## Proposal
-
-Parse `- [ ]` and `- [x]` from the body — from a configured section if
-`cairn.toml` names one, otherwise from anywhere.
-
-- `cairn check` warns when an item in a `done` category has unticked criteria.
-- `cairn show` and `cairn next` report `3/5`.
-- `criteria` and `criteria_done` become filterable, so
-  `--filter 'category=done,criteria_done<criteria'` finds the ones that slipped.
-- The MCP `close_item` tool reports what is unticked in its reply rather than
-  refusing, because the agent may be right and the criteria stale.
-
-## What this must not become
-
-Not a gate. An item can be legitimately closed with an unticked box — the world
-changed, the criterion was wrong — and a tool that refuses will teach people to
-write criteria they can tick rather than criteria that are true. A warning says
-"look at this", which is all that is wanted.
-
-## Acceptance criteria
-
-- [ ] Boxes are counted from the body, wherever they are
+- [x] Boxes are counted from the body, wherever they are
 - [ ] `check` warns on unticked criteria in a closed item, and does not fail
-- [ ] `criteria` and `criteria_done` are filterable and sortable
-- [ ] Closing over MCP reports what remains unticked
-- [ ] A body with no boxes produces no warnings and no noise
-- [ ] Nothing is written to the file; this reads what is already there
+- [x] `criteria` and `criteria_done` are filterable and sortable
+- [x] Closing over MCP reports what remains unticked
+- [x] A body with no boxes produces no warnings and no noise
+- [x] Nothing is written to the file; this reads what is already there
+
+## 2026-09-07: built, with one criterion deliberately not met
+
+The second box stays unticked on purpose, and this is the note that says why —
+which is the behaviour this item exists to make possible.
+
+`check` reports unticked criteria only when `[project] require_criteria = true`,
+not unconditionally as written above. The reason emerged from running it against
+this project's own backlog the moment it worked: **63 closed items, 217 criteria,
+200 of them unticked.** All were written before anything read them.
+
+That is not a cairn problem, it is what adoption looks like. Any project turning
+this on mid-life gets a wall of warnings about work finished years ago, turns it
+off, and from then on it is worth nothing. An unticked box is also not a schema
+violation the way an undefined status is — it is a judgement about process — so
+`check` is the wrong place for it by default.
+
+The information is actionable at the moment of closing. `cairn close` and the
+MCP `close_item` tool report it there, unconditionally, and `criteria_met` makes
+an audit available to anyone who wants one at any time.
+
+Two smaller changes from the proposal, both deliberate:
+
+`criteria_met` was added, because the filter grammar compares against literals
+and cannot express `criteria_done < criteria` as the proposal assumed.
+
+`cairn next` does not report the count. The table is already at its width, and a
+count belongs where somebody is looking at one item rather than scanning many.
+
+This project has not turned `require_criteria` on. Mass-ticking two hundred boxes
+retrospectively would be precisely the ritual the item warns against, and doing
+it honestly is a real pass over five weeks of work rather than a command.

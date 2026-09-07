@@ -118,6 +118,30 @@ pub struct Meta {
     pub extra: Mapping,
 }
 
+/// The state of an item's acceptance criteria.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Criteria {
+    pub done: usize,
+    pub total: usize,
+}
+
+impl Criteria {
+    pub fn any(&self) -> bool {
+        self.total > 0
+    }
+
+    /// Whether every criterion is ticked. An item that states none is
+    /// vacuously complete, which matters: most items have no criteria and must
+    /// not be reported as unfinished.
+    pub fn complete(&self) -> bool {
+        self.done == self.total
+    }
+
+    pub fn display(&self) -> String {
+        format!("{}/{}", self.done, self.total)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Item {
     pub id: u32,
@@ -202,6 +226,62 @@ impl Item {
             .find(|l| !l.is_empty() && !l.starts_with('#') && !l.starts_with("<!--"))
             .unwrap_or("")
             .to_string()
+    }
+
+    /// How many acceptance criteria this item states, and how many are ticked.
+    ///
+    /// Every item cairn's own templates produce carries `- [ ]` boxes under a
+    /// heading, and until this existed nothing read them: an item could close
+    /// with every box empty and `check --strict` was satisfied. That is the gap
+    /// between claiming items carry the thinking — including how you will know
+    /// when it is done — and being able to verify it.
+    ///
+    /// `section`, when given, restricts the count to the lines under a heading
+    /// of that name. Without it every box in the body counts, because an item
+    /// that puts its criteria somewhere else still meant them.
+    pub fn criteria(&self, section: Option<&str>) -> Criteria {
+        let mut total = 0usize;
+        let mut done = 0usize;
+        // `None` before the first heading means "counting", so a body with no
+        // headings at all still works.
+        let mut counting = section.is_none();
+
+        for line in self.body.lines() {
+            let trimmed = line.trim();
+            if let Some(heading) = trimmed.strip_prefix('#') {
+                if let Some(want) = section {
+                    let name = heading.trim_start_matches('#').trim();
+                    counting = name.eq_ignore_ascii_case(want);
+                }
+                continue;
+            }
+            if !counting {
+                continue;
+            }
+            // A list marker, then a box. Indentation is allowed so that nested
+            // criteria count; anything else on the line is the criterion.
+            let Some(rest) = trimmed
+                .strip_prefix("- ")
+                .or_else(|| trimmed.strip_prefix("* "))
+                .or_else(|| trimmed.strip_prefix("+ "))
+            else {
+                continue;
+            };
+            let rest = rest.trim_start();
+            if let Some(after) = rest.strip_prefix("[ ]") {
+                if after.is_empty() || after.starts_with(char::is_whitespace) {
+                    total += 1;
+                }
+            } else if let Some(after) = rest
+                .strip_prefix("[x]")
+                .or_else(|| rest.strip_prefix("[X]"))
+                && (after.is_empty() || after.starts_with(char::is_whitespace))
+            {
+                total += 1;
+                done += 1;
+            }
+        }
+        Criteria { done, total }
     }
 
     pub fn parse(path: &Path, text: &str) -> Result<Item> {
@@ -761,5 +841,97 @@ mod properties {
             prop_assert!(s.chars().all(|c| c.is_alphanumeric() || c == '-'));
             prop_assert!(std::str::from_utf8(s.as_bytes()).is_ok());
         }
+    }
+}
+
+#[cfg(test)]
+mod criteria_tests {
+    use super::*;
+
+    fn item(body: &str) -> Item {
+        Item::parse(
+            Path::new("0001-x.md"),
+            &format!("---\nid: 1\ntitle: X\nstatus: backlog\n---\n{body}"),
+        )
+        .expect("parses")
+    }
+
+    #[test]
+    fn counts_ticked_and_unticked() {
+        let i = item("- [ ] one\n- [x] two\n- [X] three\n");
+        assert_eq!(i.criteria(None), Criteria { done: 2, total: 3 });
+    }
+
+    #[test]
+    fn an_item_with_no_boxes_states_no_criteria() {
+        let i = item("Just prose, and a list:\n\n- a thing\n- another\n");
+        let c = i.criteria(None);
+        assert!(!c.any(), "prose bullets are not criteria");
+        // Vacuously complete, so the common case produces no noise anywhere.
+        assert!(c.complete());
+    }
+
+    /// The things that look like checkboxes and are not. Getting this wrong
+    /// makes the count quietly untrue, which is worse than not counting.
+    #[test]
+    fn near_misses_are_not_criteria() {
+        for body in [
+            "-[ ] no space after the marker\n",
+            "- [] no space inside\n",
+            "- [ x] a space and an x\n",
+            "- [y] not a tick\n",
+            "- [xx] two of them\n",
+            "[ ] no list marker at all\n",
+            "- [ ]nothing after, but glued to text\n",
+        ] {
+            let c = item(body).criteria(None);
+            assert!(!c.any(), "counted a checkbox in {body:?}");
+        }
+    }
+
+    #[test]
+    fn a_box_with_nothing_after_it_still_counts() {
+        // The template cairn ships emits exactly this, so if it did not count,
+        // every new item would understate itself.
+        assert_eq!(item("- [ ]\n").criteria(None).total, 1);
+        assert_eq!(item("- [x]\n").criteria(None).done, 1);
+    }
+
+    #[test]
+    fn indented_and_alternately_marked_boxes_count() {
+        let i = item("- [ ] top\n  - [x] nested\n* [ ] star\n+ [x] plus\n");
+        assert_eq!(i.criteria(None), Criteria { done: 2, total: 4 });
+    }
+
+    #[test]
+    fn a_section_restricts_the_count() {
+        let body = "## Problem\n\n- [x] not a criterion, just a note\n\n\
+                    ## Acceptance criteria\n\n- [ ] one\n- [x] two\n\n\
+                    ## Notes\n\n- [ ] also not a criterion\n";
+        let i = item(body);
+        assert_eq!(
+            i.criteria(Some("Acceptance criteria")),
+            Criteria { done: 1, total: 2 },
+            "only the named section counts"
+        );
+        assert_eq!(
+            i.criteria(None),
+            Criteria { done: 2, total: 4 },
+            "and without a section, everything does"
+        );
+    }
+
+    #[test]
+    fn a_section_is_matched_case_insensitively_and_at_any_depth() {
+        let body = "### ACCEPTANCE CRITERIA\n\n- [ ] one\n";
+        assert_eq!(item(body).criteria(Some("Acceptance criteria")).total, 1);
+    }
+
+    #[test]
+    fn a_missing_section_counts_nothing_rather_than_everything() {
+        // The dangerous failure: falling back to counting the whole body would
+        // silently include boxes the project meant to exclude.
+        let body = "## Problem\n\n- [ ] a box outside the section\n";
+        assert!(!item(body).criteria(Some("Acceptance criteria")).any());
     }
 }
