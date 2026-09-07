@@ -9,7 +9,7 @@ CARGO       ?= cargo
 MAKEINFO    ?= makeinfo
 CAIRN       := target/release/cairn
 
-.PHONY: all build check test soak fuzz conformance audit doc info html pdf record demo install install-bin \
+.PHONY: all build check test soak fuzz conformance audit dist doc info html pdf record demo install install-bin \
         install-man install-info clean roadmap
 
 all: build doc
@@ -88,6 +88,29 @@ install-info: doc/cairn.info
 	install -m 644 doc/cairn.info $(DESTDIR)$(INFODIR)/cairn.info
 	-install-info --dir-file=$(DESTDIR)$(INFODIR)/dir $(DESTDIR)$(INFODIR)/cairn.info
 
+# A source tarball for packagers, and for anybody auditing what a release
+# contains without trusting the forge to stay up.
+#
+# Built with `git archive` rather than by hand. That is not laziness: git
+# archive is deterministic by construction — file order from the tree, mtimes
+# from the commit, uid and gid zero — so the tarball CI publishes and the one
+# you build here are the same bytes. Doing it with tar(1) instead means fighting
+# the differences between GNU and BSD tar and touch, and losing quietly on
+# somebody else's machine.
+#
+# The Info manual is not included: building it needs texinfo, which a packager
+# has, and shipping a generated file would break the byte-for-byte property
+# above. `make doc` produces it.
+VERSION := $(shell sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+DIST    := cairn-$(VERSION)
+
+dist:
+	@rm -f $(DIST).tar.gz
+	git archive --format=tar.gz -9 --prefix=$(DIST)/ -o $(DIST).tar.gz HEAD
+	@echo "$(DIST).tar.gz"
+	@shasum -a 256 $(DIST).tar.gz 2>/dev/null || sha256sum $(DIST).tar.gz
+
 clean:
 	$(CARGO) clean
 	rm -f doc/cairn.info doc/cairn.html doc/cairn.pdf
+	rm -rf cairn-*.tar.gz cairn-[0-9]*/

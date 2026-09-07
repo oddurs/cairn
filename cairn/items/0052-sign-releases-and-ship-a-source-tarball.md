@@ -4,8 +4,10 @@ title: Sign releases and ship a source tarball
 type: chore
 status: backlog
 milestone: v1.0
+labels:
+- needs-a-key
 created: 2026-09-05
-updated: 2026-09-05
+updated: 2026-09-06
 priority: p0
 effort: m
 ---
@@ -37,3 +39,34 @@ verify what you got" is not a nicety.
 - [ ] The key fingerprint is published somewhere other than the release itself
 - [ ] The manual explains verification in steps a first-timer can follow
 - [ ] Verified by hand once, from a machine that did not build it
+
+## 2026-09-06
+
+Everything that does not need a key is done.
+
+`make dist` builds a source tarball with `git archive`, which is deterministic
+by construction, so the tarball CI attaches and the one you build from the same
+tag are the same bytes. Building it with tar(1) instead would mean fighting the
+differences between GNU and BSD tar and touch, and losing quietly on somebody
+else's machine.
+
+Build provenance is attested by GitHub for every archive. That is the guarantee
+the checksums cannot give: they come from the same workflow as the binaries, so
+they prove a download arrived intact and nothing about where it came from.
+
+Signing is wired up and inert. The step imports `GPG_PRIVATE_KEY` if the secret
+exists and signs every artefact; without it the release proceeds unsigned, so a
+fork can still tag. Adding the secret is the whole of what remains.
+
+"Verifying a release" in the manual explains each check, what it proves, and
+what it does not — including that the binaries are not reproducible, which
+nobody has established and which it would be worse to imply.
+
+## Still open
+
+- A signing key: `GPG_PRIVATE_KEY` and `GPG_PASSPHRASE` as repository secrets,
+  and the fingerprint published in the repository and on the site. Publishing
+  the fingerprint somewhere other than the release is the part that matters; a
+  fingerprint distributed alongside the thing it signs proves nothing.
+- Verifying by hand from a machine that did not build it, which cannot be done
+  until a release has been made with a key in place.
