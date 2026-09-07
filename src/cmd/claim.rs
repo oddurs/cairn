@@ -22,7 +22,6 @@
 use crate::cmd::set::apply;
 use crate::config::{Category, Config};
 use crate::filter::Ctx;
-use crate::item::parse_id;
 use crate::lock::Lock;
 use crate::store::{Store, today, whoami};
 use crate::{Assign, hooks, style};
@@ -85,7 +84,7 @@ pub fn claim(args: ClaimArgs) -> Result<i32> {
     let ctx = Ctx::new(&cfg, &items);
 
     let id = match (&args.id, args.next) {
-        (Some(raw), _) => parse_id(raw)?,
+        (Some(raw), _) => cfg.parse_id(raw)?,
         (None, true) => {
             let picked = crate::cmd::next::select(
                 &cfg,
@@ -193,7 +192,7 @@ pub fn release(args: ReleaseArgs) -> Result<i32> {
     let lock = Lock::acquire(&cfg)?;
     let mut released = Vec::new();
     for raw in &args.ids {
-        let mut item = store.find(parse_id(raw)?)?;
+        let mut item = store.find(cfg.parse_id(raw)?)?;
         apply(&mut item, &cfg, "assignee", Assign::Set(String::new()))?;
         if !args.keep_status {
             let status = args

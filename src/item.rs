@@ -14,7 +14,7 @@
 //
 // You should have received a copy of the GNU General Public License along with
 // this program.  If not, see <https://www.gnu.org/licenses/>.
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use serde::{Deserialize, Deserializer};
 use serde_yaml_ng::{Mapping, Value};
 use std::path::{Path, PathBuf};
@@ -205,6 +205,22 @@ impl Item {
     }
 
     pub fn parse(path: &Path, text: &str) -> Result<Item> {
+        Item::parse_with(path, text, None)
+    }
+
+    /// Parse, optionally recovering a missing `id` through the project's
+    /// identifier rendering as well as the leading-digits rule.
+    ///
+    /// A project whose identifiers read `MP-1002` has files called
+    /// `MP-1002-slug.md`, which begin with no digits at all — so a hand-written
+    /// file there would be unreadable, and the specification's digits fallback
+    /// covers only renderings that start with the number. §4.2 permits a reader
+    /// to apply the project's rendering instead, and this is that.
+    pub fn parse_with(
+        path: &Path,
+        text: &str,
+        format: Option<&crate::config::IdFormat>,
+    ) -> Result<Item> {
         let eol = Eol::detect(text);
         // Everything is handled as LF internally; the original ending is
         // reapplied on the way out.
@@ -221,12 +237,23 @@ impl Item {
             let line = e.location().map(|l| l.line() + 1);
             anyhow::anyhow!("{}: invalid frontmatter: {e}", at(path, line))
         })?;
-        let id = meta.id.or_else(|| id_from_filename(path)).ok_or_else(|| {
-            anyhow::anyhow!(
-                "{}: no `id:` in frontmatter and filename does not start with a number",
-                at(path, Some(2))
-            )
-        })?;
+        let id = meta
+            .id
+            .or_else(|| id_from_filename(path))
+            .or_else(|| {
+                let name = path.file_name()?.to_str()?;
+                format?.id_in_filename(name)
+            })
+            .ok_or_else(|| {
+                let expected = match format {
+                    Some(f) => format!("does not match `{}`", f.render(12)),
+                    None => "does not start with a number".to_string(),
+                };
+                anyhow::anyhow!(
+                    "{}: no `id:` in frontmatter and the filename {expected}",
+                    at(path, Some(2))
+                )
+            })?;
         Ok(Item {
             id,
             meta,
@@ -248,6 +275,12 @@ impl Item {
             .position(|l| l.starts_with(&prefix))
             // +2: line 1 is the opening `---`, and `position` is 0-based.
             .map(|i| i + 2)
+    }
+
+    pub fn load_with(path: &Path, format: Option<&crate::config::IdFormat>) -> Result<Item> {
+        let text =
+            std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+        Item::parse_with(path, &text, format)
     }
 
     pub fn load(path: &Path) -> Result<Item> {
@@ -485,15 +518,6 @@ fn de_id_list<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<u32>, D::Error> {
         }
     }
     Ok(out)
-}
-
-/// Parse a user-supplied id: accepts `12`, `0012`, `#12`.
-pub fn parse_id(s: &str) -> Result<u32> {
-    let t = s.trim().trim_start_matches('#');
-    match t.parse::<u32>() {
-        Ok(n) => Ok(n),
-        Err(_) => bail!("`{s}` is not a valid item id (expected a number like 12 or 0012)"),
-    }
 }
 
 #[cfg(test)]

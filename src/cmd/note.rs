@@ -25,7 +25,6 @@
 // be able to erase it.
 use crate::config::Config;
 use crate::hooks;
-use crate::item::parse_id;
 use crate::lock::Lock;
 use crate::store::{Store, today};
 use crate::style;
@@ -80,7 +79,7 @@ pub fn run(args: Args) -> Result<i32> {
     }
 
     let lock = Lock::acquire(&cfg)?;
-    let mut item = store.find(parse_id(&args.id)?)?;
+    let mut item = store.find(cfg.parse_id(&args.id)?)?;
 
     let addition = if args.bare {
         text.to_string()

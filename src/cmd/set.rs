@@ -16,7 +16,7 @@
 // this program.  If not, see <https://www.gnu.org/licenses/>.
 // cairn set / close / reopen — mutating item fields, with schema validation.
 use crate::config::{Config, FieldKind};
-use crate::item::{Field, Item, parse_id, split_list};
+use crate::item::{Field, Item, split_list};
 use crate::lock::Lock;
 use crate::store::{Store, today};
 use crate::{Assign, hooks, parse_assignment, style};
@@ -90,7 +90,10 @@ pub fn run(args: Args) -> Result<i32> {
         .collect::<Result<_>>()?;
 
     let targets: Vec<u32> = match &args.filter {
-        None => ids.iter().map(|raw| parse_id(raw)).collect::<Result<_>>()?,
+        None => ids
+            .iter()
+            .map(|raw| cfg.parse_id(raw))
+            .collect::<Result<_>>()?,
         Some(expr) => {
             let items = store.load_all()?;
             let ctx = crate::filter::Ctx::new(&cfg, &items);
@@ -242,7 +245,7 @@ fn transition(cfg: &Config, ids: &[String], status: &str, quiet: bool, verb: &st
     // it is released, so a hook that calls cairn cannot deadlock against us.
     let mut changed = Vec::new();
     for raw in ids {
-        let mut item = store.find(parse_id(raw)?)?;
+        let mut item = store.find(cfg.parse_id(raw)?)?;
         apply(&mut item, cfg, "status", Assign::Set(status.to_string()))?;
         item.touch(&today());
         item.save()?;
@@ -382,8 +385,10 @@ pub fn apply(item: &mut Item, cfg: &Config, key: &str, assign: Assign) -> Result
             }
         }
         "depends_on" => {
+            // Through the project's own format, so `depends_on+=MP-1002` works
+            // wherever `cairn show MP-1002` does.
             let parse = |v: &str| -> Result<Vec<u32>> {
-                split_list(v).iter().map(|s| parse_id(s)).collect()
+                split_list(v).iter().map(|s| cfg.parse_id(s)).collect()
             };
             let list = &mut item.meta.depends_on;
             match assign {

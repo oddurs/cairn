@@ -75,8 +75,28 @@ pub struct Project {
     #[serde(default = "default_dir")]
     pub dir: String,
     /// Zero-padding width for item ids: 4 gives `0001`.
+    ///
+    /// The older spelling of `id_format`, kept because projects use it.
+    /// `id_width = 4` is exactly `id_format = "{n:04}"`.
     #[serde(default = "default_id_width")]
     pub id_width: usize,
+
+    /// How an identifier is written: `{n}` is the number and `{n:04}` pads it.
+    ///
+    /// `MP-{n}` gives `MP-1002`; `A{n}` gives `A24`. This is a rendering and
+    /// nothing more — `id` in the frontmatter is an unsigned integer whatever
+    /// this says, so adopting a project key is a display change rather than a
+    /// format change, and nothing that refers to an item by number breaks.
+    #[serde(default)]
+    pub id_format: Option<String>,
+
+    /// The identifier the first item in an empty project takes.
+    ///
+    /// Allocation is otherwise unchanged: one more than the highest in use. So
+    /// lowering this in a project that already has items does nothing, because
+    /// the maximum still wins.
+    #[serde(default = "default_id_start")]
+    pub id_start: u32,
     #[serde(default)]
     pub default_type: Option<String>,
     #[serde(default)]
@@ -310,6 +330,172 @@ fn default_project_name() -> String {
 fn default_dir() -> String {
     "cairn/items".into()
 }
+/// How a project writes its identifiers.
+///
+/// `id` is an unsigned integer and stays one. This is only how that integer is
+/// shown and read back, which is why adopting `MP-{n}` is a display change
+/// rather than a format change: nothing stored moves, and every reference
+/// written as a bare number keeps working.
+///
+/// Deliberately one template rather than three settings for prefix, separator
+/// and padding. Three would express the same thing less clearly and would allow
+/// combinations nobody wants; a template shows you what it produces.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IdFormat {
+    prefix: String,
+    pad: usize,
+    suffix: String,
+}
+
+impl IdFormat {
+    /// The default, and the older `id_width` spelling: `0001`.
+    pub fn padded(width: usize) -> IdFormat {
+        IdFormat {
+            prefix: String::new(),
+            pad: width,
+            suffix: String::new(),
+        }
+    }
+
+    /// `MP-{n}`, `A{n}`, `{n:04}`.
+    pub fn compile(template: &str) -> Result<IdFormat> {
+        let Some(open) = template.find('{') else {
+            bail!(
+                "id_format `{template}` has no `{{n}}`: the template says where \
+                 the number goes, so it has to contain one"
+            );
+        };
+        let Some(close) = template[open..].find('}').map(|i| open + i) else {
+            bail!("id_format `{template}`: `{{` is never closed");
+        };
+        let prefix = template[..open].to_string();
+        let suffix = template[close + 1..].to_string();
+
+        if suffix.contains('{') {
+            bail!(
+                "id_format `{template}` has more than one placeholder: an item \
+                 has one identifier"
+            );
+        }
+
+        let inner = &template[open + 1..close];
+        let pad = match inner {
+            "n" => 1,
+            _ => match inner.strip_prefix("n:0") {
+                Some(digits) => digits.parse::<usize>().map_err(|_| {
+                    anyhow::anyhow!(
+                        "id_format `{template}`: `{{{inner}}}` should be `{{n}}` \
+                         or `{{n:0W}}` for a width, as in `{{n:04}}`"
+                    )
+                })?,
+                None => bail!(
+                    "id_format `{template}`: `{{{inner}}}` should be `{{n}}` or \
+                     `{{n:0W}}` for a width, as in `{{n:04}}`"
+                ),
+            },
+        };
+
+        // A prefix that is itself digits would make the rendered form
+        // ambiguous with a bare number, and `MP-12` and `12` must not be able
+        // to mean different items.
+        if prefix.chars().next().is_some_and(|c| c.is_ascii_digit()) {
+            bail!(
+                "id_format `{template}`: a prefix cannot start with a digit, or \
+                 the rendered identifier could not be told from a plain number"
+            );
+        }
+        if pad > 18 {
+            bail!("id_format `{template}`: a width of {pad} is not a width");
+        }
+        Ok(IdFormat {
+            prefix,
+            pad,
+            suffix,
+        })
+    }
+
+    pub fn render(&self, id: u32) -> String {
+        format!(
+            "{}{:0width$}{}",
+            self.prefix,
+            id,
+            self.suffix,
+            width = self.pad
+        )
+    }
+
+    /// A typical rendered width, for budgeting filename length.
+    pub fn width(&self) -> usize {
+        self.prefix.chars().count() + self.pad.max(4) + self.suffix.chars().count()
+    }
+
+    /// Accept the rendered form, or the bare number, with an optional `#`.
+    ///
+    /// Case-insensitively for the prefix and suffix: somebody typing
+    /// `cairn show mp-1002` meant the same item, and refusing them is pedantry.
+    pub fn read(&self, s: &str) -> Result<u32> {
+        let raw = s.trim();
+        let t = raw.trim_start_matches('#').trim();
+
+        // A missing prefix is not an error: the bare number is always
+        // acceptable, and every reference written before the project adopted a
+        // key is one.
+        let mut rest = t;
+        if let Some(r) = strip_prefix_ci(rest, &self.prefix) {
+            rest = r;
+        }
+        if !self.suffix.is_empty()
+            && let Some(r) = strip_suffix_ci(rest, &self.suffix)
+        {
+            rest = r;
+        }
+
+        match rest.parse::<u32>() {
+            Ok(n) => Ok(n),
+            Err(_) => {
+                let example = self.render(12);
+                bail!("`{raw}` is not a valid item id (expected {example}, or 12)")
+            }
+        }
+    }
+
+    /// The identifier a filename begins with, if it is one this format could
+    /// have produced.
+    pub fn id_in_filename(&self, name: &str) -> Option<u32> {
+        let stem = name.strip_suffix(".md").unwrap_or(name);
+        let rest = if self.prefix.is_empty() {
+            stem
+        } else {
+            strip_prefix_ci(stem, &self.prefix)?
+        };
+        let digits: String = rest.chars().take_while(char::is_ascii_digit).collect();
+        if digits.is_empty() {
+            return None;
+        }
+        digits.parse().ok()
+    }
+}
+
+fn strip_prefix_ci<'a>(s: &'a str, prefix: &str) -> Option<&'a str> {
+    if s.len() >= prefix.len() && s[..prefix.len()].eq_ignore_ascii_case(prefix) {
+        Some(&s[prefix.len()..])
+    } else {
+        None
+    }
+}
+
+fn strip_suffix_ci<'a>(s: &'a str, suffix: &str) -> Option<&'a str> {
+    if s.len() >= suffix.len() && s[s.len() - suffix.len()..].eq_ignore_ascii_case(suffix) {
+        Some(&s[..s.len() - suffix.len()])
+    } else {
+        None
+    }
+}
+
+fn default_id_start() -> u32 {
+    1
+}
+
 fn default_id_width() -> usize {
     4
 }
@@ -333,6 +519,8 @@ impl Default for Project {
             description: None,
             dir: default_dir(),
             id_width: default_id_width(),
+            id_format: None,
+            id_start: default_id_start(),
             default_type: None,
             default_status: None,
             url: None,
@@ -434,6 +622,11 @@ impl Config {
     }
 
     fn validate(&self) -> Result<()> {
+        // First, because a project whose identifiers cannot be rendered has no
+        // way to report anything else it might be wrong about.
+        if let Some(template) = &self.project.id_format {
+            IdFormat::compile(template).map_err(|e| anyhow::anyhow!("{CONFIG_FILE}: {e}"))?;
+        }
         if self.statuses.is_empty() {
             bail!("{CONFIG_FILE}: at least one [[status]] must be defined");
         }
@@ -521,7 +714,33 @@ impl Config {
     }
 
     pub fn format_id(&self, id: u32) -> String {
-        format!("{:0width$}", id, width = self.project.id_width)
+        self.id_format().render(id)
+    }
+
+    /// The project's identifier rendering.
+    ///
+    /// Parsed on every call rather than cached: it is a handful of characters,
+    /// this is not on any hot path, and a cache on `Config` would have to be
+    /// kept correct through `Deserialize`, which is exactly the kind of
+    /// invariant that rots.
+    pub fn id_format(&self) -> IdFormat {
+        match &self.project.id_format {
+            Some(template) => IdFormat::compile(template)
+                // Validated at load, so this cannot be reached from a project
+                // cairn has opened.
+                .unwrap_or_else(|_| IdFormat::padded(self.project.id_width)),
+            None => IdFormat::padded(self.project.id_width),
+        }
+    }
+
+    /// Read an identifier the user typed: the rendered form, or the bare
+    /// number, or either with a leading `#`.
+    ///
+    /// Both are accepted because requiring a prefix somebody already knows is
+    /// friction for nothing, and because every reference written before the
+    /// project adopted a key is a bare number.
+    pub fn parse_id(&self, s: &str) -> Result<u32> {
+        self.id_format().read(s)
     }
 
     /// Bytes available for the slug part of a filename, once the id prefix,
@@ -529,7 +748,8 @@ impl Config {
     pub fn slug_budget(&self) -> usize {
         self.project
             .filename_max
-            .saturating_sub(self.project.id_width + 1 + 3)
+            // The rendered identifier, the separating dash, and ".md".
+            .saturating_sub(self.id_format().width() + 1 + 3)
             .max(8)
     }
 

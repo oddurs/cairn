@@ -1709,6 +1709,113 @@ forge; it is one command in whatever runs your tests.
 @node Identifiers
 @chapter Identifiers
 
+@section How an identifier is written
+
+@cindex project key
+@cindex id_format
+@vindex id_format
+By default an identifier reads @code{0001}. A project can say otherwise:
+
+@example
+[project]
+id_format = "@{n:04@}"           # 0001         --- the default
+id_format = "MP-@{n@}"           # MP-1002
+id_format = "A@{n@}"             # A24
+id_format = "CAIRN-TOOLS-@{n@}"  # CAIRN-TOOLS-24
+@end example
+
+@noindent
+@code{@{n@}} is the number and @code{@{n:04@}} pads it, which is the syntax the
+audience already knows from every format string they use. One template rather
+than three settings for key, separator and padding: three would express the same
+thing less clearly and would allow combinations nobody wants, while a template
+shows you what it produces.
+
+@subsection The key is a rendering, not the identifier
+
+@cindex rendering
+This is the whole design, and it is worth being explicit about because the
+obvious reading of ``I want @code{MP-1002}'' is the wrong answer.
+
+Putting @code{MP-1002} in the frontmatter would make @code{id} not an unsigned
+integer, which the specification commits to --- so it would be a new format
+number and a migration for every existing project. It would also break the
+machinery that depends on identifiers being numbers: allocation is
+@code{max + 1}, @command{renumber} compares and reassigns, @code{depends_on} is
+a list of integers, and import maps identifiers across projects.
+
+So @code{id} stays an integer and the project declares how it is @emph{written}.
+That is not a compromise forced by the format; it is the better design, and the
+format promise is what made it obvious. A project changing its key changes how
+things are displayed, not what anything is, and nothing that refers to an item
+by number breaks.
+
+In JSON, @code{id} is the number and @code{ref} carries the rendered form.
+
+@subsection Typing one
+
+Both forms are accepted, in every place an identifier is taken:
+
+@example
+cairn show MP-1002
+cairn show 1002
+cairn show mp-1002
+cairn set MP-1002 depends_on+=MP-1000
+@end example
+
+@noindent
+Requiring a prefix somebody already knows is friction for nothing, and every
+reference written before a project adopted a key is a bare number. Prefix
+matching is case-insensitive.
+
+A prefix cannot begin with a digit, and cairn refuses one that does: it would
+make the rendered form indistinguishable from a plain number, and two spellings
+must not be able to mean different items.
+
+@subsection Where to start counting
+
+@vindex id_start
+Allocation is one more than the highest identifier in use, so an empty project's
+first item is @code{1}. A team wanting @code{MP-1002} would otherwise have to
+create a thousand items.
+
+@example
+[project]
+id_start = 1000
+@end example
+
+@noindent
+This applies to an empty project and nowhere else. Lowering it later does
+nothing, because allocation still takes the maximum --- which is the right
+behaviour, and is said here rather than left to be discovered.
+
+@subsection Adopting a format in an existing project
+
+Filenames carry the rendered identifier, so changing the format means every file
+should be renamed. @command{cairn check} reports each mismatch, and
+@command{cairn renumber} fixes them; @option{--dry-run} shows what it would do.
+
+@example
+cairn check                 # filename does not match the item ...
+cairn renumber --dry-run
+cairn renumber
+@end example
+
+@noindent
+Renaming is the same job as repairing a duplicate identifier --- making the
+identifiers on disk say what they mean --- which is why it lives in the same
+command rather than a new one.
+
+@subsection Reading an identifier out of a filename
+
+@cindex filename fallback
+The specification allows a reader to take @code{id} from a leading run of digits
+when the key is absent. @file{MP-1002-slug.md} has no leading digits, so that
+fallback alone would make a hand-written file in such a project unreadable ---
+and silently, which is the wrong failure. cairn also tries the project's own
+rendering, which §4.2 of the specification permits.
+
+
 @cindex ids
 @cindex merge conflicts
 Item ids are small integers because people have to type them. That choice has

@@ -3350,3 +3350,238 @@ fn dependencies_survive_an_export_and_import() {
         "everything looks startable, so the dependencies did not survive"
     );
 }
+
+// --- how identifiers are written --------------------------------------------
+
+/// A project may declare how its identifiers are written. `id` in the
+/// frontmatter is an unsigned integer regardless — the key is a *rendering*,
+/// which is what makes adopting one a display change rather than a format
+/// change.
+fn keyed(template: &str, start: Option<u32>) -> Project {
+    let p = Project::new();
+    // Both settings go into the existing [project] table; a second one would
+    // be a duplicate key, which is how this helper was wrong the first time.
+    let mut replacement = format!("id_format = \"{template}\"");
+    if let Some(n) = start {
+        replacement.push_str(&format!("\nid_start = {n}"));
+    }
+    let cfg = p.read("cairn.toml").replace("id_width = 4", &replacement);
+    p.write("cairn.toml", &cfg);
+    p
+}
+
+#[test]
+fn a_project_can_say_how_its_identifiers_are_written() {
+    for (template, first) in [
+        ("MP-{n}", "MP-1"),
+        ("A{n}", "A1"),
+        ("CAIRN-TOOLS-{n}", "CAIRN-TOOLS-1"),
+        ("{n:04}", "0001"),
+        ("{n}", "1"),
+    ] {
+        let p = keyed(template, None);
+        p.expect(&["new", "First", "-q"]);
+        let ids = p.expect(&["list", "--ids"]).trimmed();
+        assert_eq!(
+            ids, first,
+            "`{template}` should render the first item as {first}"
+        );
+
+        // And the file is named to match, or the name and the identifier
+        // disagree — which is the confusion a key is adopted to remove.
+        let name = p.expect(&["show", "1", "--path"]).trimmed();
+        assert!(
+            name.contains(&format!("{first}-first")),
+            "`{template}` produced the file {name}"
+        );
+    }
+}
+
+/// `id` stays an integer whatever the rendering says. This is the whole design:
+/// if it were not true, adopting a key would be a format change and a migration
+/// for every existing project.
+#[test]
+fn the_stored_identifier_is_still_a_number() {
+    let p = keyed("MP-{n}", None);
+    p.expect(&["new", "First", "-q"]);
+
+    let raw = p.expect(&["show", "1", "--raw"]).stdout;
+    assert_contains(&raw, "id: 1", "the frontmatter still stores an integer");
+    assert!(
+        !raw.contains("id: MP-1"),
+        "the rendering leaked into the file:\n{raw}"
+    );
+
+    let v: serde_json::Value =
+        serde_json::from_str(&p.expect(&["show", "1", "--json"]).stdout).expect("JSON");
+    assert_eq!(v["id"], 1, "`id` in JSON is the number");
+    assert_eq!(v["ref"], "MP-1", "`ref` carries the rendered form");
+}
+
+/// Both forms are accepted, because requiring a prefix somebody already knows
+/// is friction for nothing — and because every reference written before a
+/// project adopted a key is a bare number.
+#[test]
+fn both_the_rendered_form_and_the_bare_number_are_accepted() {
+    let p = keyed("MP-{n}", None);
+    p.expect(&["new", "First", "-q"]);
+    p.expect(&["new", "Second", "-q"]);
+
+    for id in ["MP-2", "2", "mp-2", "#2", "#MP-2", " MP-2 "] {
+        let out = p.run(&["show", id, "--json"]);
+        assert!(out.ok(), "`cairn show {id}` failed: {}", out.all());
+        let v: serde_json::Value = serde_json::from_str(&out.stdout).expect("JSON");
+        assert_eq!(v["id"], 2, "`{id}` should mean item 2");
+    }
+
+    // And dependencies take either, wherever `show` does.
+    p.expect(&["set", "MP-2", "depends_on+=MP-1"]);
+    let v: serde_json::Value =
+        serde_json::from_str(&p.expect(&["show", "2", "--json"]).stdout).expect("JSON");
+    assert_eq!(
+        v["depends_on"][0], 1,
+        "the dependency was stored as a number"
+    );
+}
+
+#[test]
+fn a_malformed_template_is_refused_when_the_project_is_opened() {
+    for (template, complaint) in [
+        ("MP-{oops}", "should be `{n}`"),
+        ("MP-1002", "has no `{n}`"),
+        ("{n}-{n}", "more than one placeholder"),
+        ("12{n}", "cannot start with a digit"),
+        ("MP-{n", "never closed"),
+    ] {
+        let p = keyed(template, None);
+        let out = p.fails(&["list"]);
+        assert_contains(
+            &out.all(),
+            complaint,
+            &format!("`{template}` should be refused with an explanation"),
+        );
+        assert_contains(
+            &out.all(),
+            "cairn.toml",
+            "and the message should name the file",
+        );
+    }
+}
+
+/// A prefix beginning with a digit would make `12-34` ambiguous with a plain
+/// number, and two spellings must not be able to mean different items.
+#[test]
+fn a_numeric_prefix_is_refused_rather_than_left_ambiguous() {
+    let p = keyed("2024-{n}", None);
+    let out = p.fails(&["list"]);
+    assert_contains(
+        &out.all(),
+        "cannot start with a digit",
+        "a numeric prefix is ambiguous with a bare number",
+    );
+}
+
+#[test]
+fn a_project_can_start_numbering_somewhere_other_than_one() {
+    let p = keyed("MP-{n}", Some(1000));
+    p.expect(&["new", "First", "-q"]);
+    p.expect(&["new", "Second", "-q"]);
+    assert_eq!(
+        p.expect(&["list", "--ids"]).lines(),
+        vec!["MP-1000".to_string(), "MP-1001".to_string()],
+        "allocation starts at id_start and continues normally"
+    );
+}
+
+/// Lowering it later does nothing, because allocation still takes the maximum.
+/// That is the right behaviour and is asserted rather than left to be found.
+#[test]
+fn lowering_the_starting_point_does_not_reuse_identifiers() {
+    let p = keyed("MP-{n}", Some(1000));
+    p.expect(&["new", "First", "-q"]);
+
+    let cfg = p
+        .read("cairn.toml")
+        .replace("id_start = 1000", "id_start = 5");
+    p.write("cairn.toml", &cfg);
+    p.expect(&["new", "Second", "-q"]);
+
+    assert_eq!(
+        p.expect(&["list", "--ids"]).lines(),
+        vec!["MP-1000".to_string(), "MP-1001".to_string()],
+        "an existing project is unaffected by lowering id_start"
+    );
+}
+
+/// Adopting a format should not mean touching every item by hand.
+#[test]
+fn renumber_brings_filenames_into_line_with_the_format() {
+    let p = keyed("MP-{n}", None);
+    p.expect(&["new", "First", "-q"]);
+    p.expect(&["new", "Second", "-q"]);
+
+    let cfg = p
+        .read("cairn.toml")
+        .replace("id_format = \"MP-{n}\"", "id_format = \"TOOLS-{n}\"");
+    p.write("cairn.toml", &cfg);
+
+    // check reports it first, which is how somebody finds out.
+    let checked = p.expect(&["check"]);
+    assert_contains(
+        &checked.all(),
+        "filename does not match",
+        "check should report the mismatch",
+    );
+
+    // A dry run says what it would do and does nothing.
+    let dry = p.expect(&["renumber", "--dry-run"]);
+    assert_contains(
+        &dry.all(),
+        "would be renamed",
+        "a dry run says what it would do",
+    );
+    assert_contains(
+        &p.expect(&["check"]).all(),
+        "filename does not match",
+        "a dry run must not have renamed anything",
+    );
+
+    p.expect(&["renumber"]);
+    p.expect(&["check", "--strict"]);
+    let path = p.expect(&["show", "1", "--path"]).trimmed();
+    assert!(path.contains("TOOLS-1-first"), "the file is now {path}");
+}
+
+/// The specification's fallback is a *leading run of digits*, which a project
+/// with a key does not have. §4.2 permits a reader to apply the project's
+/// rendering instead, and cairn does — otherwise a hand-written file in such a
+/// project would be unreadable, and silently so.
+#[test]
+fn an_id_can_be_recovered_from_a_formatted_filename() {
+    let p = keyed("MP-{n}", None);
+    p.expect(&["new", "First", "-q"]);
+    p.write(
+        "cairn/items/MP-77-written-by-hand.md",
+        "---\ntitle: Written by hand\nstatus: backlog\n---\nbody\n",
+    );
+
+    let ids = p.expect(&["list", "--ids"]).lines();
+    assert!(
+        ids.contains(&"MP-77".to_string()),
+        "the hand-written file was not read: {ids:?}"
+    );
+}
+
+/// A project that says nothing gets exactly what it gets today.
+#[test]
+fn the_default_rendering_is_unchanged() {
+    let p = Project::new();
+    p.expect(&["new", "First", "-q"]);
+    assert_eq!(p.expect(&["list", "--ids"]).trimmed(), "0001");
+    assert!(
+        p.expect(&["show", "1", "--path"])
+            .trimmed()
+            .contains("0001-first"),
+        "the default filename changed"
+    );
+}

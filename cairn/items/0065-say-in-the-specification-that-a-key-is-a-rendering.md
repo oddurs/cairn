@@ -2,7 +2,7 @@
 id: 65
 title: Say in the specification that a key is a rendering
 type: docs
-status: backlog
+status: done
 milestone: v0.2
 created: 2026-09-06
 updated: 2026-09-06

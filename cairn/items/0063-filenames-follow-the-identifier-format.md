@@ -2,7 +2,7 @@
 id: 63
 title: Filenames follow the identifier format
 type: feature
-status: backlog
+status: done
 milestone: v0.2
 created: 2026-09-06
 updated: 2026-09-06

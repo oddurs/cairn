@@ -18,7 +18,7 @@
 use crate::cmd::{item_json, paint_status, paint_type};
 use crate::config::Config;
 use crate::filter::{Ctx, resolve};
-use crate::item::{Item, parse_id};
+use crate::item::Item;
 use crate::lock::Lock;
 use crate::store::{Store, today};
 use crate::{hooks, style};
@@ -68,7 +68,7 @@ pub fn run(args: Args) -> Result<i32> {
     let store = Store::new(&cfg);
     let all = store.load_for_reading()?;
     let ctx = Ctx::new(&cfg, &all);
-    let item = store.find(parse_id(&args.id)?)?;
+    let item = store.find(cfg.parse_id(&args.id)?)?;
 
     if args.path {
         println!("{}", item.path.display());
@@ -162,7 +162,7 @@ pub fn run(args: Args) -> Result<i32> {
 pub fn edit(args: EditArgs) -> Result<i32> {
     let cfg = Config::discover()?;
     let store = Store::new(&cfg);
-    let item = store.find(parse_id(&args.id)?)?;
+    let item = store.find(cfg.parse_id(&args.id)?)?;
     launch_editor(&item.path)?;
     // The lock is taken after the editor exits, not around it: an editing
     // session can last minutes, and blocking every other writer for that long —
@@ -182,7 +182,7 @@ pub fn remove(args: RemoveArgs) -> Result<i32> {
     let store = Store::new(&cfg);
     let mut targets = Vec::new();
     for raw in &args.ids {
-        targets.push(store.find(parse_id(raw)?)?);
+        targets.push(store.find(cfg.parse_id(raw)?)?);
     }
 
     // Deleting an item that others depend on would leave references pointing at

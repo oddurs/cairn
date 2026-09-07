@@ -26,7 +26,7 @@
 use crate::cmd::set::apply;
 use crate::config::Config;
 use crate::filter::{Ctx, Filter, sort_items};
-use crate::item::{Item, parse_id, split_list};
+use crate::item::{Item, split_list};
 use crate::lock::Lock;
 use crate::store::{Store, today, whoami};
 use crate::{Assign, hooks};
@@ -222,10 +222,13 @@ fn b(a: &Value, key: &str) -> bool {
     a.get(key).and_then(Value::as_bool).unwrap_or(false)
 }
 
-fn require_id(a: &Value) -> Result<u32> {
+/// An agent may send `12` or `"MP-1002"`, and both mean the same item. The
+/// schema says integer, but a model that has seen the rendered form in output
+/// will send the rendered form, and refusing it teaches nothing.
+fn require_id(cfg: &Config, a: &Value) -> Result<u32> {
     match a.get("id") {
         Some(Value::Number(v)) => Ok(v.as_u64().unwrap_or(0) as u32),
-        Some(Value::String(v)) => parse_id(v),
+        Some(Value::String(v)) => cfg.parse_id(v),
         _ => bail!("`id` is required"),
     }
 }
@@ -371,7 +374,7 @@ fn show_item(a: &Value) -> Result<String> {
     let store = Store::new(&cfg);
     let items = store.load_all()?;
     let ctx = Ctx::new(&cfg, &items);
-    let item = store.find(require_id(a)?)?;
+    let item = store.find(require_id(&cfg, a)?)?;
     let mut v = crate::cmd::item_json(&cfg, &item, &store, true);
     decorate(&mut v, &ctx, &item);
     pretty(&v)
@@ -459,7 +462,7 @@ fn update_item(a: &Value) -> Result<String> {
     let cfg = Config::discover()?;
     let store = Store::new(&cfg);
     let lock = Lock::acquire(&cfg)?;
-    let mut item = store.find(require_id(a)?)?;
+    let mut item = store.find(require_id(&cfg, a)?)?;
 
     let Some(fields) = a.get("fields").and_then(Value::as_object) else {
         bail!("`fields` is required: an object of field names to values");
@@ -520,7 +523,7 @@ fn claim_item(a: &Value) -> Result<String> {
                 None => bail!("nothing unclaimed is ready to start"),
             }
         }
-        _ => require_id(a)?,
+        _ => require_id(&cfg, a)?,
     };
 
     let mut item = store.find(id)?;
@@ -579,7 +582,7 @@ fn add_note(a: &Value) -> Result<String> {
     let cfg = Config::discover()?;
     let store = Store::new(&cfg);
     let lock = Lock::acquire(&cfg)?;
-    let mut item = store.find(require_id(a)?)?;
+    let mut item = store.find(require_id(&cfg, a)?)?;
 
     let Some(text) = s(a, "text") else {
         bail!("`text` is required");
@@ -607,7 +610,7 @@ fn close_item(a: &Value) -> Result<String> {
     let cfg = Config::discover()?;
     let store = Store::new(&cfg);
     let lock = Lock::acquire(&cfg)?;
-    let mut item = store.find(require_id(a)?)?;
+    let mut item = store.find(require_id(&cfg, a)?)?;
     let status = match s(a, "status") {
         Some(v) => v,
         None => match cfg.done_status() {

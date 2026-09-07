@@ -2,7 +2,7 @@
 id: 62
 title: One template for how identifiers are written and read
 type: feature
-status: backlog
+status: done
 milestone: v0.2
 created: 2026-09-06
 updated: 2026-09-06
