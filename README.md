@@ -666,7 +666,15 @@ backlog.
 
 The corpus in [`tests/golden`](tests/golden) — which includes files cairn would
 never write, because those are what people and other tools produce — doubles as
-a conformance suite for a second implementation.
+a conformance suite, and there is a second implementation to run against it.
+[`spec/reader.py`](spec/reader.py) is a short reader written from the
+specification alone, permissively licensed so it can be copied into anything,
+and CI checks that it and cairn agree on every case.
+
+That is not ceremony. Writing it found the specification saying scalars follow
+"YAML's own rules" without saying *which* YAML — and 1.1 and 1.2 disagree about
+`no` and `12:30`, two of the three examples the section itself gave. Two
+conforming readers could have reported different content for the same file.
 
 ## The promise
 

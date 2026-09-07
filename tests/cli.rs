@@ -3585,3 +3585,99 @@ fn the_default_rendering_is_unchanged() {
         "the default filename changed"
     );
 }
+
+/// Two branches each allocated the same identifier, and one of them is already
+/// on the main branch. They are not equals: renaming the published one churns
+/// history and breaks every link anybody has written to it.
+///
+/// This is the exact case found while rebasing two branches of cairn's own
+/// backlog that had both allocated `0055`. cairn renumbered the published one,
+/// because both items looked identical to it — same creation date,
+/// distinguished only by filename — so it picked alphabetically and got it
+/// backwards.
+#[test]
+fn at_a_merge_the_side_already_published_keeps_its_identifier() {
+    let p = repository();
+
+    // The published side. Named to sort *after* the arriving one, so a test
+    // that passes by alphabetical accident cannot.
+    git(&p, &["checkout", "-qb", "published"]);
+    p.write(
+        "cairn/items/0009-zebra.md",
+        "---\nid: 9\ntitle: Zebra\nstatus: backlog\ncreated: 2026-01-01\n---\nPublished first.\n",
+    );
+    git(&p, &["add", "-A"]);
+    git(&p, &["commit", "-qm", "the published item"]);
+    git(&p, &["checkout", "-q", "main"]);
+    git(&p, &["merge", "-q", "--no-edit", "published"]);
+
+    // The arriving side, allocating the same id on a branch cut earlier.
+    git(&p, &["checkout", "-qb", "arriving", "HEAD~1"]);
+    p.write(
+        "cairn/items/0009-antelope.md",
+        "---\nid: 9\ntitle: Antelope\nstatus: backlog\ncreated: 2026-01-01\n---\nArrived later.\n",
+    );
+    git(&p, &["add", "-A"]);
+    git(&p, &["commit", "-qm", "the arriving item"]);
+
+    git(&p, &["checkout", "-q", "main"]);
+    // The `post-merge` hook repairs this on its own, which is the realistic
+    // path and also the awkward one: the hook runs after the merge commit
+    // exists but while .git/MERGE_HEAD is still on disk.
+    git(&p, &["merge", "--no-edit", "arriving"]);
+    p.expect(&["renumber"]);
+    p.expect(&["check"]);
+
+    let items: serde_json::Value =
+        serde_json::from_str(&p.expect(&["list", "-A", "--json"]).stdout).expect("JSON");
+    let items = items.as_array().expect("an array");
+    let find = |title: &str| {
+        items
+            .iter()
+            .find(|i| i["title"] == title)
+            .unwrap_or_else(|| panic!("`{title}` survived"))["id"]
+            .as_u64()
+            .expect("id")
+    };
+
+    assert_eq!(
+        find("Zebra"),
+        9,
+        "the published item kept its identifier; renaming it would break every \
+         link written to it"
+    );
+    assert_ne!(find("Antelope"), 9, "the arriving item moved");
+}
+
+/// Outside a repository there is nothing to consult, and the previous rule —
+/// oldest first, path breaking the tie — applies unchanged.
+#[test]
+fn outside_a_repository_renumbering_is_unchanged() {
+    let p = Project::new();
+    p.write(
+        "cairn/items/0009-antelope.md",
+        "---\nid: 9\ntitle: Antelope\nstatus: backlog\ncreated: 2026-01-01\n---\nbody\n",
+    );
+    p.write(
+        "cairn/items/0009-zebra.md",
+        "---\nid: 9\ntitle: Zebra\nstatus: backlog\ncreated: 2026-01-01\n---\nbody\n",
+    );
+
+    p.expect(&["renumber"]);
+    p.expect(&["check"]);
+
+    let items: serde_json::Value =
+        serde_json::from_str(&p.expect(&["list", "-A", "--json"]).stdout).expect("JSON");
+    let antelope = items
+        .as_array()
+        .expect("array")
+        .iter()
+        .find(|i| i["title"] == "Antelope")
+        .expect("Antelope")["id"]
+        .as_u64()
+        .expect("id");
+    assert_eq!(
+        antelope, 9,
+        "with nothing to consult, the path still breaks the tie"
+    );
+}

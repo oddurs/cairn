@@ -53,8 +53,25 @@ pub fn run(args: Args) -> Result<i32> {
     // collision should keep its number and the branch that arrived later should
     // move. Items with no creation date sort last, and the path breaks
     // remaining ties so two people running this on the same tree agree.
+    // When the project is versioned, the repository knows something the files
+    // do not: which of two items claiming an id was committed first. That is
+    // the one that has been published, that other people have linked to, and
+    // that must therefore keep its number.
+    let published = arrival_side(&cfg, &items);
     items.sort_by(|a, b| {
         a.id.cmp(&b.id)
+            .then_with(|| {
+                published
+                    .get(&a.path)
+                    .cmp(&published.get(&b.path))
+                    // A file git has never seen sorts after one it has, so an
+                    // uncommitted item never displaces a published one.
+                    .then_with(|| {
+                        published
+                            .contains_key(&b.path)
+                            .cmp(&published.contains_key(&a.path))
+                    })
+            })
             .then_with(|| created_key(a).cmp(&created_key(b)))
             .then_with(|| a.path.cmp(&b.path))
     });
@@ -160,6 +177,92 @@ fn rename_to_match(
         renamed += 1;
     }
     Ok(renamed)
+}
+
+/// Which side of a merge each item arrived from: 0 if it was already
+/// published, 1 if it is arriving, absent if git cannot say.
+///
+/// Two branches that each allocate the same identifier look identical to cairn:
+/// same creation date, distinguished only by filename, so the tie broke
+/// alphabetically and got it backwards half the time. At a merge the two sides
+/// are not equals — one has been published, other people have linked to it, and
+/// renaming it churns history for no reason — and the repository knows which is
+/// which.
+///
+/// The published side is HEAD during a merge, and the *first parent* of HEAD
+/// once the merge has been committed, because the first parent is the branch
+/// you were standing on. Those are the two moments somebody runs this, the
+/// second being when the `post-merge` hook does.
+///
+/// Deliberately not by timestamp or by history depth: two branch commits made a
+/// moment apart tie on the first, and siblings tie on the second. Both were
+/// tried, and both left the original coin-flip in place.
+///
+/// Outside a repository, or on an ordinary commit, this is empty and the
+/// previous rule applies unchanged.
+fn arrival_side(cfg: &Config, items: &[Item]) -> HashMap<PathBuf, u8> {
+    let git = |args: &[&str]| -> Option<String> {
+        let out = std::process::Command::new("git")
+            .args(args)
+            .current_dir(&cfg.root)
+            .output()
+            .ok()?;
+        out.status
+            .success()
+            .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
+    };
+
+    if git(&["rev-parse", "--is-inside-work-tree"]).is_none() {
+        return HashMap::new();
+    }
+
+    // Whether HEAD is a merge is asked *first*, and that order is the whole
+    // trick. The `post-merge` hook runs after the merge commit exists but while
+    // `.git/MERGE_HEAD` is still on disk, so testing for a merge in progress
+    // first would pick HEAD — the merge commit, which contains both sides — and
+    // conclude that both had been published. Which is precisely the coin-flip
+    // this is meant to remove.
+    let published = match git(&["rev-parse", "--verify", "-q", "HEAD^2"]) {
+        // HEAD has a second parent, so it is a merge commit and its first
+        // parent is the branch the merge was made on: the published side.
+        Some(_) => "HEAD^1",
+        // No merge commit yet. If one is in progress, HEAD is still the side
+        // that was already here.
+        None if git(&["rev-parse", "--verify", "-q", "MERGE_HEAD"]).is_some() => "HEAD",
+        None => return HashMap::new(),
+    };
+
+    let mut side = HashMap::new();
+    for item in items {
+        let Ok(relative) = item.path.strip_prefix(&cfg.root) else {
+            continue;
+        };
+        let relative = relative.to_string_lossy().replace('\\', "/");
+
+        // The commit that *added* the file, not the last one to touch it: an
+        // item edited yesterday can still be the one that existed first.
+        let Some(added) = git(&[
+            "log",
+            "--diff-filter=A",
+            "--follow",
+            "-1",
+            "--format=%H",
+            "--",
+            &relative,
+        ])
+        .filter(|s| !s.is_empty()) else {
+            continue;
+        };
+
+        let already_there = std::process::Command::new("git")
+            .args(["merge-base", "--is-ancestor", &added, published])
+            .current_dir(&cfg.root)
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        side.insert(item.path.clone(), u8::from(!already_there));
+    }
+    side
 }
 
 /// Sort key for creation date: undated items sort after dated ones.

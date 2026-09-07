@@ -27,6 +27,32 @@ There is deliberately no library target, because linking cairn makes the caller
 a derivative work and reading its files does not.  A test fails if a [lib]
 appears in Cargo.toml.
 
+** Merges keep the published identifier
+
+When two branches each allocated the same identifier, `cairn renumber` moved the
+wrong one about half the time: both items looked identical to it — same creation
+date, distinguished only by filename — so it picked alphabetically.  Renaming
+the side that was already published churns history and breaks every link written
+to it.
+
+cairn now asks the repository.  If the current commit is a merge, its first
+parent is the branch the merge was made on, and the item added there keeps its
+number.  Outside a repository the previous rule applies unchanged.
+
+** A second implementation of the reader
+
+spec/reader.py is a short reader for the item format, written from the
+specification alone and not from cairn's source, and permissively licensed so it
+can be copied into other tools including proprietary ones.  spec/conformance.py
+runs it over the corpus in tests/golden and compares its answers to cairn's; CI
+runs it on every push.
+
+It found a defect in the specification immediately.  §6 said unquoted scalars
+follow "YAML's own rules" without saying which YAML — and 1.1 and 1.2 disagree
+about `no` and `12:30`, two of the three examples the section itself gave.  Two
+conforming readers could have reported different content for the same file.  §6
+now requires the YAML 1.2 core schema and tabulates the divergence.
+
 ** Identifiers can be written the way your team says them
 
   [project]

@@ -141,9 +141,27 @@ and `README.md`, are **not** items.
 
 ## 6. YAML scalars
 
-YAML resolves unquoted scalars before any of this applies. A hand-written
-`0x1F` is a number and will be read as `31`; `12:30` and `1.20` are likewise
-subject to YAML's own rules.
+The frontmatter is YAML, and YAML resolves unquoted scalars before any of this
+applies. A reader **must** resolve them according to the **YAML 1.2 core
+schema**.
+
+Naming the version is not pedantry. YAML 1.1 and 1.2 disagree about exactly the
+values people write by hand, and a reader using the wrong one will report
+different content for the same file:
+
+| Written | YAML 1.2 core (required) | YAML 1.1 (wrong here) |
+| --- | --- | --- |
+| `no` | the string `no` | the boolean false |
+| `12:30` | the string `12:30` | the integer 750, read as sexagesimal |
+| `0x1F` | the integer 31 | the integer 31 |
+| `1.20` | the float 1.2 | the float 1.2 |
+
+Under 1.2 core, only `true` and `false` (and their capitalised and upper-case
+spellings) are booleans; `yes`, `no`, `on` and `off` are strings.
+
+This is worth checking rather than assuming: several widely used YAML libraries
+still implement 1.1 by default, including PyYAML. The reference reader in
+`reader.py` adjusts for it, and says where.
 
 A writer **must** quote any value it emits that would otherwise change meaning
 when read back. This confines the problem to files written by hand or by other
