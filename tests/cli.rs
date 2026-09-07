@@ -4023,13 +4023,6 @@ fn container_types_are_not_offered_as_work() {
 #[test]
 fn a_ref_targeting_anything_makes_nothing_a_container() {
     let p = Project::new();
-    let cfg = p.read("cairn.toml").replacen(
-        "[[field]]",
-        "[[field]]\nname = \"part_of\"\nkind = \"ref\"\ntarget = \"*\"\n\
-         cardinality = \"many\"\nacyclic = true\n\n[[field]]",
-        1,
-    );
-    p.write("cairn.toml", &cfg);
     p.add("One", &[]);
     p.add("Two", &[]);
     assert_eq!(
@@ -4042,13 +4035,6 @@ fn a_ref_targeting_anything_makes_nothing_a_container() {
 #[test]
 fn an_acyclic_ref_refuses_a_cycle_however_far_around() {
     let p = Project::new();
-    let cfg = p.read("cairn.toml").replacen(
-        "[[field]]",
-        "[[field]]\nname = \"part_of\"\nkind = \"ref\"\ntarget = \"*\"\n\
-         cardinality = \"many\"\nacyclic = true\n\n[[field]]",
-        1,
-    );
-    p.write("cairn.toml", &cfg);
     for title in ["One", "Two", "Three"] {
         p.add(title, &[]);
     }
@@ -4119,5 +4105,179 @@ fn a_ref_field_must_target_a_declared_type() {
         &out.all(),
         "not a declared [[type]]",
         "a ref pointing at a type nobody declared is a typo, caught at load",
+    );
+}
+
+// --- composition ------------------------------------------------------------
+
+/// A new project gets composition without configuring anything, because `init`
+/// scaffolds it. It is not hardcoded: hardcoding a second relationship would
+/// re-create the problem `0079` removed.
+#[test]
+fn a_new_project_can_compose_without_configuring_anything() {
+    let p = Project::with_init(&["init", "--name", "Composed"]);
+    assert_contains(
+        &p.read("cairn.toml"),
+        "name = \"part_of\"",
+        "init scaffolds composition",
+    );
+
+    p.add("Ship OAuth", &[]);
+    p.add("Token endpoint", &[]);
+    p.expect(&["set", "3", "part_of=2"]);
+    p.expect(&["check"]);
+}
+
+/// The reason there is no `parent` field. An item belongs to two larger efforts
+/// at once, which a scalar could not express — and a scalar is also what makes
+/// two branches reparenting the same item a real conflict.
+#[test]
+fn an_item_can_belong_to_two_things_at_once() {
+    let p = Project::new();
+    for title in ["OAuth", "Q3 security", "Token endpoint"] {
+        p.add(title, &[]);
+    }
+
+    p.expect(&["set", "3", "part_of=1"]);
+    p.expect(&["set", "3", "part_of+=2"]);
+
+    let raw = p.expect(&["show", "3", "--raw"]).stdout;
+    assert_contains(&raw, "- 1", "belongs to the first");
+    assert_contains(&raw, "- 2", "and to the second");
+
+    // Identifiers are stored as numbers, so composition reads the way
+    // `depends_on` does and a hand-written `part_of: [1, 2]` survives a save.
+    assert!(
+        !raw.contains("'1'") && !raw.contains("\"1\""),
+        "identifiers were quoted:\n{raw}"
+    );
+}
+
+/// Filing must stay free. Anything that made `cairn new` require a parent would
+/// both kill adoption and put the structure decision at the worst moment.
+#[test]
+fn composition_is_never_required_to_file_something() {
+    let p = Project::with_init(&["init", "--name", "Composed"]);
+    p.expect(&["new", "Just a title"]);
+    p.expect(&["check"]);
+    assert_eq!(
+        p.expect(&["list", "-A", "--ids", "--filter", "part_of="])
+            .lines()
+            .len(),
+        2,
+        "both the scaffolded item and the new one are unattached, and valid"
+    );
+}
+
+/// Depth is unbounded on purpose: a limit is a decision that will be wrong for
+/// somebody. Past a handful it is usually a taxonomy where a plan was wanted,
+/// which is a judgement worth voicing and not worth enforcing.
+#[test]
+fn a_deep_hierarchy_is_a_warning_rather_than_an_error() {
+    let p = Project::new();
+    for n in 1..=6 {
+        p.add(&format!("Level {n}"), &[]);
+    }
+    for n in 2..=6 {
+        p.expect(&["set", &n.to_string(), &format!("part_of={}", n - 1)]);
+    }
+
+    let out = p.expect(&["check"]);
+    assert!(out.ok(), "a deep hierarchy is not an error: {}", out.all());
+    assert_contains(
+        &out.all(),
+        "levels of composition",
+        "but it is worth mentioning",
+    );
+    assert_contains(&out.all(), "taxonomy rather than a plan", "and why");
+
+    // Shallow enough, and it says nothing at all.
+    let shallow = Project::with_init(&["init", "--name", "Shallow"]);
+    shallow.add("One", &[]);
+    shallow.add("Two", &[]);
+    shallow.expect(&["set", "3", "part_of=2"]);
+    assert!(
+        !shallow.expect(&["check"]).all().contains("composition"),
+        "two levels is a plan, not a taxonomy"
+    );
+}
+
+/// The argument against a `parent` scalar, tested rather than assumed — and it
+/// came out differently from how `0072` predicted.
+///
+/// `0072` claimed two branches linking the same item would merge without a
+/// conflict, on the reasoning that edge sets union. They do not. git merges
+/// *text*, and two branches each appending to the same YAML sequence — beside
+/// an `updated` stamp both of them also touched — is an ordinary textual
+/// conflict. `depends_on` has always had this property; composition inherits it.
+///
+/// What survives is the part that mattered, and it is tested by
+/// `an_item_can_belong_to_two_things_at_once`: a set has a resolution that
+/// keeps both intentions, while a scalar does not — one side simply loses and
+/// nobody can tell which was meant. The conflict is a merge somebody can
+/// finish rather than a decision the format destroyed.
+///
+/// Unioning these automatically in the merge driver is filed as `0080`.
+#[test]
+fn composition_conflicts_in_the_item_rather_than_losing_an_edge() {
+    let p = repository();
+    p.add("OAuth", &[]);
+    p.add("Q3 security", &[]);
+    git(&p, &["add", "-A"]);
+    git(&p, &["commit", "-qm", "two efforts"]);
+
+    git(&p, &["checkout", "-qb", "one"]);
+    p.expect(&["set", "1", "part_of=2"]);
+    git(&p, &["add", "-A"]);
+    git(&p, &["commit", "-qm", "file it under OAuth"]);
+
+    git(&p, &["checkout", "-q", "main"]);
+    git(&p, &["checkout", "-qb", "two"]);
+    p.expect(&["set", "1", "part_of=3"]);
+    git(&p, &["add", "-A"]);
+    git(&p, &["commit", "-qm", "file it under Q3"]);
+
+    git(&p, &["checkout", "-q", "main"]);
+    git(&p, &["merge", "--no-edit", "one"]);
+    let second = Command::new("git")
+        .args(["merge", "--no-edit", "two"])
+        .current_dir(p.root())
+        .env("GIT_AUTHOR_NAME", "test")
+        .env("GIT_AUTHOR_EMAIL", "test@example.invalid")
+        .env("GIT_COMMITTER_NAME", "test")
+        .env("GIT_COMMITTER_EMAIL", "test@example.invalid")
+        .env("PATH", path_with_binary())
+        .output()
+        .expect("git merge");
+
+    assert!(
+        !second.status.success(),
+        "this conflicts today; a test asserting otherwise would assert a wish"
+    );
+
+    // The important part: both intentions are still on disk, in the conflict,
+    // for somebody to resolve. Neither was silently discarded — which is what a
+    // scalar `parent` would have done to one of them.
+    let path = p
+        .root()
+        .join("cairn/items")
+        .read_dir()
+        .expect("items")
+        .flatten()
+        .map(|e| e.path())
+        .find(|path| {
+            path.file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| n.starts_with("0001"))
+        })
+        .expect("the contested item");
+    let conflicted = std::fs::read_to_string(&path).expect("read");
+    assert!(
+        conflicted.contains("<<<<<<<"),
+        "expected conflict markers:\n{conflicted}"
+    );
+    assert!(
+        conflicted.contains("- 2") && conflicted.contains("- 3"),
+        "both edges must still be present for somebody to keep:\n{conflicted}"
     );
 }

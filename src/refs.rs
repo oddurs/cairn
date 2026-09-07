@@ -306,3 +306,43 @@ pub fn rename_key(
     moved.sort_unstable();
     Ok(moved)
 }
+
+/// The longest chain of composition above an item.
+///
+/// Composition is unbounded on purpose: a depth limit is a decision that will
+/// be wrong for somebody. But a chain much deeper than a handful usually means
+/// a taxonomy where a plan was wanted, and that is a judgement cairn is
+/// entitled to voice without enforcing.
+pub fn depth(items: &[Item], cfg: &Config, item: &Item) -> usize {
+    let composing: Vec<&FieldDef> = cfg.ref_fields().filter(|f| f.rollup).collect();
+    if composing.is_empty() {
+        return 0;
+    }
+    let by_id: HashMap<u32, &Item> = items.iter().map(|i| (i.id, i)).collect();
+
+    // Breadth-first, tracking what has been seen, so a cycle that slipped in by
+    // hand cannot make this run forever. `check` reports the cycle separately.
+    let mut seen = HashSet::from([item.id]);
+    let mut frontier = vec![item];
+    let mut depth = 0;
+    while !frontier.is_empty() {
+        let mut next: Vec<&Item> = Vec::new();
+        for current in frontier {
+            for def in &composing {
+                for t in targets(items, current, def) {
+                    if seen.insert(t.id)
+                        && let Some(found) = by_id.get(&t.id)
+                    {
+                        next.push(found);
+                    }
+                }
+            }
+        }
+        if next.is_empty() {
+            break;
+        }
+        depth += 1;
+        frontier = next;
+    }
+    depth
+}

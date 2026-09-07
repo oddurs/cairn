@@ -2,7 +2,7 @@
 id: 72
 title: Relationships between items are declarable, and composition is the second one
 type: feature
-status: backlog
+status: done
 milestone: v1.0
 depends_on:
 - 79
@@ -91,14 +91,14 @@ unchanged. Making it declarable does not change what `depends_on` means.
 
 ## Acceptance criteria
 
-- [ ] Relations are declared in `cairn.toml`, `depends_on` among them
-- [ ] `part_of` ships as a default, many-to-many, cycle-checked on every write
-- [ ] An inverse is queryable without being stored twice
-- [ ] `cairn next` output is unchanged for a project that uses no relations
-- [ ] `cairn new` still requires nothing but a title
-- [ ] Two branches that both link the same item merge without a conflict
-- [ ] `check` warns on a chain deeper than four, and does not fail
-- [ ] No format bump
+- [x] Relations are declared in `cairn.toml`, `depends_on` among them
+- [x] `part_of` ships as a default, many-to-many, cycle-checked on every write
+- [x] An inverse is queryable without being stored twice
+- [x] `cairn next` output is unchanged for a project that uses no relations
+- [x] `cairn new` still requires nothing but a title
+- [ ] Two branches that both link the same item merge without a conflict — **wrong, see below**
+- [x] `check` warns on a chain deeper than four, and does not fail
+- [x] No format bump
 
 ## 2026-09-07: the `[[relation]]` table is superseded
 
@@ -129,3 +129,20 @@ inverse     = "contains"
 Everything above about trees, merge behaviour and unbounded depth stands. The
 argument against a `parent` scalar is unaffected: this is still a set of edges,
 and sets union at a merge.
+
+## 2026-09-07: one criterion was wrong
+
+"Two branches that both link the same item merge without a conflict" is false,
+and testing it is what showed that. git merges text: two branches each appending
+to the same YAML sequence, beside an `updated` stamp both of them also touched,
+is an ordinary textual conflict. `depends_on` has always behaved this way, so
+the gap predates composition rather than arriving with it.
+
+The reasoning the criterion came from still holds, and it is the part that
+mattered. A set has a resolution that keeps both intentions; a scalar `parent`
+does not — one side loses and nobody can tell which was meant. So the argument
+against a parent field is unaffected: the choice is between a merge somebody can
+finish and a decision the format already made for them.
+
+`0080` is the actual fix: teach the merge driver to union sequence fields, which
+also repairs the same wart in `depends_on`.

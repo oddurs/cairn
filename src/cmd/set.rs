@@ -503,14 +503,28 @@ fn apply_custom(item: &mut Item, cfg: &Config, key: &str, assign: Assign) -> Res
             if !crate::refs::is_many(def) && current.len() > 1 {
                 bail!("`{key}` names one item, but {} were given", current.len());
             }
-            item.set_extra(
-                key,
-                match (current.is_empty(), crate::refs::is_many(def)) {
-                    (true, _) => None,
-                    (false, true) => Some(Field::List(current)),
-                    (false, false) => Some(Field::Text(current.remove(0))),
-                },
-            );
+            // An id-addressed ref stores numbers, so that it reads the way
+            // `depends_on` does and a hand-written `part_of: [1, 4]` survives a
+            // save unchanged.
+            let numeric: Option<Vec<u32>> = (def.by == crate::config::Addressing::Id)
+                .then(|| {
+                    current
+                        .iter()
+                        .map(|v| v.trim().trim_start_matches('#').parse::<u32>().ok())
+                        .collect::<Option<Vec<u32>>>()
+                })
+                .flatten();
+            match (numeric, crate::refs::is_many(def)) {
+                (Some(ids), true) => item.set_extra_ids(key, &ids),
+                (Some(ids), false) => item.set_extra_id(key, ids.first().copied()),
+                (None, true) => {
+                    item.set_extra(key, (!current.is_empty()).then_some(Field::List(current)))
+                }
+                (None, false) => item.set_extra(
+                    key,
+                    (!current.is_empty()).then(|| Field::Text(current.remove(0))),
+                ),
+            }
         }
         FieldKind::List => {
             let mut current = match item.get(key) {

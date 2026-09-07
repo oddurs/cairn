@@ -27,6 +27,26 @@ There is deliberately no library target, because linking cairn makes the caller
 a derivative work and reading its files does not.  A test fails if a [lib]
 appears in Cargo.toml.
 
+** Composition
+
+`cairn init` now scaffolds a `part_of` field, so a new project can say that one
+item belongs to a larger effort without configuring anything.  It is scaffolded
+rather than built in: hardcoding a second relationship would re-create the
+problem declarable fields exist to remove, and many backlogs are flat.
+
+`part_of` is many-valued on purpose.  An item belongs to the authentication work
+and to the quarter's security push at once, which a `parent` field could not
+express — and a scalar has no correct merge, while a set has an obvious one.
+
+Depth is unbounded.  Past about four levels `cairn check` says so as a warning,
+because a hierarchy that deep is usually a taxonomy where a plan was wanted.
+`cairn new` still takes a title and nothing else: structure is added afterwards.
+
+cairn ships no level names — no initiative, no epic, no story — and the manual
+says why as a position rather than an omission.  A project that wants them
+declares a `[[type]]`.  Size is a fact about the graph rather than a label that
+goes stale.
+
 ** A field can name another item
 
 `kind = "ref"` declares a field whose values name other items rather than

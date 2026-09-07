@@ -208,6 +208,34 @@ impl Item {
 
     /// Set a custom (non-built-in) field. Built-ins are handled by callers so
     /// they can validate against the schema first.
+    /// Set a field whose values are identifiers, storing them as numbers.
+    ///
+    /// An id is a number, and writing it as `'1'` would both look wrong beside
+    /// `depends_on: [1, 2]` and rewrite a hand-written `part_of: [1, 4]` into
+    /// quoted strings on the next save — turning an unchanged item into a diff.
+    pub fn set_extra_ids(&mut self, key: &str, ids: &[u32]) {
+        let k = Value::String(key.to_string());
+        if ids.is_empty() {
+            self.meta.extra.remove(&k);
+            return;
+        }
+        let values: Vec<Value> = ids.iter().map(|n| Value::Number((*n).into())).collect();
+        self.meta.extra.insert(k, Value::Sequence(values));
+    }
+
+    /// The same, for a field that holds exactly one identifier.
+    pub fn set_extra_id(&mut self, key: &str, id: Option<u32>) {
+        let k = Value::String(key.to_string());
+        match id {
+            None => {
+                self.meta.extra.remove(&k);
+            }
+            Some(n) => {
+                self.meta.extra.insert(k, Value::Number(n.into()));
+            }
+        }
+    }
+
     pub fn set_extra(&mut self, key: &str, value: Option<Field>) {
         let k = Value::String(key.to_string());
         match value {

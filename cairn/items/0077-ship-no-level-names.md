@@ -2,12 +2,12 @@
 id: 77
 title: Ship no level names
 type: docs
-status: backlog
+status: done
 milestone: v1.0
 depends_on:
 - 72
 created: 2026-09-06
-updated: 2026-09-06
+updated: 2026-09-07
 priority: p1
 effort: s
 sprint: s8
@@ -57,7 +57,7 @@ belongs to the project rather than to this program.
 
 ## Acceptance criteria
 
-- [ ] The manual states it as a position, with the reasoning
-- [ ] It says what a project should do instead, in one line of configuration
-- [ ] It names what would reverse it
-- [ ] A feature request asking for epics can be answered by pointing at it
+- [x] The manual states it as a position, with the reasoning
+- [x] It says what a project should do instead, in one line of configuration
+- [x] It names what would reverse it
+- [x] A feature request asking for epics can be answered by pointing at it
