@@ -272,17 +272,19 @@ fn a_long_sequence_of_ordinary_use_leaves_the_backlog_intact() {
                 "note"
             }
             (97, Some(id)) => {
-                // Milestones are created on demand, so this exercises the path
-                // that writes to cairn.toml rather than to an item.
+                // A milestone is an item in format 2, so this exercises the
+                // container path: creating one, giving it a key, and scheduling
+                // work against it by that key.
                 let name = format!("v0.{}", s.rng.below(3));
-                // Adding one that exists is a refusal rather than a no-op,
-                // which is the right call and means the soak has to tolerate it.
-                let out = s.run(&["milestone", "add", &name]);
-                assert!(
-                    out.code == 0 || out.stderr.contains("already exists"),
-                    "milestone add failed unexpectedly: {}",
-                    out.stderr
-                );
+                let existing = s
+                    .expect(&["list", "-A", "-t", "milestone", "--json"])
+                    .stdout;
+                if !existing.contains(&format!("\"{name}\"")) {
+                    let out = s.expect(&["new", &name, "-t", "milestone", "-q"]);
+                    let m: u32 = out.stdout.trim().parse().expect("an id");
+                    s.expect(&["set", &m.to_string(), &format!("key={name}"), "-q"]);
+                    s.expected.insert(m, "backlog".into());
+                }
                 s.expect(&["set", &id.to_string(), &format!("milestone={name}"), "-q"]);
                 "milestone"
             }

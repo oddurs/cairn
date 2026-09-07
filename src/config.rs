@@ -32,7 +32,7 @@ pub const CONFIG_FILE: &str = "cairn.toml";
 ///   older cairn is never silently stripped of data a newer one wrote.
 /// * A project recording a format this build does not know is refused with an
 ///   explanation, rather than misread.
-pub const CURRENT_FORMAT: u32 = 1;
+pub const CURRENT_FORMAT: u32 = 2;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -49,6 +49,8 @@ pub struct Config {
     pub statuses: Vec<Status>,
     #[serde(default, rename = "field")]
     pub fields: Vec<FieldDef>,
+    /// Format 1 only. A milestone is an item in format 2, so this exists to be
+    /// read by `cairn migrate` and rejected everywhere else.
     #[serde(default, rename = "milestone")]
     pub milestones: Vec<Milestone>,
     #[serde(default, rename = "view")]
@@ -681,7 +683,7 @@ impl Config {
         // newer cairn is told apart from one that is simply malformed. Without
         // this, a key added in a later format would surface as "unknown field",
         // which sends the reader looking for a typo that is not there.
-        Config::check_format(&text, path)?;
+        Config::check_format(&text, path, true)?;
 
         let mut cfg: Config =
             toml::from_str(&text).with_context(|| format!("parsing {}", path.display()))?;
@@ -707,7 +709,25 @@ impl Config {
     }
 
     /// Read just the format key, tolerating anything else in the file.
-    fn check_format(text: &str, path: &Path) -> Result<()> {
+    /// Load a project that may be behind the current format.
+    ///
+    /// Only `cairn migrate` uses this. Everything else refuses an older project
+    /// rather than reading it on a best-effort basis, which §8 of the
+    /// specification requires and which is the whole reason the version exists.
+    pub fn load_for_migration(path: &Path) -> Result<Config> {
+        let text =
+            std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+        Config::check_format(&text, path, false)?;
+        let mut cfg: Config =
+            toml::from_str(&text).with_context(|| format!("parsing {}", path.display()))?;
+        cfg.root = path
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| PathBuf::from("."));
+        Ok(cfg)
+    }
+
+    fn check_format(text: &str, path: &Path, strict: bool) -> Result<()> {
         #[derive(Deserialize)]
         struct Probe {
             #[serde(default)]
@@ -722,6 +742,13 @@ impl Config {
             bail!(
                 "{} is format {found}, and this cairn understands up to {CURRENT_FORMAT}\n\
                  it was written by a newer version — upgrade cairn to open it",
+                path.display()
+            );
+        }
+        if strict && found < CURRENT_FORMAT {
+            bail!(
+                "{} is format {found}, and this cairn writes format {CURRENT_FORMAT}\n\
+                 run `cairn migrate` to bring it up to date (`--dry-run` to see what would change)",
                 path.display()
             );
         }
@@ -745,11 +772,23 @@ impl Config {
         check_unique("status", self.statuses.iter().map(|s| s.name.as_str()))?;
         check_unique("type", self.types.iter().map(|t| t.name.as_str()))?;
         check_unique("field", self.fields.iter().map(|f| f.name.as_str()))?;
-        check_unique("milestone", self.milestones.iter().map(|m| m.name.as_str()))?;
+        if !self.milestones.is_empty() && self.format() >= CURRENT_FORMAT {
+            bail!(
+                "{CONFIG_FILE}: [[milestone]] blocks are format 1. A milestone is an \
+                 item in format 2 — run `cairn migrate`"
+            );
+        }
         check_unique("view", self.views.iter().map(|v| v.name.as_str()))?;
 
         for f in &self.fields {
-            if RESERVED_FIELDS.contains(&f.name.as_str()) {
+            // A reserved key may be *declared* when it is one of the two that
+            // are references — `milestone` and `depends_on`. They stay typed on
+            // the item, because the specification documents them, and the
+            // declaration is what lets the general mechanism describe and
+            // validate them instead of a special case doing it.
+            let redeclarable =
+                f.kind == FieldKind::Ref && matches!(f.name.as_str(), "milestone" | "depends_on");
+            if RESERVED_FIELDS.contains(&f.name.as_str()) && !redeclarable {
                 bail!(
                     "{CONFIG_FILE}: [[field]] name `{}` is reserved (built-in field)",
                     f.name
@@ -819,10 +858,6 @@ impl Config {
         self.fields.iter().find(|f| f.name == name)
     }
 
-    pub fn milestone(&self, name: &str) -> Option<&Milestone> {
-        self.milestones.iter().find(|m| m.name == name)
-    }
-
     pub fn view(&self, name: &str) -> Option<&View> {
         self.views.iter().find(|v| v.name == name)
     }
@@ -887,35 +922,6 @@ impl Config {
             self.format_id(id),
             crate::item::slug(title, self.slug_budget())
         )
-    }
-
-    /// Milestones in the order a reader should meet them.
-    ///
-    /// Dates order the ones that have them. An undated milestone keeps the
-    /// position it was declared in, by taking the date of the next dated
-    /// milestone after it — so an `m0-proof` written above a dated `m1-device`
-    /// comes first, as its author plainly meant, while a trailing `later` with
-    /// nothing dated after it stays at the end.
-    ///
-    /// Sorting undated milestones to the end unconditionally, as this once did,
-    /// overrode an ordering the author had already expressed. Found by real use.
-    pub fn milestones_ordered(&self) -> Vec<&Milestone> {
-        // Walking backwards lets each undated milestone inherit the date of the
-        // nearest dated one that follows it.
-        let mut inherited: Vec<Option<&str>> = vec![None; self.milestones.len()];
-        let mut next_dated: Option<&str> = None;
-        for (i, m) in self.milestones.iter().enumerate().rev() {
-            if let Some(d) = m.due.as_deref() {
-                next_dated = Some(d);
-            }
-            inherited[i] = m.due.as_deref().or(next_dated);
-        }
-
-        let mut ordered: Vec<(usize, &Milestone)> = self.milestones.iter().enumerate().collect();
-        // Undated with nothing dated after it sorts last; declaration order
-        // breaks every remaining tie, so the result is stable and explicable.
-        ordered.sort_by_key(|(i, _)| (inherited[*i].is_none(), inherited[*i], *i));
-        ordered.into_iter().map(|(_, m)| m).collect()
     }
 }
 

@@ -221,6 +221,13 @@ items between projects **should** map by category.
 A project records the format version it uses. Version 1 is described by this
 document.
 
+The version covers the on-disk shape of a **project**, not only of an item. A
+project is its configuration and its items (§7), so a change to the shape of the
+configuration alone **may** require a new version and a migration even when no
+key in this document changes meaning. A reader of items alone is unaffected by
+such a change, and **should** say so rather than refusing a project it can in
+fact read.
+
 1. A minor revision **may** add optional keys, and **must not** do anything else.
 2. Removing a key, changing what a key means, or making an optional key required
    requires a new version number and a migration path.

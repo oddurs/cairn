@@ -68,7 +68,7 @@ pub fn run(args: Args) -> Result<i32> {
     let store = Store::new(&cfg);
     let all = store.load_for_reading()?;
     let ctx = Ctx::new(&cfg, &all);
-    let item = store.find(cfg.parse_id(&args.id)?)?;
+    let item = store.find_ref(&args.id)?;
 
     if args.path {
         println!("{}", item.path.display());
@@ -99,11 +99,13 @@ pub fn run(args: Args) -> Result<i32> {
         rows.push(("type", paint_type(&cfg, item.kind())));
     }
     if let Some(m) = item.milestone() {
-        let label = match cfg.milestone(m) {
-            Some(def) => match &def.due {
+        let label = match ctx.milestones.get(m) {
+            Some(ms) => match crate::refs::due(ms) {
                 Some(due) => format!("{m}  {}", style::dim(&format!("due {due}"))),
                 None => m.to_string(),
             },
+            // A milestone nothing answers to: `check` reports it, and the
+            // colour is so it is visible here too.
             None => style::red(m),
         };
         rows.push(("milestone", label));
@@ -174,7 +176,7 @@ pub fn run(args: Args) -> Result<i32> {
 pub fn edit(args: EditArgs) -> Result<i32> {
     let cfg = Config::discover()?;
     let store = Store::new(&cfg);
-    let item = store.find(cfg.parse_id(&args.id)?)?;
+    let item = store.find_ref(&args.id)?;
     launch_editor(&item.path)?;
     // The lock is taken after the editor exits, not around it: an editing
     // session can last minutes, and blocking every other writer for that long —
@@ -194,7 +196,7 @@ pub fn remove(args: RemoveArgs) -> Result<i32> {
     let store = Store::new(&cfg);
     let mut targets = Vec::new();
     for raw in &args.ids {
-        targets.push(store.find(cfg.parse_id(raw)?)?);
+        targets.push(store.find_ref(raw)?);
     }
 
     // Deleting an item that others depend on would leave references pointing at

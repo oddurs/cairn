@@ -122,8 +122,40 @@ pub fn run(args: Args) -> Result<i32> {
     println!("{} {}", style::green("created"), style::bold(CONFIG_FILE));
     println!("{} {}/", style::green("created"), args.dir);
 
+    // A milestone is an item now, so a project that wants a roadmap needs some.
+    // `--bare` gets none, for the same reason it gets no example item: it asked
+    // for the schema and nothing else.
     if !args.bare {
-        let path = write_example(&cfg, &items_dir)?;
+        for (n, (key, title, due, why)) in [
+            (
+                "v0.1",
+                "First usable version",
+                Some("2026-12-01"),
+                "Enough to dogfood in a real project.",
+            ),
+            (
+                "v1.0",
+                "Stable release",
+                Some("2027-03-01"),
+                "Documented, tested, and safe to depend on.",
+            ),
+            ("later", "Someday", None, "Good ideas without a date yet."),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let path = write_milestone(&cfg, &items_dir, n as u32 + 1, key, title, due, why)?;
+            println!(
+                "{} {}",
+                style::green("created"),
+                path.strip_prefix(&cwd).unwrap_or(&path).display()
+            );
+        }
+    }
+
+    if !args.bare {
+        // After the milestones, and pointing at the first of them.
+        let path = write_example(&cfg, &items_dir, 4, Some("v0.1"))?;
         println!(
             "{} {}",
             style::green("created"),
@@ -153,27 +185,27 @@ pub fn run(args: Args) -> Result<i32> {
     Ok(0)
 }
 
-fn write_example(cfg: &Config, dir: &Path) -> Result<PathBuf> {
+fn write_example(cfg: &Config, dir: &Path, id: u32, milestone: Option<&str>) -> Result<PathBuf> {
     let today = store::today();
     let kind = cfg
         .project
         .default_type
         .clone()
         .or_else(|| cfg.types.first().map(|t| t.name.clone()));
-    let mut front = String::from("---\nid: 1\ntitle: Adopt cairn for the roadmap\n");
+    let mut front = format!("---\nid: {id}\ntitle: Adopt cairn for the roadmap\n");
     if let Some(k) = kind {
         front.push_str(&format!("type: {k}\n"));
     }
     front.push_str(&format!("status: {}\n", cfg.initial_status()));
-    if let Some(m) = cfg.milestones.first() {
-        front.push_str(&format!("milestone: {}\n", m.name));
+    if let Some(m) = milestone {
+        front.push_str(&format!("milestone: {m}\n"));
     }
     front.push_str(&format!("created: {today}\nupdated: {today}\n---\n"));
     front.push_str(EXAMPLE_BODY);
 
     let path = dir.join(format!(
         "{}-adopt-cairn-for-the-roadmap.md",
-        cfg.format_id(1)
+        cfg.format_id(id)
     ));
     crate::store::write_atomic(&path, front.as_bytes())?;
     Ok(path)
@@ -212,7 +244,7 @@ const STANDARD: &str = r####"# cairn.toml — the schema for this project's road
 
 # On-disk format version. cairn refuses to open a project written in a format it
 # does not know, rather than misreading it. See "Compatibility" in the manual.
-format = 1
+format = 2
 
 [project]
 name = "{{name}}"
@@ -313,6 +345,26 @@ board = false             # hide this column on `cairn board`
 #
 # Nothing requires it. `cairn new` still takes only a title, and structure is
 # added afterwards: `cairn set 12 part_of=7`.
+[[type]]
+name = "milestone"
+description = "a release, or whatever this project ships"
+
+# A milestone is an item, so `milestone: v0.1` names one by its key. The key is
+# a handle rather than an identity: `id` is still the number.
+[[field]]
+name = "milestone"
+kind = "ref"
+target = "milestone"
+by = "key"
+rollup = true
+inverse = "scheduled"
+description = "what this ships in"
+
+[[field]]
+name = "due"
+kind = "date"
+description = "when a milestone is meant to land"
+
 [[field]]
 name = "part_of"
 kind = "ref"
@@ -346,23 +398,6 @@ description = "Subsystem this touches"
 
 # ─── Milestones ──────────────────────────────────────────────────────────────
 # Sections of the rendered roadmap, in due-date order.
-
-[[milestone]]
-name = "v0.1"
-title = "First usable version"
-due = "2026-12-01"
-description = "Enough to dogfood in a real project."
-
-[[milestone]]
-name = "v1.0"
-title = "Stable release"
-due = "2027-03-01"
-description = "Documented, tested, and safe to depend on."
-
-[[milestone]]
-name = "later"
-title = "Someday"
-description = "Good ideas without a date yet."
 
 # ─── Saved views ─────────────────────────────────────────────────────────────
 # `cairn list --view next`, `cairn board --view triage`
@@ -435,7 +470,7 @@ const MINIMAL: &str = r####"# cairn.toml — roadmap and issue schema.
 # Start here and add types, fields, milestones and views as you need them.
 # See `cairn init --preset standard` for a fully commented example.
 
-format = 1
+format = 2
 
 [project]
 name = "{{name}}"
@@ -455,7 +490,63 @@ name = "done"
 category = "done"
 color = "green"
 
+# A milestone is an item, and `milestone: v0.1` names one by its key.
+[[type]]
+name = "milestone"
+
+[[field]]
+name = "milestone"
+kind = "ref"
+target = "milestone"
+by = "key"
+rollup = true
+
+[[field]]
+name = "due"
+kind = "date"
+
 [render]
 target = "ROADMAP.md"
 group_by = "milestone"
 "####;
+
+/// Write one of the milestones a new project starts with.
+///
+/// They are ordinary items — the type and the reference are declared in the
+/// configuration like anything else — and they depend on each other in
+/// sequence, because a roadmap is a sequence and that is now how the order is
+/// expressed rather than by the order of blocks in a file.
+#[allow(clippy::too_many_arguments)]
+fn write_milestone(
+    cfg: &Config,
+    items_dir: &std::path::Path,
+    id: u32,
+    key: &str,
+    title: &str,
+    due: Option<&str>,
+    body: &str,
+) -> Result<std::path::PathBuf> {
+    let path = items_dir.join(cfg.filename_for(id, title));
+    let mut item = crate::item::Item {
+        id,
+        meta: Default::default(),
+        body: String::new(),
+        path: path.clone(),
+        front: String::new(),
+        eol: Default::default(),
+    };
+    item.meta.title = Some(title.to_string());
+    item.meta.key = Some(key.to_string());
+    item.meta.kind = Some(crate::refs::MILESTONE_TYPE.to_string());
+    item.meta.status = Some(cfg.initial_status().to_string());
+    item.meta.created = Some(crate::store::today());
+    if id > 1 {
+        item.meta.depends_on = vec![id - 1];
+    }
+    if let Some(d) = due {
+        item.set_extra("due", Some(crate::item::Field::Text(d.to_string())));
+    }
+    item.set_body(body);
+    item.save()?;
+    Ok(path)
+}

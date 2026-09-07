@@ -91,7 +91,7 @@ pub struct Args {
 pub fn run(args: Args) -> Result<i32> {
     let cfg = Config::discover()?;
     let store = Store::new(&cfg);
-    let mut items = store.load_for_reading()?;
+    let items = store.load_for_reading()?;
 
     let view = match &args.view {
         Some(name) => match cfg.view(name) {
@@ -117,15 +117,32 @@ pub fn run(args: Args) -> Result<i32> {
         .clauses
         .iter()
         .any(|c| matches!(c.key.as_str(), "status" | "category"));
+    // The same rule closed items follow: hidden by default, never when the
+    // caller has said something about the axis themselves. A container — a
+    // milestone, an area — is what work belongs to rather than work, and
+    // listing them among the work is noise nobody asked for.
+    let mentions_type = filter.clauses.iter().any(|c| c.key == "type");
 
     // Built from the full set before filtering, so `blocked` still reflects
-    // dependencies the filter itself excluded.
-    let ctx = Ctx::new(&cfg, &items);
-    items.retain(|i| filter.matches(i, &ctx));
+    // dependencies the filter itself excluded — and so milestones, which are
+    // items, are found whether or not the filter would have kept them.
+    let all = items;
+    let ctx = Ctx::new(&cfg, &all);
+    let mut items: Vec<Item> = all
+        .iter()
+        .filter(|i| filter.matches(i, &ctx))
+        .cloned()
+        .collect();
     // Closed items are hidden by default, but never when the caller has said
     // something about status themselves.
     if !args.all && !mentions_status {
         items.retain(|i| !cfg.category(i.status()).is_closed());
+    }
+    // `--all` means all: closed work and containers alike. Without it, naming
+    // a type is how you ask for them, which is the same rule closed items
+    // follow for status.
+    if !args.all && !mentions_type {
+        items.retain(|i| !cfg.is_container(i.kind()));
     }
 
     let sort = args
@@ -223,7 +240,9 @@ fn resolve_columns(args: &Args, view: Option<&crate::config::View>, cfg: &Config
     if !cfg.types.is_empty() {
         cols.push("type".into());
     }
-    if !cfg.milestones.is_empty() {
+    // The column is offered when the project has the field at all; empty ones
+    // are dropped once the rows are known.
+    if cfg.field(crate::refs::MILESTONE_FIELD).is_some() {
         cols.push("milestone".into());
     }
     for f in cfg.fields.iter().filter(|f| f.column) {

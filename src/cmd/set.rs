@@ -260,7 +260,7 @@ fn transition(cfg: &Config, ids: &[String], status: &str, quiet: bool, verb: &st
     // it is released, so a hook that calls cairn cannot deadlock against us.
     let mut changed = Vec::new();
     for raw in ids {
-        let mut item = store.find(cfg.parse_id(raw)?)?;
+        let mut item = store.find_ref(raw)?;
         apply_requested(&mut item, cfg, "status", Assign::Set(status.to_string()))?;
         item.touch(&today());
         item.save()?;
@@ -407,27 +407,13 @@ pub fn apply(item: &mut Item, cfg: &Config, key: &str, assign: Assign) -> Result
             }
             _ => bail!("`status` is not a list field; use status=..."),
         },
+        // Validated by the generic ref check rather than here: whether a
+        // milestone exists is a question about the backlog, and this function
+        // sees only the schema. `depends_on` has the same arrangement.
         "milestone" => match assign {
-            Assign::Set(v) if v.is_empty() => item.meta.milestone = None,
-            Assign::Set(v) => {
-                if cfg.milestone(&v).is_none() {
-                    bail!(
-                        "{}\nadd it with: cairn milestone add {v}",
-                        unknown(
-                            "milestone",
-                            &v,
-                            cfg.milestones.iter().map(|m| m.name.as_str())
-                        )
-                    );
-                }
-                item.meta.milestone = Some(v);
-            }
+            Assign::Set(v) if v.trim().is_empty() => item.meta.milestone = None,
+            Assign::Set(v) => item.meta.milestone = Some(v.trim().to_string()),
             _ => bail!("`milestone` is not a list field; use milestone=..."),
-        },
-        "source" => match assign {
-            Assign::Set(v) if v.is_empty() => item.meta.source = None,
-            Assign::Set(v) => item.meta.source = Some(v),
-            _ => bail!("`source` is not a list field; use source=..."),
         },
         "assignee" => match assign {
             Assign::Set(v) if v.is_empty() => item.meta.assignee = None,

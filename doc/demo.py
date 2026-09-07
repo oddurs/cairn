@@ -24,15 +24,17 @@ import tempfile
 # features.
 SETUP = [
     "cairn init --name Nimbus --bare",
-    "cairn milestone add v0.2 --title Hardening --due 2027-02-01",
+    # A milestone is an item in format 2, and the roadmap needs two to be about.
+    "cairn new 'First usable version' -t milestone --set key=v0.1 --set due=2026-12-01 -q",
+    "cairn new 'Hardening' -t milestone --set key=v0.2 --set due=2027-02-01 -q",
 ]
 
 SCRIPT = [
     "cairn new 'Support OAuth login' -t feature -m v0.1 --set priority=p0",
-    "cairn new 'Rate-limit the public API' -t feature -m v0.2 --set priority=p1 -d 1",
+    "cairn new 'Rate-limit the public API' -t feature -m v0.2 --set priority=p1 -d 3",
     "cairn next",
     "cairn claim --next",
-    "cairn close 1",
+    "cairn close 3",
     "cairn next",
     "cairn board",
     # Ends on the roadmap rather than `render`, which the hooks have already

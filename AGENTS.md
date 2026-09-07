@@ -32,12 +32,14 @@ cairn render                      # regenerate ROADMAP.md
 
 ### Schema
 
-- **Types**: `feature`, `bug`, `chore`, `docs`
+- **Types**: `feature`, `bug`, `chore`, `docs`, `milestone`
 - **Statuses**: `backlog` (open), `planned` (open), `doing` (active), `blocked` (active), `done` (done), `dropped` (dropped)
 - **`priority`**: one of p0, p1, p2, p3 — p0 is a release blocker
 - **`effort`**: one of s, m, l, xl — Rough size, not an estimate
 - **`sprint`**: one of s1, s2, s3, s4, s5, s6, s7, s8 — Durability sprint; see ROADMAP.md
 - **`area`**: free text — Subsystem this touches
+- **`due`**: date, YYYY-MM-DD — when a milestone is meant to land
+- **`milestone`**: names a `milestone` item, by key — what this ships in
 - **Milestones**: `v0.1` (due 2026-10-15), `v0.2` (due 2026-12-01), `v1.0` (due 2027-03-01), `later`
 - **Saved views** (`cairn list --view NAME`): `now`, `next`, `sprint`, `triage`
 

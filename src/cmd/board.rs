@@ -85,8 +85,15 @@ pub fn run(args: Args) -> Result<i32> {
     if let Some(m) = &args.milestone {
         filter.push("milestone", crate::filter::Op::Eq, vec![m.clone()]);
     }
-    let ctx = Ctx::new(&cfg, &items);
-    items.retain(|i| filter.matches(i, &ctx));
+    // The full set builds the context; milestones live in it and must be found
+    // whether or not the filter would have kept them.
+    let all = items;
+    let ctx = Ctx::new(&cfg, &all);
+    let mut items: Vec<Item> = all
+        .iter()
+        .filter(|i| filter.matches(i, &ctx))
+        .cloned()
+        .collect();
     sort_items(&mut items, "milestone,id", &ctx);
 
     let columns = column_values(&ctx, &items, &group_by, args.all);
@@ -329,11 +336,7 @@ fn column_values(ctx: &Ctx, items: &[Item], key: &str, all: bool) -> Vec<String>
             .collect();
     }
     if key == "milestone" {
-        let mut names: Vec<String> = cfg
-            .milestones_ordered()
-            .iter()
-            .map(|m| m.name.clone())
-            .collect();
+        let mut names: Vec<String> = ctx.milestones.keys();
         if items.iter().any(|i| i.milestone().is_none()) {
             names.push(String::new());
         }

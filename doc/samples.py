@@ -77,13 +77,16 @@ def main():
     # A project with enough shape to be worth looking at.
     setup = [
         'cairn init --name Nimbus --bare',
-        'cairn milestone add v0.2 --title Hardening --due 2027-02-01',
+        # Milestones are items in format 2, and come first so the roadmap has
+        # something to be about.
+        'cairn new "First usable version" -t milestone --set key=v0.1 --set due=2026-12-01 -q',
+        'cairn new "Hardening" -t milestone --set key=v0.2 --set due=2027-02-01 -q',
         'cairn new "Support OAuth login" -t feature -m v0.1 --set priority=p0 -q',
         'cairn new "Rate-limit the public API" -t feature -m v0.2 --set priority=p1 -d 1 -q',
         'cairn new "Board shears on narrow terminals" -t bug -m v0.1 --set priority=p1 -q',
         'cairn new "Document the export format" -t docs -m v0.2 --set priority=p2 -q',
-        'cairn set 1 status=doing -q',
-        'cairn set 3 status=planned -q',
+        'cairn set 3 status=doing -q',
+        'cairn set 5 status=planned -q',
     ]
     for line in setup:
         run(line)
@@ -96,10 +99,10 @@ def main():
     }
 
     # The file an item actually is, straight off disk.
-    item = os.path.join(work, "cairn", "items", "0001-support-oauth-login.md")
+    item = os.path.join(work, "cairn", "items", "0003-support-oauth-login.md")
     with open(item, encoding="utf-8") as f:
         samples["item"] = {
-            "path": "cairn/items/0001-support-oauth-login.md",
+            "path": "cairn/items/0003-support-oauth-login.md",
             "html": esc(f.read().rstrip("\n")),
         }
 
@@ -108,13 +111,13 @@ def main():
     request = json.dumps({
         "jsonrpc": "2.0", "id": 1, "method": "tools/call",
         "params": {"name": "update_item",
-                   "arguments": {"id": 1, "fields": {"status": "in progress"}}},
+                   "arguments": {"id": 3, "fields": {"status": "in progress"}}},
     })
     proc = subprocess.run([cairn, "mcp"], input=request + "\n", cwd=work,
                           env=env, capture_output=True, text=True)
     reply = json.loads(proc.stdout.strip().splitlines()[-1])
     detail = reply["result"]["content"][0]["text"]
-    call = 'update_item {"id": 1, "fields": {"status": "in progress"}}'
+    call = 'update_item {"id": 3, "fields": {"status": "in progress"}}'
     samples["mcp"] = {
         "cmd": "cairn mcp",
         "html": (

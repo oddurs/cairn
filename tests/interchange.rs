@@ -242,6 +242,10 @@ fn a_backlog_survives_leaving_and_coming_back() {
 
     let mut rng = Rng(seed);
     let source = Project::new("Source");
+    // A milestone is an item in format 2, so one has to exist before anything
+    // can be scheduled against it — and it round-trips like any other item.
+    let m = source.expect(&["new", "-q", "--", "First release"]);
+    source.expect(&["set", m.trim(), "type=milestone", "key=v0.1"]);
 
     let mut created: Vec<u32> = Vec::new();
     for n in 0..count {

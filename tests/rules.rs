@@ -227,13 +227,11 @@ fn commands_that_exist_only_to_be_tested_are_hidden() {
         .map(|(n, _)| n)
         .collect();
 
-    for expected in ["MergeDriver", "Migrate"] {
-        assert!(
-            hidden.contains(&expected.to_string()),
-            "`{expected}` should be hidden from --help: see the second rule in \
-             CONTRIBUTING.md"
-        );
-    }
+    assert!(
+        hidden.contains(&"MergeDriver".to_string()),
+        "`merge-driver` is called by git rather than by people, so it should be \
+         hidden from --help: see the second rule in CONTRIBUTING.md"
+    );
 
     let config = repo("src/config.rs");
     let current: u32 = config
@@ -242,12 +240,19 @@ fn commands_that_exist_only_to_be_tested_are_hidden() {
         .and_then(|v| v.trim_end_matches(';').parse().ok())
         .expect("CURRENT_FORMAT in src/config.rs");
 
-    assert_eq!(
-        current, 1,
-        "CURRENT_FORMAT is now {current}, so a project can genuinely be behind \
-         and `cairn migrate` is a command people need to find. Remove the \
-         `#[command(hide = true)]` from Migrate in src/main.rs, and this \
-         assertion with it."
+    // Migrate was hidden while format 1 was the only format there had ever
+    // been, because nobody could need it. This assertion is what said to
+    // unhide it, and it now guards the other direction: a command people need
+    // to find must stay findable.
+    assert!(
+        current > 1,
+        "CURRENT_FORMAT is {current}; if it has gone back to 1 then nothing can \
+         be behind, and `migrate` should be hidden again"
+    );
+    assert!(
+        !hidden.contains(&"Migrate".to_string()),
+        "a project can be behind the format, so `migrate` is a command people \
+         need to find in --help"
     );
 }
 

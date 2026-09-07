@@ -63,7 +63,7 @@ pub fn document(cfg: &Config, store: &Store, items: &[Item], today: &str) -> Val
         },
         // The schema travels with the items so a consumer can interpret status
         // and field names it has never seen.
-        "schema": crate::cmd::misc::schema_json(cfg),
+        "schema": crate::cmd::misc::schema_json(cfg, &crate::refs::Milestones::new(cfg, items)),
         "items": entries,
     })
 }
@@ -76,6 +76,12 @@ pub struct Incoming {
     pub id: Option<u32>,
     #[serde(default)]
     pub title: Option<String>,
+    /// The handle a key-addressed reference names. Without it a milestone
+    /// arrives keyless and every `milestone: v0.1` in the same document
+    /// resolves to nothing — silently, because a reference that names nothing
+    /// is simply dropped.
+    #[serde(default)]
+    pub key: Option<String>,
     #[serde(default, rename = "type")]
     pub kind: Option<String>,
     #[serde(default)]

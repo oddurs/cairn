@@ -34,13 +34,16 @@ pub struct Ctx<'a> {
     /// a fact about the whole set, and computing it per comparison would turn a
     /// filter into a graph walk for every item it looks at.
     contains: HashMap<u32, Vec<u32>>,
+    /// The project's milestones, which are items. Here for the same reason
+    /// dependency state is: it is a property of the whole set.
+    pub milestones: crate::refs::Milestones<'a>,
     /// Everything beneath an item at any depth, and how much of it is finished.
     beneath: HashMap<u32, (usize, usize)>,
     depth: HashMap<u32, usize>,
 }
 
 impl<'a> Ctx<'a> {
-    pub fn new(cfg: &'a Config, items: &[Item]) -> Ctx<'a> {
+    pub fn new(cfg: &'a Config, items: &'a [Item]) -> Ctx<'a> {
         let mut closed = HashSet::new();
         let mut known = HashSet::new();
         for i in items {
@@ -82,6 +85,7 @@ impl<'a> Ctx<'a> {
             closed,
             known,
             contains,
+            milestones: crate::refs::Milestones::new(cfg, items),
             beneath,
             depth,
         }
@@ -363,7 +367,7 @@ fn compare_by_key(a: &Item, b: &Item, key: &str, ctx: &Ctx) -> Ordering {
         "status" => cfg
             .status_index(a.status())
             .cmp(&cfg.status_index(b.status())),
-        "milestone" => milestone_rank(cfg, a.milestone()).cmp(&milestone_rank(cfg, b.milestone())),
+        "milestone" => milestone_rank(ctx, a.milestone()).cmp(&milestone_rank(ctx, b.milestone())),
         _ => {
             let (x, y) = (resolve(a, ctx, key), resolve(b, ctx, key));
             // Empty values sort last regardless of direction of the rest.
@@ -391,14 +395,17 @@ fn compare_by_key(a: &Item, b: &Item, key: &str, ctx: &Ctx) -> Ordering {
     }
 }
 
-/// Milestones sort in due-date order; items with no milestone go last.
-pub fn milestone_rank(cfg: &Config, name: Option<&str>) -> usize {
+/// Milestones sort in roadmap order; items with no milestone go last.
+pub fn milestone_rank(ctx: &Ctx, name: Option<&str>) -> usize {
     match name {
         None | Some("") => usize::MAX,
-        Some(n) => cfg
-            .milestones_ordered()
+        Some(n) => ctx
+            .milestones
             .iter()
-            .position(|m| m.name == n)
+            .position(|m| m.key().is_some_and(|k| k.eq_ignore_ascii_case(n)))
+            // A name no milestone answers to sorts before "unscheduled" but
+            // after everything real, so a typo is visible rather than hidden
+            // among the unplanned.
             .unwrap_or(usize::MAX - 1),
     }
 }

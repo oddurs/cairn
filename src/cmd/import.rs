@@ -138,6 +138,20 @@ pub fn run(args: Args) -> Result<i32> {
     // dependency was silently dropped.
     let mut written: Vec<(usize, Item)> = Vec::new();
     let mut new_milestones: HashSet<String> = HashSet::new();
+    // Milestones are items, so what exists is read from the backlog — plus
+    // whatever this document is about to bring. A document that carries both a
+    // milestone and the work scheduled against it must not lose the reference
+    // just because the items arrive in an unhelpful order.
+    let milestones = crate::refs::Milestones::new(&cfg, &existing);
+    let arriving: HashSet<String> = incoming
+        .iter()
+        .filter_map(|i| i.key.clone())
+        .map(|k| k.trim().to_lowercase())
+        .filter(|k| !k.is_empty())
+        .collect();
+    let known = |name: &str| {
+        milestones.get(name).is_some() || arriving.contains(&name.trim().to_lowercase())
+    };
 
     for (index, inc) in incoming.iter().enumerate() {
         let title = inc
@@ -162,7 +176,17 @@ pub fn run(args: Args) -> Result<i32> {
                 continue;
             }
             let mut item = store.find(*local)?;
-            apply_fields(&mut item, &cfg, inc, &map, &args, &mut warnings, &title)?;
+            apply_fields(
+                &mut item,
+                &cfg,
+                inc,
+                &map,
+                &args,
+                &mut warnings,
+                &title,
+                &milestones,
+                &arriving,
+            )?;
             item.meta.updated = inc.updated.clone().or_else(|| Some(today()));
             if !args.dry_run {
                 item.save()?;
@@ -200,11 +224,21 @@ pub fn run(args: Args) -> Result<i32> {
         // today's date would make "recently updated" meaningless.
         item.meta.updated = inc.updated.clone().or_else(|| Some(today()));
         item.meta.source = source;
-        apply_fields(&mut item, &cfg, inc, &map, &args, &mut warnings, &title)?;
+        apply_fields(
+            &mut item,
+            &cfg,
+            inc,
+            &map,
+            &args,
+            &mut warnings,
+            &title,
+            &milestones,
+            &arriving,
+        )?;
 
         if args.create_milestones
             && let Some(m) = &item.meta.milestone
-            && cfg.milestone(m).is_none()
+            && !known(m)
         {
             new_milestones.insert(m.clone());
         }
@@ -248,13 +282,24 @@ pub fn run(args: Args) -> Result<i32> {
         return Ok(0);
     }
 
-    if !new_milestones.is_empty() {
-        let mut names: Vec<&String> = new_milestones.iter().collect();
-        names.sort();
-        crate::cmd::milestone::add_many(&cfg, &names)?;
-    }
     for (_, item) in &written {
         item.save()?;
+    }
+    // After the items, not before, and re-checked against what is now on disk.
+    // A milestone is an item, so the document may well have carried it — and
+    // creating a second one with the same key would make every reference to it
+    // ambiguous.
+    if !new_milestones.is_empty() {
+        let now = store.load_all()?;
+        let present = crate::refs::Milestones::new(&cfg, &now);
+        let mut names: Vec<&String> = new_milestones
+            .iter()
+            .filter(|m| present.get(m).is_none())
+            .collect();
+        names.sort();
+        if !names.is_empty() {
+            create_milestones(&cfg, &store, &names)?;
+        }
     }
 
     // Only after every item is safely on disk. Closing an issue that points at
@@ -338,6 +383,7 @@ fn report(warnings: &[String], created: usize, updated: usize, skipped: usize, d
 
 /// Map one incoming item's vocabulary onto this project's, recording anything
 /// that could not be placed rather than silently dropping it.
+#[allow(clippy::too_many_arguments)]
 fn apply_fields(
     item: &mut Item,
     cfg: &Config,
@@ -346,8 +392,11 @@ fn apply_fields(
     args: &Args,
     warnings: &mut Vec<String>,
     title: &str,
+    milestones: &crate::refs::Milestones,
+    arriving: &HashSet<String>,
 ) -> Result<()> {
     item.meta.title = Some(title.to_string());
+    item.meta.key = inc.key.clone().filter(|k| !k.trim().is_empty());
 
     let status = resolve_status(cfg, inc, map, warnings, title);
     apply(item, cfg, "status", Assign::Set(status))?;
@@ -374,7 +423,7 @@ fn apply_fields(
         .and_then(|m| lookup(map, "milestone", m).or(Some(m.clone())))
         .or_else(|| args.milestone.clone());
     if let Some(m) = milestone {
-        if cfg.milestone(&m).is_some() {
+        if milestones.get(&m).is_some() || arriving.contains(&m.trim().to_lowercase()) {
             apply(item, cfg, "milestone", Assign::Set(m))?;
         } else if args.create_milestones {
             // Written straight in: the milestone is created before the save.
@@ -601,4 +650,34 @@ fn which(program: &str) -> Option<std::path::PathBuf> {
             .map(|dir| dir.join(program))
             .find(|p| p.is_file())
     })
+}
+
+/// Create milestone items for names an import brought in.
+///
+/// A milestone is an item, so this is `cairn new -t milestone` with a key —
+/// which is also why there is no longer a `milestone add` command to call.
+fn create_milestones(cfg: &Config, store: &Store, names: &[&String]) -> Result<()> {
+    let mut items = store.load_all()?;
+    for (next, name) in (store.next_id(&items)..).zip(names.iter()) {
+        let mut item = Item {
+            id: next,
+            meta: Default::default(),
+            body: String::new(),
+            path: store.path_for(next, name),
+            front: String::new(),
+            eol: Default::default(),
+        };
+        item.meta.title = Some((*name).clone());
+        item.meta.key = Some((*name).clone());
+        // Only when the project declares it: writing a type nobody declared
+        // would make `check` reject the items this just created.
+        if cfg.item_type(crate::refs::MILESTONE_TYPE).is_some() {
+            item.meta.kind = Some(crate::refs::MILESTONE_TYPE.to_string());
+        }
+        item.meta.status = Some(cfg.initial_status().to_string());
+        item.meta.created = Some(today());
+        item.save()?;
+        items.push(item);
+    }
+    Ok(())
 }
