@@ -200,6 +200,7 @@ impl Item {
         match key {
             "id" => Field::Text(self.id.to_string()),
             "title" => opt(self.meta.title.as_deref()),
+            "key" => opt(self.key()),
             "type" | "kind" => opt(self.meta.kind.as_deref()),
             "status" => opt(self.meta.status.as_deref()),
             "milestone" => opt(self.meta.milestone.as_deref()),

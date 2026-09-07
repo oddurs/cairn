@@ -4720,3 +4720,32 @@ fn merging_the_same_addition_twice_is_stable() {
         "the same value must not appear twice"
     );
 }
+
+/// `key` is a documented frontmatter field, so it is queryable like every other
+/// one. It was not, which meant `--columns key` printed an empty column and
+/// `--filter key=v0.1` matched nothing — silently, because an unknown field is
+/// simply missing rather than an error.
+#[test]
+fn a_key_is_queryable_like_any_other_field() {
+    let p = Project::new();
+    milestone(&p, "v0.9", Some("2027-01-01"));
+    p.add("Work", &[]);
+
+    assert_eq!(
+        p.expect(&["list", "-A", "--ids", "--filter", "key=v0.9"])
+            .lines(),
+        vec!["0001".to_string()],
+    );
+    assert_contains(
+        &p.expect(&["list", "-A", "--plain", "--columns", "id,key"])
+            .stdout,
+        "v0.9",
+        "and shows as a column",
+    );
+    // An item with no key is unset rather than absent, so `key=` finds them.
+    assert_eq!(
+        p.expect(&["list", "-A", "--ids", "--filter", "key="])
+            .lines(),
+        vec!["0002".to_string()],
+    );
+}
