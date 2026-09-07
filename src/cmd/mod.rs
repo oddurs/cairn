@@ -25,7 +25,6 @@ pub mod list;
 pub mod log;
 pub mod mcp;
 pub mod migrate;
-pub mod milestone;
 pub mod misc;
 pub mod new;
 pub mod next;
@@ -140,6 +139,12 @@ pub fn progress(cfg: &Config, items: &[&Item]) -> (usize, usize) {
 /// Zero terms are omitted rather than printed as zeroes — "0 blocked" is not
 /// information, and a summary that is mostly zeroes stops being read.
 pub fn summary(ctx: &crate::filter::Ctx, items: &[&Item]) -> String {
+    // Over work only. A container counted as ready would make the line
+    // disagree with the table above it, which is worse than no line.
+    let items: Vec<&&Item> = items
+        .iter()
+        .filter(|i| !ctx.cfg.is_container(i.kind()))
+        .collect();
     let ready = items.iter().filter(|i| ctx.is_ready(i)).count();
     let active = items
         .iter()

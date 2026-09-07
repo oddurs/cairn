@@ -60,8 +60,19 @@ pub fn config(args: ConfigArgs) -> Result<i32> {
         println!("{}", cfg.root.join(CONFIG_FILE).display());
         return Ok(0);
     }
+    // Milestones are items, so describing the schema now needs the backlog.
+    // Read leniently: a project with one unreadable item should still be able
+    // to say what its schema is.
+    let items = crate::store::Store::new(&cfg)
+        .load_lenient()
+        .map(|(items, _)| items)
+        .unwrap_or_default();
+    let milestones = crate::refs::Milestones::new(&cfg, &items);
     if args.json {
-        println!("{}", serde_json::to_string_pretty(&schema_json(&cfg))?);
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&schema_json(&cfg, &milestones))?
+        );
         return Ok(0);
     }
 
@@ -121,21 +132,16 @@ pub fn config(args: ConfigArgs) -> Result<i32> {
     );
     section(
         "milestones",
-        cfg.milestones_ordered().iter().map(|m| {
+        milestones.iter().map(|m| {
             format!(
                 "{:<12} {}",
-                m.name,
+                m.key().unwrap_or_default(),
                 style::dim(&{
-                    let mut bits: Vec<String> = Vec::new();
-                    if let Some(t) = &m.title {
-                        bits.push(t.clone());
-                    }
-                    if let Some(d) = &m.due {
+                    let mut bits: Vec<String> = vec![m.title().to_string()];
+                    if let Some(d) = crate::refs::due(m) {
                         bits.push(format!("due {d}"));
                     }
-                    if let Some(st) = &m.status {
-                        bits.push(format!("[{st}]"));
-                    }
+                    bits.push(format!("[{}]", m.status()));
                     bits.join(" — ")
                 })
             )
@@ -203,7 +209,7 @@ fn describe_field(f: &crate::config::FieldDef) -> String {
     style::dim(&kind)
 }
 
-pub fn schema_json(cfg: &Config) -> serde_json::Value {
+pub fn schema_json(cfg: &Config, milestones: &crate::refs::Milestones) -> serde_json::Value {
     use serde_json::json;
     json!({
         "project": {
@@ -251,9 +257,14 @@ pub fn schema_json(cfg: &Config) -> serde_json::Value {
                 }
                 v
             }).collect::<Vec<_>>(),
-        "milestones": cfg.milestones_ordered().iter().map(|m| json!({
-            "name": m.name, "title": m.title, "due": m.due,
-            "description": m.description, "status": m.status
+        // A milestone is an item, so this reports what it is rather than a
+        // separate shape: the key it answers to, and where to read the rest.
+        "milestones": milestones.iter().map(|m| json!({
+            "id": m.id,
+            "key": m.key(),
+            "title": m.title(),
+            "due": crate::refs::due(m),
+            "status": m.status(),
         })).collect::<Vec<_>>(),
         "views": cfg.views.iter().map(|v| json!({
             "name": v.name, "description": v.description, "filter": v.filter, "sort": v.sort
@@ -267,7 +278,11 @@ const END: &str = "<!-- cairn:end -->";
 
 pub fn agent(args: AgentArgs) -> Result<i32> {
     let cfg = Config::discover()?;
-    let block = agent_block(&cfg);
+    let items = crate::store::Store::new(&cfg)
+        .load_lenient()
+        .map(|(items, _)| items)
+        .unwrap_or_default();
+    let block = agent_block(&cfg, &crate::refs::Milestones::new(&cfg, &items));
 
     let Some(path) = args.write else {
         print!("{block}");
@@ -306,7 +321,7 @@ pub fn agent(args: AgentArgs) -> Result<i32> {
 
 /// The instructions block. Generated from the live schema so it can never
 /// describe a workflow the project does not actually have.
-fn agent_block(cfg: &Config) -> String {
+fn agent_block(cfg: &Config, milestones: &crate::refs::Milestones) -> String {
     let mut s = String::new();
     s.push_str(BEGIN);
     s.push_str("\n## Roadmap and issues\n\n");
@@ -401,14 +416,14 @@ you tried, what to watch for.\n",
                 .unwrap_or_else(|| restriction.clone()),
         ));
     }
-    if !cfg.milestones.is_empty() {
+    if !milestones.is_empty() {
         s.push_str(&format!(
             "- **Milestones**: {}\n",
-            cfg.milestones_ordered()
+            milestones
                 .iter()
-                .map(|m| match &m.due {
-                    Some(d) => format!("`{}` (due {d})", m.name),
-                    None => format!("`{}`", m.name),
+                .map(|m| match crate::refs::due(m) {
+                    Some(d) => format!("`{}` (due {d})", m.key().unwrap_or_default()),
+                    None => format!("`{}`", m.key().unwrap_or_default()),
                 })
                 .collect::<Vec<_>>()
                 .join(", ")

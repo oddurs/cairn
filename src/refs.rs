@@ -18,6 +18,7 @@
 use crate::config::{Addressing, Cardinality, Config, FieldDef, FieldKind};
 use crate::item::{Field, Item};
 use anyhow::{Result, bail};
+use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 
 /// The values a ref field holds on an item, as written.
@@ -400,4 +401,131 @@ pub fn permitted_for_agent(cfg: &Config, field: &str, value: Option<&str>) -> Re
         }
     }
     Ok(())
+}
+
+// --- milestones, which are items -------------------------------------------
+
+/// The type name a milestone item carries, and the field that names one.
+///
+/// Both are ordinary schema, declared in `cairn.toml` like anything else. These
+/// constants are what `init` scaffolds and what `migrate` writes, not a
+/// hardcoded meaning: a project may rename either, and everything below works
+/// from the declaration rather than from the name.
+pub const MILESTONE_TYPE: &str = "milestone";
+pub const MILESTONE_FIELD: &str = "milestone";
+
+/// The milestones of a project, in the order a reader should meet them.
+pub struct Milestones<'a> {
+    ordered: Vec<&'a Item>,
+}
+
+impl<'a> Milestones<'a> {
+    /// Gather and order the milestone items.
+    ///
+    /// A roadmap is a sequence, and milestones can depend on one another, so
+    /// the order is that graph first: anything a milestone depends on comes
+    /// before it. `due` breaks what the graph leaves free, and the identifier
+    /// breaks what remains.
+    ///
+    /// This replaces a rule that walked the configuration backwards so an
+    /// undated milestone could inherit the date of the next dated one. That
+    /// existed only because milestones had no natural order. Items have one.
+    pub fn new(cfg: &Config, items: &'a [Item]) -> Milestones<'a> {
+        let Some(def) = cfg.field(MILESTONE_FIELD) else {
+            return Milestones {
+                ordered: Vec::new(),
+            };
+        };
+        let target = def.target.as_deref().unwrap_or(MILESTONE_TYPE);
+        let mut found: Vec<&Item> = items.iter().filter(|i| i.kind() == Some(target)).collect();
+
+        // Depth in the dependency graph, so a milestone sorts after everything
+        // it waits on however the dates read.
+        let by_id: HashMap<u32, &Item> = found.iter().map(|i| (i.id, *i)).collect();
+        let mut rank: HashMap<u32, usize> = HashMap::new();
+        for m in &found {
+            let mut seen = HashSet::from([m.id]);
+            let mut frontier: Vec<u32> = m.meta.depends_on.clone();
+            let mut depth = 0usize;
+            while !frontier.is_empty() {
+                let mut next = Vec::new();
+                for id in frontier {
+                    if !seen.insert(id) {
+                        continue;
+                    }
+                    if let Some(dep) = by_id.get(&id) {
+                        next.extend(dep.meta.depends_on.iter().copied());
+                    }
+                }
+                if next.is_empty() {
+                    break;
+                }
+                depth += 1;
+                frontier = next;
+            }
+            // A milestone with dependencies sorts after one without, even when
+            // the chain is a single step.
+            rank.insert(
+                m.id,
+                if m.meta.depends_on.is_empty() {
+                    0
+                } else {
+                    depth + 1
+                },
+            );
+        }
+
+        found.sort_by(|a, b| {
+            rank.get(&a.id)
+                .cmp(&rank.get(&b.id))
+                // Undated sorts last among equals: a milestone with no date is
+                // the one nobody has committed to.
+                .then_with(|| match (due(a), due(b)) {
+                    (Some(x), Some(y)) => x.cmp(y),
+                    (Some(_), None) => Ordering::Less,
+                    (None, Some(_)) => Ordering::Greater,
+                    (None, None) => Ordering::Equal,
+                })
+                .then_with(|| a.id.cmp(&b.id))
+        });
+        Milestones { ordered: found }
+    }
+
+    /// The milestone a value names, if any.
+    pub fn get(&self, key: &str) -> Option<&'a Item> {
+        self.ordered
+            .iter()
+            .copied()
+            .find(|m| m.key().is_some_and(|k| k.eq_ignore_ascii_case(key.trim())))
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &&'a Item> {
+        self.ordered.iter()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.ordered.is_empty()
+    }
+
+    /// The keys, in order, for a diagnostic that lists what would have worked.
+    pub fn keys(&self) -> Vec<String> {
+        self.ordered
+            .iter()
+            .filter_map(|m| m.key().map(str::to_string))
+            .collect()
+    }
+}
+
+/// A milestone item's due date, if it has one.
+///
+/// An ordinary custom field. Nothing about a date is special to cairn; it is
+/// declared in the schema like `priority`, and read here because the roadmap
+/// wants to sort by it.
+pub fn due(item: &Item) -> Option<&str> {
+    item.meta
+        .extra
+        .get(serde_yaml_ng::Value::String("due".into()))
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
 }

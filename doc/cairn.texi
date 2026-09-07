@@ -570,9 +570,13 @@ misreading data is worse than declining to read it.
 non-zero if a migration is due, which is what belongs in continuous
 integration.
 
-There is at present nothing to migrate --- format 1 is the only format there has
-been --- and the command exists anyway, and is tested, because a migration path
-first attempted when it is needed is a migration path nobody has tried.
+Format 2 moved milestones out of the configuration and into items. No item file
+changed, and the migration touches @file{cairn.toml} and writes the new
+milestone items, and is described under @ref{Compatibility}.
+
+The command was exercised on every run for as long as there was nothing to
+migrate, so that a path first attempted when it is needed was not a path nobody
+had tried. That turned out to be worth doing.
 
 @section What is guaranteed by test
 
@@ -1039,6 +1043,94 @@ footer = "doc/roadmap-outro.md"
 @code{assignee} or by a custom @code{area} field produces a different document
 from the same items. @code{header} and @code{footer} name Markdown files
 spliced above and below the generated body.
+
+@section Milestones
+
+@cindex milestones
+A milestone is an item.
+
+@example
+---
+id: 42
+key: v0.1
+title: Usable in anger
+type: milestone
+due: 2026-10-15
+status: doing
+---
+
+October because the conference is in November, and this is the thing
+worth showing there.
+@end example
+
+@noindent
+And @code{milestone: v0.1} in an item's frontmatter names it by key, exactly as
+it always did.
+
+@subsection Why it changed
+
+@cindex format 2
+Until format 2 a milestone was a block in @file{cairn.toml}, and everything it
+could not do followed from that. It had no body, so the reason for a date had
+nowhere to live --- in a tool whose argument is that items carry the thinking
+that produced them. It had no history, so @command{cairn log v0.1}, the most
+interesting question anybody asks about a milestone, had no answer. It could not
+be assigned, searched, depended upon, or closed with criteria.
+
+It also needed a rule of its own, which walked the list backwards so that an
+undated milestone could inherit the date of the next dated one. That code
+existed only because milestones had no natural order. Items have one.
+
+@subsection What it is not
+
+@cindex part_of
+It is deliberately @emph{not} composition. @code{milestone} is single-valued and
+@code{part_of} is many-valued, because an item belongs to several larger efforts
+and ships in exactly one release. Collapsing them would not remove a redundant
+concept; it would discard the constraint that makes a milestone mean anything.
+
+@subsection Order
+
+A roadmap is a sequence, and milestones are items, so they can depend on one
+another. The order is that graph first --- anything a milestone waits on comes
+before it --- with @code{due} breaking what the graph leaves free and the
+identifier breaking what remains. @command{cairn init} wires the scaffolded ones
+in sequence, so nobody has to think about it.
+
+This works because a container never appears in @command{cairn next}
+(@pxref{Fields that name items}). Without that, milestones depending on each
+other would read as blocked work and crowd out the real thing.
+
+@subsection Where they show up
+
+Milestones are containers, so they are absent from @command{cairn next}, the
+board, the roadmap's item lists, and an ordinary @command{cairn list}. They
+appear when you ask: @command{cairn list -t milestone}, or @option{--all},
+which means all.
+
+@subsection Migrating
+
+@cindex cairn migrate
+@example
+cairn migrate --dry-run
+cairn migrate
+@end example
+
+@noindent
+No item file changes. @code{milestone: v0.1} means what it meant, which is the
+whole reason a reference is addressed by key rather than by identifier: the
+migration touches @file{cairn.toml} and writes the new milestone items, and
+nothing else moves.
+
+Each @code{[[milestone]]} block becomes an item --- its @code{title} the title,
+its @code{description} the body, its @code{due} a field --- and they are wired
+into a dependency chain in the order they were declared, which is what replaces
+the inheritance rule.
+
+@command{cairn milestone} is gone with it. Adding one is
+@command{cairn new -t milestone}, listing them is
+@command{cairn list -t milestone}, and by the bar in the command review neither
+made a real task harder to do without the command.
 
 @node Filters
 @chapter Filters
@@ -2404,11 +2496,6 @@ warnings fatal; @option{--render} additionally verifies the roadmap file.
 
 @section cairn renumber
 Repairs duplicate ids. @xref{Identifiers}.
-
-@section cairn milestone
-@code{list}, @code{add}, @code{set} and @code{remove} operate on the
-@code{[[milestone]]} blocks in @file{cairn.toml}. Removing a milestone that
-items still reference requires @option{--force}.
 
 @section cairn config
 Prints the resolved schema, @option{--json} for machine use, @option{--path}

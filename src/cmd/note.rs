@@ -79,7 +79,7 @@ pub fn run(args: Args) -> Result<i32> {
     }
 
     let lock = Lock::acquire(&cfg)?;
-    let mut item = store.find(cfg.parse_id(&args.id)?)?;
+    let mut item = store.find_ref(&args.id)?;
 
     let addition = if args.bare {
         text.to_string()

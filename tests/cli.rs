@@ -308,9 +308,28 @@ fn init_refuses_to_clobber_an_existing_project() {
 #[test]
 fn init_writes_an_example_item_unless_told_not_to() {
     let bare = Project::new();
-    assert_eq!(bare.count_all(), 0);
+    assert_eq!(
+        bare.count_all(),
+        0,
+        "`--bare` is the schema and nothing else"
+    );
+
+    // Three milestones and one example. A milestone is an item in format 2, so
+    // a project that renders a roadmap needs some for the roadmap to be about.
     let seeded = Project::with_init(&["init", "--name", "Seeded"]);
-    assert_eq!(seeded.count_all(), 1);
+    assert_eq!(seeded.count_all(), 4);
+    assert_eq!(
+        seeded
+            .expect(&["list", "-t", "milestone", "--ids"])
+            .lines()
+            .len(),
+        3
+    );
+    assert_eq!(
+        seeded.expect(&["list", "--ids"]).lines(),
+        vec!["0004".to_string()],
+        "and the work is one item, with the containers out of the way"
+    );
 }
 
 #[test]
@@ -324,19 +343,14 @@ fn init_minimal_is_a_working_schema() {
 
 fn seeded() -> Project {
     let p = Project::new();
-    p.add(
-        "First item",
-        &[
-            "--type",
-            "feature",
-            "--milestone",
-            "v0.1",
-            "--set",
-            "priority=p0",
-        ],
-    );
+    p.add("First item", &["--type", "feature", "--set", "priority=p0"]);
     p.add("Second item", &["-t", "bug"]);
     p.add("Third item", &["-t", "chore"]);
+    // The milestone comes last so the three items keep the identifiers every
+    // test below names. A milestone is an item in format 2, so it has to exist
+    // before anything can point at it — the same as a dependency.
+    milestone(&p, "v0.1", Some("2026-12-01"));
+    p.expect(&["set", "1", "milestone=v0.1", "-q"]);
     p
 }
 
@@ -373,7 +387,7 @@ fn filter_expressions_cover_the_grammar() {
     assert_eq!(p.count_of("priority=p0"), 1, "equality");
     assert_eq!(p.count_of("milestone="), 2, "an empty value means unset");
     assert_eq!(p.count_of("milestone!="), 1, "negated emptiness");
-    assert_eq!(p.count_of("type!=bug"), 2, "negation");
+    assert_eq!(p.count_of("type!=bug"), 3, "negation, milestone included");
     assert_eq!(p.count_of("type=bug|chore"), 2, "alternatives");
     assert_eq!(p.count_of("title~first"), 1, "substring, case-insensitive");
     assert_eq!(p.count_of("id=1"), 1, "ids compare numerically");
@@ -466,7 +480,7 @@ fn closing_hides_an_item_and_reopening_restores_it() {
     let p = seeded();
     p.expect(&["close", "2", "-q"]);
     assert_eq!(p.count(), 2, "closed items are hidden by default");
-    assert_eq!(p.count_all(), 3, "--all shows them");
+    assert_eq!(p.count_all(), 4, "--all shows them, and the milestone too");
     p.expect(&["reopen", "2", "-q"]);
     assert_eq!(p.count(), 3);
 }
@@ -488,49 +502,107 @@ fn removing_an_item_requires_confirmation_or_force() {
 
 // --- milestones -------------------------------------------------------------
 
+/// A milestone is an item, so it is created, edited and read like one. There
+/// is no `milestone` command any more: `add` was `new -t milestone`, `list` was
+/// `list -t milestone`, and by the bar in `0051` neither made a task harder to
+/// do without it.
 #[test]
-fn milestones_are_managed_through_the_configuration() {
-    let p = seeded();
+fn a_milestone_is_an_item_like_any_other() {
+    let p = Project::new();
+    let id = milestone(&p, "v0.9", Some("2027-06-01"));
+    p.expect(&["set", &id, "title=Beta"]);
+
+    // Addressable by its key, wherever an identifier is taken.
+    let shown = p.json(&["show", "v0.9", "--json"]);
+    assert_eq!(shown["key"], "v0.9");
+    assert_eq!(shown["title"], "Beta");
+    assert_eq!(shown["type"], "milestone");
+
+    // It carries a body, which is most of the point: the reason for a date now
+    // lives with the date, and `cairn log` can say when the date moved.
     p.expect(&[
-        "milestone",
-        "add",
-        "v0.9",
-        "--title",
-        "Beta",
-        "--due",
-        "2027-06-01",
+        "note",
+        &id,
+        "--bare",
+        "-q",
+        "--",
+        "June because the conference is in July.",
     ]);
     assert_contains(
-        &p.expect(&["milestone", "list"]).all(),
-        "v0.9",
-        "it is listed",
+        &p.expect(&["show", &id]).stdout,
+        "conference",
+        "a milestone has reasoning, which a configuration block could not hold",
     );
-    p.fails(&["milestone", "add", "v0.9"]);
-    p.fails(&["milestone", "add", "v1.1", "--due", "nonsense"]);
+
+    // And it is out of the way of ordinary work.
+    p.add("Real work", &[]);
+    assert_eq!(
+        p.expect(&["list", "--ids"]).lines(),
+        vec!["0002".to_string()],
+        "a container is not listed among the work"
+    );
+    assert_eq!(
+        p.expect(&["list", "-t", "milestone", "--ids"]).lines(),
+        vec!["0001".to_string()],
+        "but is there when asked for"
+    );
+
+    // The command it replaced is gone rather than quietly accepted.
+    let out = p.fails(&["milestone", "add", "v1.0"]);
+    assert_contains(
+        &out.all(),
+        "unrecognized subcommand",
+        "the command is removed, not silently accepted",
+    );
 }
 
+/// Removing an item repairs everything that named it, through any reference and
+/// not only `depends_on`.
+///
+/// Only `depends_on` was repaired before, which was right while it was the only
+/// relationship there was — and left a milestone named by twenty items dangling
+/// the moment milestones became items. The soak found it, on a seed CI drew and
+/// I had not.
+///
+/// The rule it restores: a destructive command always leaves a valid project
+/// and says what else it touched.
 #[test]
-fn a_milestone_in_use_is_protected() {
-    let p = seeded();
-    p.expect(&["milestone", "add", "v0.9"]);
-    p.expect(&["set", "3", "milestone=v0.9", "-q"]);
-    p.fails(&["milestone", "remove", "v0.9"]);
+fn removing_an_item_repairs_every_reference_to_it() {
+    let p = Project::new();
+    let id = milestone(&p, "v0.9", None);
+    p.add("Work", &[]);
+    p.add("More work", &[]);
+    p.expect(&["set", "2", "3", "milestone=v0.9"]);
+    p.expect(&["set", "3", "part_of=2"]);
 
-    // Forcing it clears the milestone from whatever referenced it, rather than
-    // leaving items pointing at a name that no longer exists.
-    let out = p.expect(&["milestone", "remove", "v0.9", "--force"]);
-    assert_contains(&out.all(), "milestone cleared", "it says what it did");
-    p.expect(&["check"]);
-    assert_eq!(
-        p.json(&["show", "3", "--json"])["milestone"],
-        serde_json::Value::Null
+    let out = p.expect(&["remove", &id, "--force"]);
+    assert_contains(
+        &out.all(),
+        "dropped reference",
+        "it says what else it touched",
+    );
+
+    // Valid afterwards, with no option to leave the wreckage.
+    p.expect(&["check", "--strict"]);
+    for n in ["2", "3"] {
+        assert!(
+            !p.expect(&["show", n, "--raw"]).stdout.contains("v0.9"),
+            "item {n} still names a milestone that is gone"
+        );
+    }
+
+    // And a reference to something still present is left alone.
+    assert_contains(
+        &p.expect(&["show", "3", "--raw"]).stdout,
+        "part_of",
+        "an unrelated reference survived",
     );
 }
 
 #[test]
 fn editing_the_configuration_preserves_its_comments() {
     let p = seeded();
-    p.expect(&["milestone", "add", "v0.9"]);
+    milestone(&p, "v0.9", None);
     assert_contains(
         &p.read("cairn.toml"),
         "# cairn.toml",
@@ -1026,6 +1098,8 @@ fn an_empty_hook_is_reported() {
 #[test]
 fn export_produces_a_self_describing_document() {
     let p = seeded();
+    // Four items: three of work and the milestone they are scheduled against.
+    // A milestone is an item, so it travels with them.
     let doc = p.json(&["export"]);
     assert_eq!(doc["cairn"], "1", "the format is versioned");
     assert!(
@@ -1033,7 +1107,11 @@ fn export_produces_a_self_describing_document() {
         "the schema travels with the items"
     );
     let items = doc["items"].as_array().unwrap();
-    assert_eq!(items.len(), p.count_all());
+    assert_eq!(
+        items.len(),
+        p.count_all(),
+        "every item travels, milestones among them"
+    );
     assert!(
         items[0].get("category").is_some(),
         "categories cross the boundary"
@@ -1068,6 +1146,7 @@ fn import_maps_by_category_not_by_name() {
     recv.write("backlog.json", &doc);
     recv.expect(&["import", "--from", "json", "backlog.json", "-q"]);
 
+    // `-A` means all: closed work and containers alike, on both sides.
     assert_eq!(recv.count_all(), source.count_all());
     recv.expect(&["check"]);
 
@@ -1154,9 +1233,19 @@ fn import_creates_milestones_when_asked() {
         "-q",
     ]);
     assert_contains(
-        &recv.expect(&["milestone", "list"]).all(),
+        &recv
+            .expect(&[
+                "list",
+                "-A",
+                "-t",
+                "milestone",
+                "--plain",
+                "--columns",
+                "id,title",
+            ])
+            .all(),
         "v0.1",
-        "the milestone the document mentioned",
+        "the milestone the document mentioned was created as an item",
     );
     recv.expect(&["check"]);
 }
@@ -1527,7 +1616,7 @@ fn writing_leaves_no_temporary_files_behind() {
     let p = seeded();
     p.expect(&["set", "1", "status=doing", "-q"]);
     p.expect(&["render", "-q"]);
-    p.expect(&["milestone", "add", "v9.9"]);
+    milestone(&p, "v9.9", None);
     for dir in ["cairn/items", "."] {
         for entry in std::fs::read_dir(p.path(dir)).unwrap() {
             let name = entry.unwrap().file_name().to_string_lossy().to_string();
@@ -1940,6 +2029,12 @@ fn the_golden_corpus_is_valid_against_a_default_schema() {
             std::fs::copy(&path, p.path(&format!("cairn/items/{name}"))).unwrap();
         }
     }
+    // The corpus includes an item scheduled for `v0.1`, and a milestone is an
+    // item in format 2, so one has to exist for the reference to resolve. Made
+    // after the corpus is in place, because the corpus brings its own
+    // identifiers and this must not collide with them.
+    milestone(&p, "v0.1", None);
+
     // Unknown keys are warnings, not errors: a file from a later version must
     // remain usable rather than becoming unreadable.
     let out = p.run(&["check"]);
@@ -1952,30 +2047,36 @@ fn the_golden_corpus_is_valid_against_a_default_schema() {
 #[test]
 fn a_project_from_a_newer_cairn_is_refused_not_misread() {
     let p = Project::new();
-    let toml = p.read("cairn.toml").replace("format = 1", "format = 99");
+    let toml = p.read("cairn.toml").replace("format = 2", "format = 99");
     p.write("cairn.toml", &toml);
     let out = p.fails(&["list"]);
     assert_contains(&out.all(), "format 99", "the format it found");
     assert_contains(&out.all(), "upgrade cairn", "and what to do about it");
 }
 
+/// A project with no `format` key is format 1, which is now behind. §8 of the
+/// specification requires refusing rather than reading on a best-effort basis,
+/// and the refusal has to name the way forward.
 #[test]
-fn a_project_without_a_format_key_is_format_one() {
-    // Projects created before the key existed must keep working untouched.
+fn a_project_without_a_format_key_is_refused_and_told_what_to_run() {
     let p = Project::new();
-    let toml = p
+    let cfg = p
         .read("cairn.toml")
         .lines()
-        .filter(|l| !l.starts_with("format ="))
+        .filter(|l| !l.trim_start().starts_with("format ="))
         .collect::<Vec<_>>()
-        .join("\n");
-    p.write("cairn.toml", &toml);
-    p.add("Still fine", &[]);
-    assert_contains(
-        &p.expect(&["migrate", "--check"]).all(),
-        "format 1",
-        "assumed",
-    );
+        .join(
+            "
+",
+        );
+    p.write("cairn.toml", &cfg);
+
+    let out = p.fails(&["new", "Still fine", "-q"]);
+    assert_contains(&out.all(), "is format 1", "it says what it found");
+    assert_contains(&out.all(), "cairn migrate", "and what to do about it");
+
+    p.expect(&["migrate"]);
+    p.expect(&["new", "Now fine", "-q"]);
 }
 
 #[test]
@@ -2054,48 +2155,6 @@ fn plain_output_reports_names_and_the_table_reports_labels() {
 // --- lessons from real use --------------------------------------------------
 
 #[test]
-fn an_undated_milestone_keeps_the_position_it_was_declared_in() {
-    // From dogfooding: a project declared `m0-proof` first, undated, ahead of a
-    // dated `m1-device`. Sorting undated milestones to the end put m0 last —
-    // overriding an ordering its author had already expressed unambiguously.
-    let p = Project::new();
-    let toml = p.read("cairn.toml");
-    let head = &toml[..toml.find("[[milestone]]").unwrap()];
-    let tail = &toml[toml.rfind("# ─── Saved views").unwrap()..];
-    p.write(
-        "cairn.toml",
-        &format!(
-            "{head}\
-             [[milestone]]\nname = \"m0-proof\"\n\n\
-             [[milestone]]\nname = \"m1-device\"\ndue = \"2026-11-01\"\n\n\
-             [[milestone]]\nname = \"m2-firmware\"\ndue = \"2027-01-15\"\n\n\
-             [[milestone]]\nname = \"later\"\n\n{tail}"
-        ),
-    );
-
-    let listed = p.expect(&["milestone", "list"]).stdout;
-    let order: Vec<&str> = ["m0-proof", "m1-device", "m2-firmware", "later"]
-        .into_iter()
-        .filter(|m| listed.contains(m))
-        .collect();
-    let positions: Vec<usize> = order.iter().map(|m| listed.find(m).unwrap()).collect();
-    assert!(
-        positions.windows(2).all(|w| w[0] < w[1]),
-        "milestones came out in the wrong order:\n{listed}"
-    );
-
-    // And the same order reaches the rendered roadmap.
-    p.add("Something", &["--milestone", "m0-proof"]);
-    p.add("Something else", &["--milestone", "m1-device"]);
-    p.expect(&["render", "-q"]);
-    let roadmap = p.read("ROADMAP.md");
-    assert!(
-        roadmap.find("m0-proof").unwrap() < roadmap.find("m1-device").unwrap(),
-        "the rendered roadmap disagrees with the milestone list"
-    );
-}
-
-#[test]
 fn a_new_project_keeps_its_roadmap_current_without_being_told_to() {
     // Also from dogfooding: a project a day old already had a stale ROADMAP.md,
     // because rendering was left to discipline. It is now done by hooks that
@@ -2154,16 +2213,16 @@ fn dropped_work_does_not_count_against_progress() {
     // number worthless: the reader has to open the milestone to learn whether
     // the remainder is work or wreckage.
     let p = Project::new();
-    p.expect(&["milestone", "add", "someday"]);
+    milestone(&p, "someday", None);
     for n in 0..4 {
         p.add(&format!("Idea {n}"), &["--milestone", "someday"]);
     }
-    p.expect(&["close", "1", "-q"]);
-    for id in ["2", "3", "4"] {
+    p.expect(&["close", "2", "-q"]);
+    for id in ["3", "4", "5"] {
         p.expect(&["set", id, "status=dropped", "-q"]);
     }
 
-    let listed = p.expect(&["milestone", "list"]).stdout;
+    let listed = p.expect(&["roadmap"]).stdout;
     assert_contains(&listed, "100%", "the milestone is finished");
     assert_contains(&listed, "1/1", "and only the live item is counted");
 
@@ -2679,30 +2738,6 @@ fn a_nonsensical_board_width_is_clamped_not_obeyed() {
 }
 
 #[test]
-fn a_dated_milestone_is_filed_among_the_dated_ones() {
-    // Declaration order is meaningful — an undated milestone takes its position
-    // from the dated one that follows it — so appending every new milestone put
-    // it after a trailing `later`, which then inherited its date and stopped
-    // sorting last. Found by looking at the demo's own output.
-    let p = Project::new();
-    p.expect(&["milestone", "add", "v0.2", "--due", "2027-02-01"]);
-    p.expect(&["milestone", "add", "someday"]);
-
-    let listed = p.expect(&["milestone", "list"]).stdout;
-    let at = |name: &str| listed.find(name).unwrap_or_else(|| panic!("{name} listed"));
-    assert!(
-        at("v0.1") < at("v0.2"),
-        "dated milestones stay in date order"
-    );
-    assert!(at("v0.2") < at("v1.0"), "including one added afterwards");
-    assert!(at("v1.0") < at("later"), "and undated ones stay at the end");
-    assert!(
-        at("later") < at("someday"),
-        "in the order they were declared"
-    );
-}
-
-#[test]
 fn the_clock_can_be_pinned_for_a_reproducible_run() {
     // Items record the date they were created, so the recorded demo and the
     // website's samples embedded whatever day they were made — and the check
@@ -2780,11 +2815,7 @@ fn bug_report_describes_the_project_it_is_run_in() {
     p.expect(&["new", "Two"]);
 
     let out = p.expect(&["--bug-report"]);
-    assert!(
-        out.stdout.contains("format: 1"),
-        "no format: {}",
-        out.stdout
-    );
+    assert_contains(&out.stdout, "format:", "it reports the format");
     assert!(out.stdout.contains("items: 2"), "no count: {}", out.stdout);
     assert!(
         out.stdout.contains("hooks:"),
@@ -3908,16 +3939,29 @@ fn closing_over_mcp_reports_unticked_criteria_without_refusing() {
 /// the general mechanism.
 fn with_refs(extra: &str) -> Project {
     let p = Project::new();
+    // The scaffold already declares a `milestone` type and a reference to it,
+    // so this adds a second reference to the same type rather than a duplicate.
     let cfg = p.read("cairn.toml").replacen(
         "[[field]]",
         &format!(
-            "[[type]]\nname = \"milestone\"\n\n[[field]]\nname = \"release\"\n\
-             kind = \"ref\"\ntarget = \"milestone\"\nby = \"key\"\n{extra}\n\n[[field]]"
+            "[[field]]\nname = \"release\"\nkind = \"ref\"\n\
+             target = \"milestone\"\nby = \"key\"\n{extra}\n\n[[field]]"
         ),
         1,
     );
     p.write("cairn.toml", &cfg);
     p
+}
+
+/// A milestone to point at. In format 2 a milestone is an item, so it has to
+/// exist before anything can name it — the same as a dependency.
+fn milestone(p: &Project, key: &str, due: Option<&str>) -> String {
+    let id = p.expect(&["new", key, "-t", "milestone", "-q"]).trimmed();
+    p.expect(&["set", &id, &format!("key={key}")]);
+    if let Some(d) = due {
+        p.expect(&["set", &id, &format!("due={d}")]);
+    }
+    id
 }
 
 #[test]
@@ -4035,8 +4079,18 @@ fn container_types_are_not_offered_as_work() {
         !p.expect(&["board"]).stdout.contains("Version one"),
         "nor is it on the board"
     );
-    // But it is still an item, and still listed.
-    assert_eq!(p.expect(&["list", "-A", "--ids"]).lines().len(), 2);
+    // Still an item, and still there when the type is named — the same rule
+    // closed items follow.
+    assert_eq!(
+        p.expect(&["list", "-A", "--ids"]).lines().len(),
+        2,
+        "`--all` means all, containers included"
+    );
+    assert_eq!(
+        p.expect(&["list", "-t", "milestone", "--ids"]).lines(),
+        vec!["0001".to_string()],
+        "and naming the type asks for them without `--all`"
+    );
 }
 
 /// `target = "*"` must not make every type a container, or `depends_on` would
@@ -4185,8 +4239,8 @@ fn composition_is_never_required_to_file_something() {
         p.expect(&["list", "-A", "--ids", "--filter", "part_of="])
             .lines()
             .len(),
-        2,
-        "both the scaffolded item and the new one are unattached, and valid"
+        5,
+        "three milestones, the example and the new item: none needed a parent"
     );
 }
 

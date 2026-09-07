@@ -201,7 +201,7 @@ pub fn release(args: ReleaseArgs) -> Result<i32> {
     let lock = Lock::acquire(&cfg)?;
     let mut released = Vec::new();
     for raw in &args.ids {
-        let mut item = store.find(cfg.parse_id(raw)?)?;
+        let mut item = store.find_ref(raw)?;
         apply(&mut item, &cfg, "assignee", Assign::Set(String::new()))?;
         if !args.keep_status {
             let status = args

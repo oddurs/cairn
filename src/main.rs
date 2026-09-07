@@ -183,20 +183,14 @@ enum Command {
 
     /// Bring a project up to the current on-disk format
     ///
-    /// Hidden while format 1 is the only format there has ever been: today this
-    /// command exists so the migration path is exercised before it is needed,
-    /// which is a good reason to have it and a poor reason to spend a line of
-    /// `--help` on it. `tests/rules.rs` fails if `CURRENT_FORMAT` rises without
-    /// this becoming visible again.
-    #[command(hide = true)]
+    /// Visible since format 2. It was hidden while 1 was the only format there
+    /// had ever been — a command that existed to be tested rather than used —
+    /// and `tests/rules.rs` is what said to unhide it.
     Migrate(cmd::migrate::Args),
 
     /// Resolve a generated file during a merge (used by git, not by people)
     #[command(hide = true)]
     MergeDriver(cmd::git::MergeArgs),
-
-    /// Inspect and manage milestones
-    Milestone(cmd::milestone::Args),
 
     /// Show the resolved configuration
     Config(cmd::misc::ConfigArgs),
@@ -287,7 +281,6 @@ fn run(command: Command) -> Result<i32> {
         Command::Renumber(a) => cmd::renumber::run(a),
         Command::Migrate(a) => cmd::migrate::run(a),
         Command::MergeDriver(a) => cmd::git::merge_driver(a),
-        Command::Milestone(a) => cmd::milestone::run(a),
         Command::Config(a) => cmd::misc::config(a),
         Command::Agent(a) => cmd::misc::agent(a),
         Command::Mcp(a) => cmd::mcp::run(a),

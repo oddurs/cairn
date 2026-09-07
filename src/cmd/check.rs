@@ -177,11 +177,6 @@ fn collect_inner(
         {
             r.error_at(&at, item, "type", format!("unknown type `{k}`"));
         }
-        if let Some(m) = item.milestone()
-            && cfg.milestone(m).is_none()
-        {
-            r.error_at(&at, item, "milestone", format!("unknown milestone `{m}`"));
-        }
 
         for f in &cfg.fields {
             let v = item.get(&f.name);

@@ -118,6 +118,28 @@ impl<'a> Store<'a> {
         Ok(())
     }
 
+    /// Find an item by whatever somebody typed: an identifier, or a key.
+    ///
+    /// A key is unambiguous with an identifier by construction — a key that
+    /// reads as one is refused when it is set — so accepting both costs
+    /// nothing and means `cairn log v0.1` works on a milestone, which is most
+    /// of why a milestone is an item.
+    pub fn find_ref(&self, raw: &str) -> Result<Item> {
+        let items = self.load_all()?;
+        let wanted = raw.trim().trim_start_matches('#').trim();
+        if let Some(found) = items
+            .iter()
+            .find(|i| i.key().is_some_and(|k| k.eq_ignore_ascii_case(wanted)))
+        {
+            return Ok(found.clone());
+        }
+        let id = self.cfg.parse_id(raw)?;
+        items
+            .into_iter()
+            .find(|i| i.id == id)
+            .ok_or_else(|| anyhow::anyhow!("no item with id {}", self.cfg.format_id(id)))
+    }
+
     pub fn find(&self, id: u32) -> Result<Item> {
         self.load_all()?
             .into_iter()

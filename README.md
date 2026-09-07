@@ -258,6 +258,31 @@ cairn set --filter 'milestone=v0.1,status=backlog' priority=p1
 A filtered write prints what it matched and asks before touching anything,
 unless `--yes` is given.
 
+## Milestones are items
+
+```yaml
+---
+id: 42
+key: v0.1
+title: Usable in anger
+type: milestone
+due: 2026-10-15
+---
+
+October because the conference is in November.
+```
+
+`milestone: v0.1` in an item names it by key, exactly as it always did. What
+changed in format 2 is where the milestone's *own* information lives: it used to
+be a block in `cairn.toml`, which cannot hold a body or be asked when something
+changed — so a milestone had no reasoning, no history, and needed a bespoke
+ordering rule.
+
+It is deliberately not the same thing as `part_of`: an item belongs to several
+larger efforts and ships in exactly one release.
+
+`cairn migrate` moves an older project. No item file changes.
+
 ## How an item got here
 
 The repository is the database, and a repository has one thing a database does

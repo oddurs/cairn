@@ -28,7 +28,13 @@ pub fn roadmap_markdown(cfg: &Config, store: &Store, items: &[Item]) -> Result<S
         None => Filter::default(),
     };
     let ctx = Ctx::new(cfg, items);
-    let visible: Vec<&Item> = items.iter().filter(|i| filter.matches(i, &ctx)).collect();
+    // Containers are what work is scheduled against, not work. Rendering them
+    // as items would put every milestone under its own heading.
+    let visible: Vec<&Item> = items
+        .iter()
+        .filter(|i| !cfg.is_container(i.kind()))
+        .filter(|i| filter.matches(i, &ctx))
+        .collect();
 
     let mut out = String::new();
     let title = r.title.clone().unwrap_or_else(|| {
@@ -57,9 +63,9 @@ pub fn roadmap_markdown(cfg: &Config, store: &Store, items: &[Item]) -> Result<S
         out.push_str("_No items yet._\n");
     }
     for (key, members) in groups {
-        out.push_str(&section_heading(cfg, &r.group_by, &key));
-        out.push_str(&meta_line(cfg, &key, &members));
-        if let Some(desc) = milestone_description(cfg, &r.group_by, &key) {
+        out.push_str(&section_heading(&ctx, &r.group_by, &key));
+        out.push_str(&meta_line(&ctx, &key, &members));
+        if let Some(desc) = milestone_description(&ctx, &r.group_by, &key) {
             out.push_str(&format!("{desc}\n\n"));
         }
         if r.group_by_status {
@@ -93,17 +99,14 @@ pub fn roadmap_markdown(cfg: &Config, store: &Store, items: &[Item]) -> Result<S
     Ok(out)
 }
 
-fn section_heading(cfg: &Config, group_by: &str, key: &str) -> String {
+fn section_heading(ctx: &Ctx, group_by: &str, key: &str) -> String {
     if key.is_empty() {
         return format!("## {}\n\n", unassigned_label(group_by));
     }
     if group_by == "milestone"
-        && let Some(m) = cfg.milestone(key)
+        && let Some(m) = ctx.milestones.get(key)
     {
-        return match &m.title {
-            Some(t) => format!("## {} — {t}\n\n", m.name),
-            None => format!("## {}\n\n", m.name),
-        };
+        return format!("## {key} — {}\n\n", m.title());
     }
     format!("## {key}\n\n")
 }
@@ -116,7 +119,8 @@ fn unassigned_label(group_by: &str) -> String {
     }
 }
 
-fn meta_line(cfg: &Config, key: &str, members: &[&Item]) -> String {
+fn meta_line(ctx: &Ctx, key: &str, members: &[&Item]) -> String {
+    let cfg = ctx.cfg;
     let r = &cfg.render;
     let mut bits: Vec<String> = Vec::new();
     if r.progress {
@@ -132,8 +136,8 @@ fn meta_line(cfg: &Config, key: &str, members: &[&Item]) -> String {
             bits.push(format!("{done} of {total} done"));
         }
     }
-    if let Some(m) = cfg.milestone(key)
-        && let Some(due) = &m.due
+    if let Some(m) = ctx.milestones.get(key)
+        && let Some(due) = crate::refs::due(m)
     {
         bits.push(format!("due {due}"));
     }
@@ -144,11 +148,14 @@ fn meta_line(cfg: &Config, key: &str, members: &[&Item]) -> String {
     }
 }
 
-fn milestone_description(cfg: &Config, group_by: &str, key: &str) -> Option<String> {
+/// A milestone's body is its description, which is most of why it is an item:
+/// the reason for a date now lives with the date.
+fn milestone_description(ctx: &Ctx, group_by: &str, key: &str) -> Option<String> {
     if group_by != "milestone" {
         return None;
     }
-    cfg.milestone(key)?.description.clone()
+    let body = ctx.milestones.get(key)?.summary();
+    (!body.trim().is_empty()).then_some(body)
 }
 
 fn item_line(ctx: &Ctx, store: &Store, item: &Item) -> String {
@@ -213,7 +220,7 @@ fn group<'a>(ctx: &Ctx, items: &[&'a Item], key: &str) -> Vec<(String, Vec<&'a I
             if k.is_empty() {
                 usize::MAX
             } else {
-                milestone_rank(cfg, Some(k))
+                milestone_rank(ctx, Some(k))
             }
         });
     } else {

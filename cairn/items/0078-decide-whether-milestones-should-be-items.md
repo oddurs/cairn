@@ -2,7 +2,7 @@
 id: 78
 title: Decide whether milestones should be items
 type: docs
-status: backlog
+status: done
 milestone: v1.0
 depends_on:
 - 79
@@ -142,15 +142,15 @@ somebody will fear losing.
 
 ## Acceptance criteria
 
-- [ ] `0079` lands first; this is built on it and not beside it
-- [ ] `milestone:` in an item file is unchanged, before and after
-- [ ] `[[milestone]]` is gone from `cairn.toml`, and `cairn init` scaffolds items
-- [ ] The migration is written and tested against a real project before the
+- [x] `0079` lands first; this is built on it and not beside it
+- [x] `milestone:` in an item file is unchanged, before and after
+- [x] `[[milestone]]` is gone from `cairn.toml`, and `cairn init` scaffolds items
+- [x] The migration is written and tested against a real project before the
       format number moves
-- [ ] Migrating twice is a no-op, and migrating an already-migrated project says so
-- [ ] `milestones_ordered` and its inheritance rule are deleted, and roadmap
+- [x] Migrating twice is a no-op, and migrating an already-migrated project says so
+- [x] `milestones_ordered` and its inheritance rule are deleted, and roadmap
       order comes from dependencies, then `due`, then identifier
-- [ ] `cairn log v0.1` answers when the date moved
-- [ ] A milestone with no items still renders on the roadmap
-- [ ] `cairn migrate` is unhidden, and the test in `tests/rules.rs` updated
-- [ ] The fate of the `milestone` command is decided in the same release
+- [x] `cairn log v0.1` answers when the date moved
+- [x] A milestone with no items still renders on the roadmap
+- [x] `cairn migrate` is unhidden, and the test in `tests/rules.rs` updated
+- [x] The fate of the `milestone` command is decided in the same release

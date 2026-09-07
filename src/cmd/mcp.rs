@@ -250,7 +250,7 @@ fn get_schema() -> Result<String> {
     let open = items.iter().filter(|i| !ctx.is_closed(i)).count();
     let ready = items.iter().filter(|i| ctx.is_ready(i)).count();
 
-    let mut v = crate::cmd::misc::schema_json(&cfg);
+    let mut v = crate::cmd::misc::schema_json(&cfg, &ctx.milestones);
     if let Some(o) = v.as_object_mut() {
         o.insert(
             "counts".into(),

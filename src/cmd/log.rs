@@ -90,7 +90,7 @@ impl Change {
 pub fn run(args: Args) -> Result<i32> {
     let cfg = Config::discover()?;
     let store = Store::new(&cfg);
-    let item = store.find(cfg.parse_id(&args.id)?)?;
+    let item = store.find_ref(&args.id)?;
 
     let relative = item
         .path
@@ -102,7 +102,7 @@ pub fn run(args: Args) -> Result<i32> {
     // Every reason there might be no history, in the order they are worth
     // reporting. None of them is a failure of the command.
     if let Some(reason) = unavailable(&cfg.root) {
-        return report_nothing(&args, &item, &reason);
+        return report_nothing(&cfg, &args, &item, &reason);
     }
 
     if args.patch {
@@ -112,6 +112,7 @@ pub fn run(args: Args) -> Result<i32> {
     let mut revisions = history(&cfg.root, &relative, item.id)?;
     if revisions.is_empty() {
         return report_nothing(
+            &cfg,
             &args,
             &item,
             "the file is not committed yet, so there is nothing to show",
@@ -246,7 +247,7 @@ fn unavailable(root: &Path) -> Option<String> {
     None
 }
 
-fn report_nothing(args: &Args, item: &Item, reason: &str) -> Result<i32> {
+fn report_nothing(cfg: &Config, args: &Args, item: &Item, reason: &str) -> Result<i32> {
     if args.json {
         println!(
             "{}",
@@ -258,7 +259,7 @@ fn report_nothing(args: &Args, item: &Item, reason: &str) -> Result<i32> {
             }))?
         );
     } else {
-        println!("{}  {}", style::bold(&item.id.to_string()), item.title());
+        println!("{}  {}", style::bold(&cfg.format_id(item.id)), item.title());
         println!("{}", style::dim(&format!("  no history: {reason}")));
     }
     Ok(0)

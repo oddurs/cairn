@@ -27,6 +27,47 @@ There is deliberately no library target, because linking cairn makes the caller
 a derivative work and reading its files does not.  A test fails if a [lib]
 appears in Cargo.toml.
 
+* Noteworthy changes in release 0.2.0-rc.1 (unreleased)
+
+** Format 2: milestones are items
+
+A milestone used to be a block in cairn.toml, and everything it could not do
+followed from that.  No body, so the reason for a date had nowhere to live.  No
+history, so `cairn log v0.1` — the most interesting question about a milestone —
+had no answer.  It could not be assigned, searched, depended upon or closed with
+criteria, and it needed an ordering rule of its own that walked the list
+backwards so an undated milestone could inherit the next dated one's date.
+
+A milestone is now an item with `type = "milestone"` and a `key`.  `milestone:
+v0.1` in an item's frontmatter means exactly what it meant before — which is the
+whole reason a reference is addressed by key rather than by identifier.
+
+**No item file changes.**  `cairn migrate` rewrites cairn.toml and writes the
+milestone items; nothing else moves.  Run `cairn migrate --dry-run` first.
+
+The milestones are wired into a dependency chain in the order they were
+declared, because a roadmap is a sequence and that is now how the order is
+expressed.  The inheritance rule is deleted.
+
+`cairn milestone` is removed.  Adding one is `cairn new -t milestone`, listing
+them is `cairn list -t milestone`, and by the bar in the command review neither
+made a real task harder to do without the command.
+
+Containers — any type a reference names specifically — are absent from `cairn
+next`, the board, the roadmap's item lists and an ordinary `cairn list`.  They
+appear when you ask for them by type, or with `--all`, which now means all.
+
+** Removing an item repairs every reference to it
+
+`cairn remove` dropped `depends_on` references to what it deleted, and nothing
+else — which was right while `depends_on` was the only relationship there was,
+and left a milestone named by twenty items dangling the moment milestones became
+items.  It now repairs every declared reference, and the rule it restores is
+that a destructive command always leaves a valid project and says what else it
+touched.
+
+Found by the soak, on a seed CI drew and I had not.
+
 ** Merges resolve what has an answer
 
 The merge driver now handles item files as well as the generated roadmap.  Two

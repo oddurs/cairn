@@ -58,6 +58,9 @@ impl Project {
     }
 
     /// The ids a filter selects.
+    /// The ids a filter selects. `-A` so that containers and closed work are
+    /// both included: a law about the grammar must hold over every item, not
+    /// over the subset an ordinary listing shows.
     fn select(&self, expr: &str) -> BTreeSet<u32> {
         self.expect(&["list", "-A", "--ids", "--filter", expr])
             .lines()
@@ -86,6 +89,11 @@ fn backlog(seed: u64, count: usize) -> Project {
     p.expect(&["init", "--bare", "--name", "Laws"]);
 
     let mut rng = Rng(seed);
+    // A milestone is an item in format 2, so it has to exist before anything
+    // can be scheduled against it.
+    let m = p.expect(&["new", "v0.1", "-t", "milestone", "-q"]);
+    p.expect(&["set", m.trim(), "key=v0.1"]);
+
     for n in 0..count {
         let out = p.expect(&["new", &format!("Item {n}"), "-q"]);
         let id = out.trim().to_string();
