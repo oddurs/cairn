@@ -46,10 +46,11 @@ why one field served; with an agent working and a person owning they are not,
 and `cairn claim` used to overwrite the record of who cared.  Claiming now sets
 `assignee` and leaves `owner` alone.
 
-`created_by` records what made an item.  An item filed by a person is owned by
-them; one filed by an agent is left unowned on purpose, so that `--filter
-'owner='` finds what no person has taken responsibility for.  `cairn next
---mine` means assigned to you, owned by you, or taken by nobody.
+`created_by` records what made an item, and only when that was an agent — a
+person filing something is the ordinary case and its file is unchanged.  So
+`--filter 'created_by!=,owner='` finds what an agent made that no person has
+taken responsibility for.  `cairn next --mine` means assigned to you, owned by
+you, or taken by nobody.
 
 ** Position in a hierarchy is a query
 

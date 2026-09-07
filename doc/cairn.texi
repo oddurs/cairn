@@ -1391,14 +1391,17 @@ used to overwrite the record of who cared.
 
 @command{cairn claim} sets @code{assignee} and leaves @code{owner} alone.
 
-@code{created_by} records what made an item, as cairn was told. An item filed by
-a person is owned by them; an item filed by an agent is left unowned on purpose,
-because the question worth asking as the proportion written by agents rises is
-which items no person has yet taken responsibility for:
+@code{created_by} records what made an item, and only when that was an agent. A
+person filing something is the ordinary case and needs no annotation: writing
+two lines into every item forever would cost the readability that makes this
+format worth having, for a signal only the other kind carries.
+
+So the absence of @code{created_by} means a person, and the question worth
+asking as the proportion written by agents rises is the pair --- something an
+agent made, that no person has yet taken responsibility for:
 
 @example
-cairn list --filter 'owner='
-cairn list --filter 'created_by=claude,owner='
+cairn list --filter 'created_by!=,owner='
 @end example
 
 @noindent

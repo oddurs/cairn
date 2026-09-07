@@ -100,17 +100,18 @@ pub fn run(args: Args) -> Result<i32> {
     };
     item.meta.title = Some(args.title.clone());
     item.meta.created = Some(now.clone());
-    // What made this, as cairn was told. An agent filing something leaves it
-    // unowned on purpose: "items no human has looked at" is the query that
-    // matters as the proportion written by agents rises, and it needs a gap to
-    // find rather than a name to trust.
-    match crate::store::acting_agent() {
-        Some(agent) => item.meta.created_by = Some(agent),
-        None => {
-            let who = crate::store::whoami();
-            item.meta.created_by = Some(who.clone());
-            item.meta.owner = Some(who);
-        }
+    // Recorded only when an agent is acting. A person filing something is the
+    // ordinary case and needs no annotation — writing two lines into every item
+    // forever would cost the readability that makes this format worth having,
+    // for a signal that is only informative on the other kind.
+    //
+    // So the absence of `created_by` means a person, and the query that matters
+    // as the proportion written by agents rises is the pair: something an agent
+    // made, that no person has taken responsibility for.
+    //
+    //     cairn list --filter 'created_by!=,owner='
+    if let Some(agent) = crate::store::acting_agent() {
+        item.meta.created_by = Some(agent);
     }
     item.meta.updated = Some(now);
 

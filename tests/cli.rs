@@ -4527,27 +4527,28 @@ fn what_created_an_item_is_recorded() {
     p.add("By a person", &[]);
     p.expect_as_agent(&["new", "By an agent", "-q"]);
 
+    // A person filing something is the ordinary case and is not annotated.
+    // Two extra lines in every item forever would cost the readability that
+    // makes this format worth having, for a signal only the other kind carries.
     let person = p.expect(&["show", "1", "--raw"]).stdout;
-    assert_contains(&person, "created_by: tester", "the person who filed it");
-    assert_contains(&person, "owner: tester", "who also owns it by default");
+    assert!(
+        !person.contains("created_by") && !person.contains("owner"),
+        "a person's item should be unchanged:\n{person}"
+    );
 
     let agent = p.expect(&["show", "2", "--raw"]).stdout;
     assert_contains(&agent, "created_by: claude", "the agent that filed it");
     assert!(
         !agent.contains("owner:"),
-        "an agent leaves it unowned, so it can be found:\n{agent}"
+        "and left it unowned, so it can be found:\n{agent}"
     );
 
+    // The query the pair exists for: made by something that is not a person,
+    // and not yet anybody's responsibility.
     assert_eq!(
-        p.expect(&["list", "-A", "--ids", "--filter", "owner="])
+        p.expect(&["list", "-A", "--ids", "--filter", "created_by!=,owner="])
             .lines(),
         vec!["0002".to_string()],
-        "which is the query the field exists for"
-    );
-    assert_eq!(
-        p.expect(&["list", "-A", "--ids", "--filter", "created_by=claude"])
-            .lines(),
-        vec!["0002".to_string()]
     );
 }
 
