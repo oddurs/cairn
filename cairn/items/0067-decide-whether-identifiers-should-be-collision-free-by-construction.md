@@ -98,3 +98,26 @@ a concrete instance of me being subject to it.
 needs somebody who did not write the repair machinery to read the argument,
 and that has not happened.
 
+## 2026-09-07: this is now the only expensive change left
+
+`0088` inventories what would still cost a format number. Everything on that
+list is configuration-shaped, like format 2 — which touched zero item files
+across seven real projects — except this one.
+
+Changing what `id` is rewrites **every item file in every project**, plus every
+`depends_on` in all of them. It is the only known change whose cost grows with
+adoption, and cairn currently has the smallest number of users it will ever
+have.
+
+That reframes the decision. It is not "should identifiers be collision-free",
+weighed on its merits whenever somebody gets to it. It is: **this door closes a
+little more every week, and the cheapest moment to walk through it is now.**
+
+If the answer is what I still think it is — keep integers — then the right
+outcome is not to leave the question open. It is to write the promise into §4:
+`id` is an unsigned integer and will remain one. An open question invites a
+future maintainer to reopen it at the worst possible time; a promise does not.
+
+Closing a door deliberately is worth more than the flexibility of leaving it
+ajar, and this item should end by doing one or the other.
+
