@@ -36,7 +36,7 @@ cairn render                      # regenerate ROADMAP.md
 - **Statuses**: `backlog` (open), `planned` (open), `doing` (active), `blocked` (active), `done` (done), `dropped` (dropped)
 - **`priority`**: one of p0, p1, p2, p3 — p0 is a release blocker
 - **`effort`**: one of s, m, l, xl — Rough size, not an estimate
-- **`sprint`**: one of s1, s2, s3, s4, s5, s6, s7, s8 — Durability sprint; see ROADMAP.md
+- **`sprint`**: one of s1, s2, s3, s4, s5, s6, s7, s8, s9 — Durability sprint; see ROADMAP.md
 - **`area`**: free text — Subsystem this touches
 - **`due`**: date, YYYY-MM-DD — when a milestone is meant to land
 - **`milestone`**: names a `milestone` item, by key — what this ships in
