@@ -2,7 +2,7 @@
 id: 57
 title: Renumber should keep the identifier the published side already has
 type: bug
-status: backlog
+status: done
 milestone: v0.2
 created: 2026-09-06
 updated: 2026-09-06

@@ -117,6 +117,19 @@ jobs:
       - run: npm run build
         working-directory: www
 
+  conformance:
+    # A second reader, written from spec/README.md alone and not from cairn's
+    # source, run over the same corpus. When the two disagree one of them is
+    # wrong — which is how the specification came to say *which* YAML it means.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install pyyaml
+      - run: python3 spec/conformance.py
+
   doc:
     runs-on: ubuntu-latest
     steps:

@@ -286,6 +286,38 @@ merge performed by a forge rather than locally runs no hook at all, which is why
 Anything the hook changed is left for a person to commit; a hook that amended
 the merge commit would be doing something nobody asked it to.
 
+@section Which side keeps a contested identifier
+
+@cindex merge collision
+@cindex renumber
+Two branches that each create an item allocate the same identifier, because
+allocation is one more than the highest in use and no branch can know what the
+other did. When they meet, one of the two has to move.
+
+They are not equals. One side has been published --- it is on the branch people
+pull, and anybody may have written its identifier into a commit message or a
+link --- and the other is arriving. Renaming the published one churns history
+and breaks those references, so the published one keeps its number.
+
+cairn asks the repository which is which. If the current commit is a merge, its
+@emph{first parent} is the branch the merge was made on, and an item whose file
+was added on that side was already published. If a merge is in progress and has
+not been committed, @code{HEAD} is that side.
+
+Asking whether @code{HEAD} is a merge @emph{before} asking whether one is in
+progress matters, because the @code{post-merge} hook runs after the merge commit
+exists but while @file{.git/MERGE_HEAD} is still on disk. Asking the other way
+round picks the merge commit, which contains both sides, and concludes that both
+were published.
+
+Neither the creation date nor the depth of history distinguishes them: two
+branch commits made a moment apart tie on the first, and siblings tie on the
+second. Both were tried.
+
+Outside a repository, or on an ordinary commit, the older item keeps the
+identifier and the filename breaks a tie --- which is what cairn did before, and
+is the best that can be done with no history to consult.
+
 @section Interrupted renumbering
 
 @command{cairn renumber} moves a file aside before writing it back under its new

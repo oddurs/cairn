@@ -9,7 +9,7 @@ CARGO       ?= cargo
 MAKEINFO    ?= makeinfo
 CAIRN       := target/release/cairn
 
-.PHONY: all build check test soak fuzz audit doc info html pdf record demo install install-bin \
+.PHONY: all build check test soak fuzz conformance audit doc info html pdf record demo install install-bin \
         install-man install-info clean roadmap
 
 all: build doc
@@ -22,6 +22,11 @@ check: test
 	$(CARGO) fmt --check
 	$(CARGO) clippy --all-targets -- -D warnings
 	$(CAIRN) check --render --strict
+
+# A second reader, written from the specification alone, run over the corpus
+# cairn's own tests use. Needs `pip install pyyaml`.
+conformance:
+	python3 spec/conformance.py
 
 # Advisories, licences and sources. Needs `cargo install cargo-deny`.
 audit:

@@ -38,7 +38,7 @@ Enough to run a real project's roadmap without reaching for anything else.
 
 ## v0.2 — Comfortable
 
-`##########` 92% · 33 of 36 done · due 2026-12-01
+`##########` 94% · 34 of 36 done · due 2026-12-01
 
 The rough edges that show up after a few weeks of daily use, and the pieces that make the central claim true rather than merely stated.
 
@@ -46,7 +46,6 @@ The rough edges that show up after a few weeks of daily use, and the pieces that
 
 - [ ] [`0049`](https://github.com/oddurs/cairn/blob/main/cairn/items/0049-a-cookbook-of-things-people-actually-want-to-do.md) A cookbook of things people actually want to do <sup>docs · p2</sup>
 - [ ] [`0056`](https://github.com/oddurs/cairn/blob/main/cairn/items/0056-collect-a-contributor-licence-agreement.md) Collect a contributor licence agreement <sup>chore · p0</sup>
-- [ ] [`0057`](https://github.com/oddurs/cairn/blob/main/cairn/items/0057-renumber-should-keep-the-identifier-the-published-side-already-has.md) Renumber should keep the identifier the published side already has <sup>bug · p1</sup>
 
 ### done
 
@@ -73,6 +72,7 @@ The rough edges that show up after a few weeks of daily use, and the pieces that
 - [x] [`0047`](https://github.com/oddurs/cairn/blob/main/cairn/items/0047-say-where-to-report-bugs-in-the-program-itself.md) Say where to report bugs, in the program itself <sup>bug · p1</sup>
 - [x] [`0048`](https://github.com/oddurs/cairn/blob/main/cairn/items/0048-choose-an-editor-that-exists-on-the-platform.md) Choose an editor that exists on the platform <sup>bug · p1</sup>
 - [x] [`0055`](https://github.com/oddurs/cairn/blob/main/cairn/items/0055-recordings-embedded-the-day-they-were-made.md) Recordings embedded the day they were made <sup>bug · p1</sup>
+- [x] [`0057`](https://github.com/oddurs/cairn/blob/main/cairn/items/0057-renumber-should-keep-the-identifier-the-published-side-already-has.md) Renumber should keep the identifier the published side already has <sup>bug · p1</sup>
 - [x] [`0058`](https://github.com/oddurs/cairn/blob/main/cairn/items/0058-write-down-what-cairn-will-always-do-before-anyone-is-watching.md) Write down what cairn will always do, before anyone is watching <sup>docs · p0</sup>
 - [x] [`0059`](https://github.com/oddurs/cairn/blob/main/cairn/items/0059-declare-cairn-s-boundary-what-one-repository-can-do.md) Declare cairn's boundary: what one repository can do <sup>docs · p0</sup>
 - [x] [`0060`](https://github.com/oddurs/cairn/blob/main/cairn/items/0060-never-ship-a-library-target.md) Never ship a library target <sup>chore · p1</sup>
@@ -86,7 +86,7 @@ The rough edges that show up after a few weeks of daily use, and the pieces that
 
 ## v1.0 — Stable
 
-`######····` 58% · 7 of 12 done · due 2027-03-01
+`#######···` 67% · 8 of 12 done · due 2027-03-01
 
 Safe to depend on: every scriptable surface carries a promise, the command surface has been reviewed and pruned rather than accumulated, releases can be verified, and it installs from a package manager people already use.
 
@@ -95,7 +95,6 @@ Safe to depend on: every scriptable surface carries a promise, the command surfa
 - [ ] [`0052`](https://github.com/oddurs/cairn/blob/main/cairn/items/0052-sign-releases-and-ship-a-source-tarball.md) Sign releases and ship a source tarball <sup>chore · p0</sup>
 - [ ] [`0053`](https://github.com/oddurs/cairn/blob/main/cairn/items/0053-be-in-a-package-manager-people-already-use.md) Be in a package manager people already use <sup>chore · p0</sup>
 - [ ] [`0054`](https://github.com/oddurs/cairn/blob/main/cairn/items/0054-decide-about-translation-and-write-the-decision-down.md) Decide about translation, and write the decision down <sup>docs · p2</sup>
-- [ ] [`0061`](https://github.com/oddurs/cairn/blob/main/cairn/items/0061-a-second-implementation-of-the-reader.md) A second implementation of the reader <sup>feature · p1</sup>
 - [ ] [`0067`](https://github.com/oddurs/cairn/blob/main/cairn/items/0067-decide-whether-identifiers-should-be-collision-free-by-construction.md) Decide whether identifiers should be collision-free by construction <sup>feature · p1 · s7</sup>
 
 ### done
@@ -107,6 +106,7 @@ Safe to depend on: every scriptable surface carries a promise, the command surfa
 - [x] [`0036`](https://github.com/oddurs/cairn/blob/main/cairn/items/0036-publish-the-item-format-as-a-document-in-its-own-right.md) Publish the item format as a document in its own right <sup>docs · p1</sup>
 - [x] [`0050`](https://github.com/oddurs/cairn/blob/main/cairn/items/0050-say-what-is-stable-and-what-the-promise-means.md) Say what is stable, and what the promise means <sup>docs · p0</sup>
 - [x] [`0051`](https://github.com/oddurs/cairn/blob/main/cairn/items/0051-review-the-command-surface-before-1-0-freezes-it.md) Review the command surface before 1.0 freezes it <sup>chore · p0</sup>
+- [x] [`0061`](https://github.com/oddurs/cairn/blob/main/cairn/items/0061-a-second-implementation-of-the-reader.md) A second implementation of the reader <sup>feature · p1</sup>
 
 ## later — Someday
 
