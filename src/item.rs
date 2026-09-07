@@ -196,6 +196,14 @@ impl Item {
 
     /// Look up any field by name — built-in or custom. `category` is resolved by
     /// the caller, which has the config.
+    /// Names `get` answers that are not the field's own name.
+    ///
+    /// Beside `get` for the same reason `DERIVED_KEYS` sits beside `resolve`:
+    /// the alias and the list of legitimate keys have to move together.
+    /// `cairn check` learned this the hard way, by calling a working saved view
+    /// in a real project a typo the first time it was run outside the tests.
+    pub const ALIASES: &'static [&'static str] = &["kind", "label"];
+
     pub fn get(&self, key: &str) -> Field {
         match key {
             "id" => Field::Text(self.id.to_string()),

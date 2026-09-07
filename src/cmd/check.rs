@@ -442,6 +442,7 @@ fn schema(cfg: &Config, r: &mut Report) {
     let mut known: HashSet<String> = crate::config::RESERVED_FIELDS
         .iter()
         .chain(crate::filter::DERIVED_KEYS.iter())
+        .chain(Item::ALIASES.iter())
         .map(|s| (*s).to_string())
         .collect();
     known.extend(cfg.fields.iter().map(|f| f.name.clone()));

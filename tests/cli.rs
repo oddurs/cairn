@@ -5461,3 +5461,21 @@ fn adopting_refuses_what_it_cannot_copy() {
     assert_contains(&out.all(), "is format 1", "it says what it found");
     assert_contains(&out.all(), "cairn migrate", "and names the way forward");
 }
+
+/// An alias is not a typo. `label` is `labels` and `kind` is `type`, and the
+/// first real project the schema check ran against had a working saved view
+/// filtering on `label=cloud` that it called a mistake.
+#[test]
+fn a_saved_view_using_an_alias_is_not_called_a_typo() {
+    let p = seeded();
+    p.append(
+        "cairn.toml",
+        "\n[[view]]\nname = \"tagged\"\nfilter = \"label=x\"\nsort = \"kind\"\n",
+    );
+
+    let out = p.expect(&["check"]).all();
+    assert!(
+        !out.contains("not a declared field"),
+        "an alias `get` answers is a legitimate key: {out}"
+    );
+}
