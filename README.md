@@ -220,6 +220,25 @@ colour) are all available:
 cairn list --ids --filter 'priority=p0' | xargs -n1 cairn show
 ```
 
+## How an item got here
+
+The repository is the database, and a repository has one thing a database does
+not:
+
+```sh
+$ cairn log 12
+2026-09-04  oddurs   created
+2026-09-05  claude   status backlog -> doing
+2026-09-05  claude   note added
+2026-09-11  oddurs   status doing -> done
+```
+
+Changes are reported as field transitions rather than as a patch, renames are
+followed so a retitled item keeps its history, and `--patch` hands the job to
+git when you want the diffs. Outside a git repository it explains rather than
+fails: cairn does not require git, and a legitimate setup should not look
+broken.
+
 ## The generated roadmap
 
 ```console

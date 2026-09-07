@@ -27,6 +27,25 @@ There is deliberately no library target, because linking cairn makes the caller
 a derivative work and reading its files does not.  A test fails if a [lib]
 appears in Cargo.toml.
 
+** An item's history
+
+`cairn log 12` shows how an item reached its present state, read from the
+repository it lives in and reported as field transitions rather than as a
+patch.  `--patch` hands the diffs to git, `--json` is for callers, and `-n`
+limits the output.  Outside a git repository, or before an item is committed,
+it explains rather than fails.
+
+Renames are followed, so retitling an item does not lose its history.  Two
+things about that needed care.  `git log --follow --reverse` silently truncates
+the history, so the log is read newest-first and reversed afterwards.  And
+because every cairn item has the same shape, git's rename detection concludes
+that item 2 was renamed from item 1 and follows into the wrong item's history;
+each revision is checked against the id it carries and the trail cut where that
+changes.
+
+In a shallow clone the oldest revision present is reported as such rather than
+as the creation, which is a claim the clone cannot support.
+
 ** Where to report a bug
 
 `cairn --help` now ends with the address, in the shape the GNU Coding

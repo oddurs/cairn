@@ -22,6 +22,7 @@ pub mod git;
 pub mod import;
 pub mod init;
 pub mod list;
+pub mod log;
 pub mod mcp;
 pub mod migrate;
 pub mod milestone;

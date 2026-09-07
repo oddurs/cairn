@@ -1194,6 +1194,74 @@ heading, and @option{--stdin} reads a note longer than a line.
 Move items to the first @code{done} status, or back to the default open
 status. @option{--status} overrides the target.
 
+@section cairn log
+@cindex history
+@cindex git log
+Shows how an item reached its present state, read from the repository it lives
+in.
+
+@example
+$ cairn log 12
+2026-09-04  oddurs   created
+2026-09-05  claude   status backlog -> doing
+2026-09-05  claude   note added
+2026-09-11  oddurs   status doing -> done
+@end example
+
+@noindent
+Changes are reported in the vocabulary of the schema rather than as a patch,
+because a patch answers a different question. The @code{updated} stamp is never
+reported: it changes on every write by definition, so a line for it would sit
+under every real change and mean nothing.
+
+@table @option
+@item -n @var{count}
+@itemx --max-count=@var{count}
+Show only the most recent @var{count} revisions.
+
+@item -p
+@itemx --patch
+Hand the job to @command{git log --patch}, which formats diffs better than
+anything reimplemented here would.
+
+@item --json
+Machine-readable, including the commit hash and the item's path at each
+revision.
+@end table
+
+@noindent
+This is the only command that reads from git, and it follows the same rule as
+everything else here: a project without git still works. Outside a repository,
+or before an item is committed, it explains rather than fails --- an error
+would make a legitimate setup look broken.
+
+@subsection Renames, and the item it is really following
+
+@cindex renames
+Retitling an item renames its file, so the history is read with
+@option{--follow}. Two things about that are worth knowing, because both were
+discovered by testing rather than by reading git's documentation.
+
+@option{--follow} and @option{--reverse} together silently truncate: on a
+project with two items, asking for one returned its creating commit and nothing
+after it. The log is therefore read newest-first and reversed afterwards.
+
+More importantly, every item cairn writes has the same shape, and a fresh one
+is largely boilerplate --- similar enough that git's rename detection concludes
+item 2 was renamed from item 1 and follows into the wrong item's history.
+Attributing one item's creation to another is worse than showing nothing,
+because it looks right. So each revision is checked against the id it carries,
+and the trail is cut where that changes. The identifier being stable is what
+makes the correction possible.
+
+@subsection A shallow clone
+
+@cindex shallow clone
+In a shallow clone the oldest revision on hand is a horizon rather than a
+beginning. cairn checks whether that revision is one whose parents the clone
+lacks, and if it is, reports it as the earliest revision present rather than as
+the creation, and says on standard error what it could not see.
+
 @section cairn edit
 @cindex editor
 @vindex VISUAL

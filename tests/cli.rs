@@ -2845,3 +2845,265 @@ fn an_empty_editor_variable_is_ignored() {
         "an empty VISUAL was treated as an editor: {said}"
     );
 }
+
+// --- an item's history ------------------------------------------------------
+
+/// The central claim is that the repository is the database. This is the part
+/// of that claim a database cannot make, so it had better work.
+#[test]
+fn the_history_of_an_item_reads_as_field_changes() {
+    let p = repository();
+    p.add("Support OAuth", &[]);
+    git(&p, &["add", "-A"]);
+    git(&p, &["commit", "-qm", "add the item"]);
+
+    p.expect(&["set", "2", "status=doing"]);
+    git(&p, &["add", "-A"]);
+    git(&p, &["commit", "-qm", "start it"]);
+
+    p.expect(&["close", "2"]);
+    git(&p, &["add", "-A"]);
+    git(&p, &["commit", "-qm", "finish it"]);
+
+    let out = p.expect(&["log", "2"]);
+    let text = out.stdout.clone();
+    assert_contains(&text, "created", "the first revision is the creation");
+    assert_contains(&text, "status backlog -> doing", "the transition it made");
+    assert_contains(&text, "-> done", "and the one that closed it");
+
+    // A patch would be the lazy answer, and would say nothing a reader wants.
+    assert!(
+        !text.contains("@@") && !text.contains("+++"),
+        "the default output is a diff rather than a summary:\n{text}"
+    );
+
+    // `updated` changes on every single write, so reporting it would put a line
+    // of noise under every real change.
+    assert!(
+        !text.contains("updated 2026") && !text.contains("updated ->"),
+        "the `updated` stamp is reported as a change:\n{text}"
+    );
+}
+
+/// Renaming the file when a title changes is a feature. Without following
+/// renames, using it would silently destroy the item's history — so this is the
+/// test that says why `--follow` is there.
+#[test]
+fn history_survives_the_rename_a_retitle_causes() {
+    let p = repository();
+    p.add("Frist draft", &[]);
+    git(&p, &["add", "-A"]);
+    git(&p, &["commit", "-qm", "with a typo in the title"]);
+
+    let before = p.expect(&["show", "2", "--path"]).trimmed();
+    p.expect(&["set", "2", "title=Second draft"]);
+    let after = p.expect(&["show", "2", "--path"]).trimmed();
+    assert_ne!(before, after, "a retitle should have renamed the file");
+
+    git(&p, &["add", "-A"]);
+    git(&p, &["commit", "-qm", "fix the title"]);
+
+    let text = p.expect(&["log", "2"]).stdout;
+    assert_contains(&text, "created", "the creation is still in the history");
+    assert_contains(
+        &text,
+        "title",
+        "and the retitle that renamed the file is reported",
+    );
+    assert_eq!(
+        text.lines().filter(|l| l.contains("created")).count(),
+        1,
+        "the item was created once, not once per name:\n{text}"
+    );
+}
+
+/// cairn does not require git, so a project without it must explain rather than
+/// fail: an error here would make the tool look broken on a legitimate setup.
+#[test]
+fn history_outside_a_repository_explains_itself() {
+    let p = Project::new();
+    p.add("Not versioned", &[]);
+
+    let out = p.expect(&["log", "1"]);
+    assert!(out.ok(), "this is not a failure: {}", out.all());
+    assert_contains(&out.stdout, "no history", "it says there is none");
+    assert_contains(
+        &out.stdout,
+        "not in a git repository",
+        "and says why, rather than reporting that a program could not be run",
+    );
+}
+
+/// An item created but not yet committed has no history, which is different
+/// from an item whose history cannot be read.
+#[test]
+fn an_uncommitted_item_says_so_rather_than_showing_nothing() {
+    let p = repository();
+    p.add("Brand new", &[]);
+
+    let out = p.expect(&["log", "2"]);
+    assert_contains(
+        &out.stdout,
+        "not committed",
+        "a new item has no history, which is not the same as having none to read",
+    );
+}
+
+/// A committed item edited since is the normal state of a working tree, and the
+/// history is incomplete without saying so.
+#[test]
+fn history_reports_a_working_tree_that_has_moved_on() {
+    let p = repository();
+    p.add("Committed", &[]);
+    git(&p, &["add", "-A"]);
+    git(&p, &["commit", "-qm", "commit it"]);
+
+    let clean = p.expect(&["log", "2"]).stdout;
+    assert!(
+        !clean.contains("working tree differs"),
+        "nothing had changed yet:\n{clean}"
+    );
+
+    p.expect(&["set", "2", "priority=p0"]);
+    let dirty = p.expect(&["log", "2"]).stdout;
+    assert_contains(
+        &dirty,
+        "working tree differs",
+        "an edited item should say the last commit is not the whole story",
+    );
+}
+
+#[test]
+fn history_is_available_as_json() {
+    let p = repository();
+    p.add("Machine readable", &[]);
+    git(&p, &["add", "-A"]);
+    git(&p, &["commit", "-qm", "add"]);
+    p.expect(&["set", "2", "status=doing"]);
+    git(&p, &["add", "-A"]);
+    git(&p, &["commit", "-qm", "move"]);
+
+    let out = p.expect(&["log", "2", "--json"]);
+    let v: serde_json::Value = serde_json::from_str(&out.stdout)
+        .unwrap_or_else(|e| panic!("not JSON: {e}\n{}", out.stdout));
+
+    assert_eq!(v["available"], true);
+    let revisions = v["revisions"].as_array().expect("revisions");
+    assert_eq!(revisions.len(), 2, "two commits touched it");
+    assert_eq!(revisions[0]["changes"][0]["field"], "created");
+    assert_eq!(revisions[1]["changes"][0]["field"], "status");
+    assert_eq!(revisions[1]["changes"][0]["to"], "doing");
+
+    // Outside a repository the shape has to stay parseable, or a caller has to
+    // special-case the thing it is least likely to have tested.
+    let bare = Project::new();
+    bare.add("Elsewhere", &[]);
+    let out = bare.expect(&["log", "1", "--json"]);
+    let v: serde_json::Value = serde_json::from_str(&out.stdout).expect("still JSON");
+    assert_eq!(v["available"], false);
+    assert!(v["revisions"].as_array().expect("revisions").is_empty());
+}
+
+#[test]
+fn history_can_be_limited_to_the_most_recent_revisions() {
+    let p = repository();
+    p.add("Busy", &[]);
+    git(&p, &["add", "-A"]);
+    git(&p, &["commit", "-qm", "one"]);
+    for status in ["doing", "backlog", "doing"] {
+        p.expect(&["set", "2", &format!("status={status}")]);
+        git(&p, &["add", "-A"]);
+        git(&p, &["commit", "-qm", "change"]);
+    }
+
+    let all = p.expect(&["log", "2"]).stdout;
+    let some = p.expect(&["log", "2", "-n", "2"]).stdout;
+    assert!(
+        some.lines().count() < all.lines().count(),
+        "-n did not limit anything:\n{some}"
+    );
+    assert!(
+        !some.contains("created"),
+        "-n 2 should show the two most recent, not the two oldest:\n{some}"
+    );
+}
+
+/// Every item cairn writes has the same shape, and a fresh one is mostly
+/// boilerplate — similar enough that git's rename detection concludes item 2
+/// was renamed from item 1 and follows into the wrong item's history.
+///
+/// This is not a hypothetical: `git log --follow` does exactly that on a
+/// two-item project, which is every project. Attributing one item's creation to
+/// another is worse than showing no history at all, because it looks right.
+#[test]
+fn history_does_not_wander_into_a_different_item() {
+    let p = repository();
+    p.add("Second item", &[]);
+    git(&p, &["add", "-A"]);
+    git(&p, &["commit", "-qm", "add the second"]);
+    p.expect(&["set", "2", "status=doing"]);
+    git(&p, &["add", "-A"]);
+    git(&p, &["commit", "-qm", "start the second"]);
+
+    let out = p.expect(&["log", "2", "--json"]);
+    let v: serde_json::Value = serde_json::from_str(&out.stdout).expect("JSON");
+    let revisions = v["revisions"].as_array().expect("revisions");
+
+    assert_eq!(
+        revisions.len(),
+        2,
+        "item 2 has two commits; git's rename detection offers item 1's as well:\n{}",
+        out.stdout
+    );
+    for rev in revisions {
+        let path = rev["path"].as_str().unwrap_or_default();
+        assert!(
+            path.contains("0002"),
+            "a revision of a different item leaked in: {path}"
+        );
+    }
+}
+
+/// In a shallow clone the oldest revision on hand is a horizon, not a
+/// beginning. Calling it "created" states something false with complete
+/// confidence, which is the worst way for a history to be wrong.
+#[test]
+fn a_shallow_clone_does_not_claim_a_creation_it_cannot_see() {
+    let p = repository();
+    p.add("Long lived", &[]);
+    git(&p, &["add", "-A"]);
+    git(&p, &["commit", "-qm", "create it"]);
+    p.expect(&["set", "2", "status=doing"]);
+    git(&p, &["add", "-A"]);
+    git(&p, &["commit", "-qm", "and change it"]);
+
+    let clone = Project::empty();
+    let url = format!("file://{}", p.root().display());
+    let out = Command::new("git")
+        .args(["clone", "-q", "--depth", "1", &url, "."])
+        .current_dir(clone.root())
+        .output()
+        .expect("git clone");
+    if !out.status.success() {
+        // Some sandboxes refuse file:// clones; that is not this test's
+        // subject, and failing here would be noise.
+        eprintln!("skipping: shallow clone unavailable in this environment");
+        return;
+    }
+
+    let shown = clone.expect(&["log", "2"]);
+    assert!(
+        !shown.stdout.contains("created"),
+        "the creating commit is not in this clone, so it must not be claimed:\n{}",
+        shown.stdout
+    );
+    assert_contains(
+        &shown.all(),
+        "shallow",
+        "and the reason the history stops has to be said",
+    );
+
+    let v: serde_json::Value =
+        serde_json::from_str(&clone.expect(&["log", "2", "--json"]).stdout).expect("JSON");
+    assert_eq!(v["truncated"], true, "a caller can tell too");
+}
