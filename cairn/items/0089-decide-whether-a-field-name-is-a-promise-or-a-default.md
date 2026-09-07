@@ -91,3 +91,7 @@ enough that its people keep having to translate.
 ## 2026-09-07
 
 Settled as recommended: not now, not never. The manual has it as 'Roles: a decision taken by not taking it', with the argument on both sides, the point that a role attribute would be a new optional key and therefore free to add later, and the condition that would reverse it — a real project whose word for one of these is wrong enough that its people keep having to translate. Open until somebody other than the author has read it.
+
+## 2026-09-07
+
+Live evidence, filed as 0094: renaming the milestone field to anything else leaves the schema internally consistent, `cairn check` clean, and `cairn roadmap` printing the project name and nothing. `milestone` is looked up by literal string in refs, list, show, import and init, and it is the default `render.group_by`. That does not overturn the recommendation — a role mechanism is still additive and still not worth building — but it means the tool currently pretends the name is free when it is not, and 0094 is where that gets said out loud.
