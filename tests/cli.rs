@@ -134,6 +134,27 @@ impl Project {
         }
     }
 
+    /// Run as an agent, the way the MCP server does.
+    fn run_as_agent(&self, args: &[&str]) -> Out {
+        self.run_env(args, &[("CAIRN_AGENT", Some("claude"))])
+    }
+
+    fn expect_as_agent(&self, args: &[&str]) -> Out {
+        let out = self.run_as_agent(args);
+        assert!(out.ok(), "cairn {args:?} failed:\n{}", out.all());
+        out
+    }
+
+    fn fails_as_agent(&self, args: &[&str]) -> Out {
+        let out = self.run_as_agent(args);
+        assert!(
+            !out.ok(),
+            "cairn {args:?} should have failed:\n{}",
+            out.all()
+        );
+        out
+    }
+
     /// Run with something on standard input. Used by the MCP tests, which
     /// speak a request/response protocol over the child's stdio.
     fn run_stdin(&self, args: &[&str], input: &str) -> Out {
@@ -4414,4 +4435,127 @@ fn a_project_without_composition_is_unaffected() {
             .lines()
             .contains(&"0001".to_string())
     );
+}
+
+// --- what an agent may do, and what made an item ----------------------------
+
+fn restricted() -> Project {
+    let p = Project::new();
+    let cfg = p
+        .read("cairn.toml")
+        .replacen(
+            "name = \"priority\"",
+            "name = \"priority\"\nagent = \"read-only\"",
+            1,
+        )
+        .replacen("name = \"done\"", "name = \"done\"\nagent = \"propose\"", 1);
+    p.write("cairn.toml", &cfg);
+    p
+}
+
+/// A schema that says agents may set status and add notes, and may not change
+/// priority or declare something finished, is one somebody will let near a real
+/// backlog. That trust is worth more than any feature.
+#[test]
+fn an_agent_is_held_to_what_the_schema_permits() {
+    let p = restricted();
+    p.add("A thing", &[]);
+
+    // A person is unrestricted.
+    p.expect(&["set", "1", "priority=p0"]);
+    p.expect(&["close", "1"]);
+    p.expect(&["reopen", "1"]);
+
+    let refused = p.fails_as_agent(&["set", "1", "priority=p1"]);
+    assert_contains(
+        &refused.all(),
+        "may read `priority` but not set it",
+        "a read-only field is refused",
+    );
+    assert_contains(
+        &refused.all(),
+        "note on the item",
+        "and the refusal says what to do instead, rather than only saying no",
+    );
+
+    let closing = p.fails_as_agent(&["close", "1"]);
+    assert_contains(
+        &closing.all(),
+        "may not move an item to `done`",
+        "a status an agent may only propose",
+    );
+
+    // What it is allowed, it may still do.
+    p.expect_as_agent(&["set", "1", "status=doing"]);
+}
+
+/// The restriction is about what somebody changes, not about what a schema
+/// fills in. Checking the two together refused an agent permission to create
+/// anything at all in a project with a read-only field, because the default was
+/// applied through the same path.
+#[test]
+fn an_agent_can_still_file_work_in_a_restricted_project() {
+    let p = restricted();
+    p.expect_as_agent(&["new", "Filed by an agent", "-q"]);
+    assert_eq!(p.expect(&["list", "-A", "--ids"]).lines().len(), 1);
+    p.expect(&["check"]);
+}
+
+/// Who is working and who is answerable are different questions. With people
+/// they are usually the same person, which is why one field served; with an
+/// agent working and a person owning they are not.
+#[test]
+fn claiming_does_not_overwrite_who_owns_something() {
+    let p = Project::new();
+    p.add("A thing", &[]);
+    p.expect(&["set", "1", "owner=alice"]);
+
+    let out = p.run_env(&["claim", "1"], &[("CAIRN_USER", Some("bob"))]);
+    assert!(out.ok(), "{}", out.all());
+
+    let raw = p.expect(&["show", "1", "--raw"]).stdout;
+    assert_contains(&raw, "assignee: bob", "bob is working on it");
+    assert_contains(&raw, "owner: alice", "and alice is still answerable");
+}
+
+/// As the proportion of items written by agents rises, "items no human has
+/// looked at" is the query that matters, and it needs a gap to find rather than
+/// a name to trust.
+#[test]
+fn what_created_an_item_is_recorded() {
+    let p = Project::new();
+    p.add("By a person", &[]);
+    p.expect_as_agent(&["new", "By an agent", "-q"]);
+
+    let person = p.expect(&["show", "1", "--raw"]).stdout;
+    assert_contains(&person, "created_by: tester", "the person who filed it");
+    assert_contains(&person, "owner: tester", "who also owns it by default");
+
+    let agent = p.expect(&["show", "2", "--raw"]).stdout;
+    assert_contains(&agent, "created_by: claude", "the agent that filed it");
+    assert!(
+        !agent.contains("owner:"),
+        "an agent leaves it unowned, so it can be found:\n{agent}"
+    );
+
+    assert_eq!(
+        p.expect(&["list", "-A", "--ids", "--filter", "owner="])
+            .lines(),
+        vec!["0002".to_string()],
+        "which is the query the field exists for"
+    );
+    assert_eq!(
+        p.expect(&["list", "-A", "--ids", "--filter", "created_by=claude"])
+            .lines(),
+        vec!["0002".to_string()]
+    );
+}
+
+/// A project that restricts nothing behaves as it always has.
+#[test]
+fn an_unrestricted_project_treats_an_agent_as_anybody_else() {
+    let p = Project::new();
+    p.add("A thing", &[]);
+    p.expect_as_agent(&["set", "1", "priority=p0"]);
+    p.expect_as_agent(&["close", "1"]);
 }

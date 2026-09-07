@@ -59,6 +59,7 @@ Sections, no Front-Cover Texts, and no Back-Cover Texts.
 * Working the backlog::     Finding, claiming and finishing work.
 * Interchange::             Moving a backlog in and out.
 * Stability::               What may be scripted against.
+* Agents and ownership::    What an agent may touch, and who owns what.
 * Fields that name items::  References, keys and containers.
 * Acceptance criteria::     How an item says it is finished.
 * Verifying a release::     Checksums, provenance and signatures.
@@ -1317,6 +1318,92 @@ language rather than several partial ones, for the reason above.
 
 Until then, English messages sit alongside the English that git, cargo and the
 compiler already print to the same person.
+
+@node Agents and ownership
+@chapter Agents and ownership
+
+@cindex agents
+@cindex permissions
+The schema tells a model exactly which statuses, types and fields exist, and
+that closed vocabulary is the most useful thing cairn does for one. It says
+what @emph{exists}. This chapter is about what an agent may @emph{touch}, and
+about telling apart who is working from who is answerable.
+
+@section What an agent may do
+
+@vindex agent
+@example
+[[field]]
+name  = "priority"
+agent = "read-only"      # may read it, may not set it
+
+[[status]]
+name  = "done"
+agent = "propose"        # may ask for it; a person decides
+@end example
+
+@noindent
+Both default to unrestricted, so a project that says nothing behaves as it
+always has.
+
+A refusal says what to do instead, because an agent that is only told no learns
+nothing:
+
+@example
+cairn: `claude` may read `priority` but not set it, by this project's
+cairn.toml. Say what you believe in a note on the item instead, and a
+person can make the change.
+@end example
+
+@noindent
+@code{propose} needs somewhere for the proposal to go, and the item's body is
+already where every other reason lives. An agent that believes something is
+finished writes down why, and a person moves it.
+
+@command{cairn agent} carries these restrictions into the instruction block, so
+a model reads them rather than discovering them by being refused.
+
+@section What this is, exactly
+
+@cindex guard rail
+@strong{A guard rail, not a security boundary.}
+
+The Model Context Protocol server knows who is calling, because the caller
+identifies itself, and it can refuse. A command line cannot: an agent with a
+shell runs @command{cairn set} and nothing here sees it. Nothing detects an
+agent --- a program that wants to be treated as a person simply is one.
+
+Saying otherwise would be the first dishonest sentence in this manual. The
+comparison is a git hook: useful, conventional, and not a lock.
+
+What it buys is worth having regardless. A project that can say @emph{agents may
+set status and add notes, and may not change priority or acceptance criteria} is
+one somebody will point an agent at, and that is worth more than any feature.
+
+@section Who is working, and who is answerable
+
+@vindex owner
+@vindex created_by
+@code{assignee} is who is doing the work. @code{owner} is who is answerable for
+it. With people the two are usually the same, which is why one field served for
+so long; with an agent working and a person owning they are not, and claiming
+used to overwrite the record of who cared.
+
+@command{cairn claim} sets @code{assignee} and leaves @code{owner} alone.
+
+@code{created_by} records what made an item, as cairn was told. An item filed by
+a person is owned by them; an item filed by an agent is left unowned on purpose,
+because the question worth asking as the proportion written by agents rises is
+which items no person has yet taken responsibility for:
+
+@example
+cairn list --filter 'owner='
+cairn list --filter 'created_by=claude,owner='
+@end example
+
+@noindent
+@option{--mine} on @command{cairn next} means assigned to you, owned by you, or
+taken by nobody.
 
 @node Fields that name items
 @chapter Fields that name items

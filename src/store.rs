@@ -309,6 +309,20 @@ pub fn today() -> String {
 /// Who is acting. Explicit override first, then the repository's own idea of
 /// its author, then the login name — so an agent can identify itself with
 /// `CAIRN_USER=claude` without touching git configuration.
+/// Whether cairn is acting on behalf of an agent rather than a person.
+///
+/// Set by the Model Context Protocol server from the caller's own
+/// `clientInfo.name`, and available as `CAIRN_AGENT` for anything else that
+/// wants to say so. Nothing detects this: a program that wants to be treated
+/// as a person simply is one, which is why the manual calls the restrictions a
+/// guard rail rather than a boundary.
+pub fn acting_agent() -> Option<String> {
+    std::env::var("CAIRN_AGENT")
+        .ok()
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+}
+
 pub fn whoami() -> String {
     if let Ok(v) = std::env::var("CAIRN_USER")
         && !v.trim().is_empty()

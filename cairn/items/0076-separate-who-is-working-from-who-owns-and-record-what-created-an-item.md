@@ -2,10 +2,10 @@
 id: 76
 title: Separate who is working from who owns, and record what created an item
 type: feature
-status: backlog
+status: done
 milestone: v1.0
 created: 2026-09-06
-updated: 2026-09-06
+updated: 2026-09-07
 priority: p1
 effort: m
 sprint: s8
@@ -52,9 +52,9 @@ be asked today: who cares about this, and did a person write it.
 
 ## Acceptance criteria
 
-- [ ] `owner` exists beside `assignee`, and `claim` does not overwrite it
-- [ ] `created_by` records what created an item, from the identity cairn is given
-- [ ] Both are filterable: `owner=`, `created_by=claude`
-- [ ] `cairn next --mine` means owned or assigned, and says which
-- [ ] Existing items with only `assignee` behave exactly as they do now
-- [ ] No format bump: both keys are optional additions
+- [x] `owner` exists beside `assignee`, and `claim` does not overwrite it
+- [x] `created_by` records what created an item, from the identity cairn is given
+- [x] Both are filterable: `owner=`, `created_by=claude`
+- [x] `cairn next --mine` means owned or assigned, and says which
+- [x] Existing items with only `assignee` behave exactly as they do now
+- [x] No format bump: both keys are optional additions

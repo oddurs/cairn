@@ -2,10 +2,10 @@
 id: 75
 title: Say what an agent may touch
 type: feature
-status: backlog
+status: done
 milestone: v1.0
 created: 2026-09-06
-updated: 2026-09-06
+updated: 2026-09-07
 priority: p0
 effort: m
 sprint: s8
@@ -65,9 +65,9 @@ documentation.
 
 ## Acceptance criteria
 
-- [ ] A field can be marked read-only for agents, and the MCP server refuses it
-- [ ] A status transition can require a person, and refusal explains why
-- [ ] The refusal names what to do instead, rather than only saying no
-- [ ] `cairn agent` reports the restrictions, so a model learns them before trying
-- [ ] The manual says plainly this is a guard rail, not a boundary
-- [ ] A project that configures nothing behaves exactly as it does today
+- [x] A field can be marked read-only for agents, and the MCP server refuses it
+- [x] A status transition can require a person, and refusal explains why
+- [x] The refusal names what to do instead, rather than only saying no
+- [x] `cairn agent` reports the restrictions, so a model learns them before trying
+- [x] The manual says plainly this is a guard rail, not a boundary
+- [x] A project that configures nothing behaves exactly as it does today

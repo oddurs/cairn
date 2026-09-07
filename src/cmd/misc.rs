@@ -375,6 +375,13 @@ you tried, what to watch for.\n",
             .join(", ")
     ));
     for f in &cfg.fields {
+        let restriction = match f.agent {
+            crate::config::Agent::Write => String::new(),
+            crate::config::Agent::ReadOnly => " — **you may read this and not set it**".into(),
+            crate::config::Agent::Propose => {
+                " — **you may propose this in a note, not set it**".into()
+            }
+        };
         s.push_str(&format!(
             "- **`{}`**: {}{}{}\n",
             f.name,
@@ -390,8 +397,8 @@ you tried, what to watch for.\n",
             if f.required { " (required)" } else { "" },
             f.description
                 .as_ref()
-                .map(|d| format!(" — {d}"))
-                .unwrap_or_default(),
+                .map(|d| format!(" — {d}{restriction}"))
+                .unwrap_or_else(|| restriction.clone()),
         ));
     }
     if !cfg.milestones.is_empty() {

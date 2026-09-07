@@ -100,6 +100,18 @@ pub fn run(args: Args) -> Result<i32> {
     };
     item.meta.title = Some(args.title.clone());
     item.meta.created = Some(now.clone());
+    // What made this, as cairn was told. An agent filing something leaves it
+    // unowned on purpose: "items no human has looked at" is the query that
+    // matters as the proportion written by agents rises, and it needs a gap to
+    // find rather than a name to trust.
+    match crate::store::acting_agent() {
+        Some(agent) => item.meta.created_by = Some(agent),
+        None => {
+            let who = crate::store::whoami();
+            item.meta.created_by = Some(who.clone());
+            item.meta.owner = Some(who);
+        }
+    }
     item.meta.updated = Some(now);
 
     let kind = args.kind.or_else(|| cfg.project.default_type.clone());

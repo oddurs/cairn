@@ -19,7 +19,7 @@
 // one of each — the scarce resource is agreement about who is doing what.
 // Claiming writes that agreement into the item, where everyone can see it and
 // git can merge it.
-use crate::cmd::set::apply;
+use crate::cmd::set::apply_requested as apply;
 use crate::config::{Category, Config};
 use crate::filter::Ctx;
 use crate::lock::Lock;

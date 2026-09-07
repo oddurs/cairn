@@ -27,6 +27,30 @@ There is deliberately no library target, because linking cairn makes the caller
 a derivative work and reading its files does not.  A test fails if a [lib]
 appears in Cargo.toml.
 
+** What an agent may touch
+
+A field or a status can say what an agent may do with it — `agent =
+"read-only"` or `agent = "propose"` — and both default to unrestricted, so a
+project that says nothing is unchanged.  A refusal says what to do instead, and
+`cairn agent` carries the restrictions into the instruction block so a model
+reads them rather than discovering them by being refused.
+
+The manual is explicit that this is a guard rail rather than a security
+boundary: the MCP server knows who is calling and can refuse, a command line
+cannot, and nothing detects an agent.
+
+** Who is working, and who is answerable
+
+`owner` joins `assignee`.  With people the two are usually the same, which is
+why one field served; with an agent working and a person owning they are not,
+and `cairn claim` used to overwrite the record of who cared.  Claiming now sets
+`assignee` and leaves `owner` alone.
+
+`created_by` records what made an item.  An item filed by a person is owned by
+them; one filed by an agent is left unowned on purpose, so that `--filter
+'owner='` finds what no person has taken responsibility for.  `cairn next
+--mine` means assigned to you, owned by you, or taken by nobody.
+
 ** Position in a hierarchy is a query
 
 `contains`, `descendants`, `progress`, `depth` and `leaf` are derived from the

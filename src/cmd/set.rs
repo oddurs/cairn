@@ -122,7 +122,7 @@ pub fn run(args: Args) -> Result<i32> {
             // A failure part-way through has already written the items before
             // it, so the error says which — silence here would leave somebody
             // guessing how far it got.
-            apply(&mut item, &cfg, key, assign.clone()).map_err(|e| {
+            apply_requested(&mut item, &cfg, key, assign.clone()).map_err(|e| {
                 if changed.is_empty() {
                     e
                 } else {
@@ -261,7 +261,7 @@ fn transition(cfg: &Config, ids: &[String], status: &str, quiet: bool, verb: &st
     let mut changed = Vec::new();
     for raw in ids {
         let mut item = store.find(cfg.parse_id(raw)?)?;
-        apply(&mut item, cfg, "status", Assign::Set(status.to_string()))?;
+        apply_requested(&mut item, cfg, "status", Assign::Set(status.to_string()))?;
         item.touch(&today());
         item.save()?;
         if !quiet {
@@ -328,6 +328,25 @@ pub fn check_no_cycle(store: &Store, item: &Item) -> Result<()> {
 
 /// Apply one assignment, validating against the schema first. This is the only
 /// write path for field values, so `new` and `set` cannot drift apart.
+/// Apply an assignment somebody asked for, subject to what an agent may do.
+///
+/// Separate from `apply` because `apply` also serves schema defaults on a new
+/// item and every field an import carries. Checking there refused an agent
+/// permission to *create* anything in a project with a read-only field, since
+/// the default was applied through the same path — the restriction is about
+/// what somebody changes, not about what a schema fills in.
+pub fn apply_requested(item: &mut Item, cfg: &Config, key: &str, assign: Assign) -> Result<()> {
+    crate::refs::permitted_for_agent(
+        cfg,
+        key,
+        match &assign {
+            Assign::Set(v) => Some(v.as_str()),
+            _ => None,
+        },
+    )?;
+    apply(item, cfg, key, assign)
+}
+
 pub fn apply(item: &mut Item, cfg: &Config, key: &str, assign: Assign) -> Result<()> {
     match key {
         "id" => bail!("`id` cannot be changed"),
@@ -347,6 +366,16 @@ pub fn apply(item: &mut Item, cfg: &Config, key: &str, assign: Assign) -> Result
                 item.meta.key = Some(v);
             }
             _ => bail!("`key` is not a list field; use key=..."),
+        },
+        "owner" => match assign {
+            Assign::Set(v) if v.trim().is_empty() => item.meta.owner = None,
+            Assign::Set(v) => item.meta.owner = Some(v),
+            _ => bail!("`owner` is not a list field; use owner=..."),
+        },
+        "created_by" => match assign {
+            Assign::Set(v) if v.trim().is_empty() => item.meta.created_by = None,
+            Assign::Set(v) => item.meta.created_by = Some(v),
+            _ => bail!("`created_by` is not a list field; use created_by=..."),
         },
         "title" => match assign {
             Assign::Set(v) if v.is_empty() => bail!("title cannot be empty"),
