@@ -254,11 +254,11 @@ fn a_long_sequence_of_ordinary_use_leaves_the_backlog_intact() {
                 "renumber"
             }
             (95, _) => {
-                // `--compact` closes the gaps that `remove` leaves, so it moves
-                // far more identifiers than a plain renumber ever does.
-                s.expect(&["renumber", "--compact"]);
-                s.expected = current_state(&s);
-                "renumber --compact"
+                // A dry run must never write, whatever state the backlog is in.
+                let before = current_state(&s);
+                s.expect(&["renumber", "--dry-run"]);
+                assert_eq!(current_state(&s), before, "a dry run changed the backlog");
+                "renumber --dry-run"
             }
             (96, Some(id)) => {
                 s.expect(&[

@@ -58,6 +58,7 @@ Sections, no Front-Cover Texts, and no Back-Cover Texts.
 * Filters::                 Selecting items.
 * Working the backlog::     Finding, claiming and finishing work.
 * Interchange::             Moving a backlog in and out.
+* Stability::               What may be scripted against.
 * Commands::                Every subcommand.
 * Hooks::                   Running your own programs on events.
 * Coding agents::           Keeping generated work inside the schema.
@@ -1132,6 +1133,122 @@ inside cairn and no second place for credentials to live, and enterprise hosts
 work because @command{gh} is already configured for them. Install it from
 @url{https://cli.github.com} and run @command{gh auth login} first.
 
+@node Stability
+@chapter Stability
+
+@cindex stability
+@cindex scripting
+The file format has a version, a policy and a corpus that pins it. It was for a
+while the only part of cairn that had promised anybody anything, which is a poor
+position for a tool people are invited to script against: output that is an
+accident of implementation cannot be depended on, and everybody sensible
+notices.
+
+This chapter says what may change and what may not. The rules are the ones the
+format already uses: within a major version, things may be added and may not be
+removed or renamed.
+
+@section What is promised
+
+@table @asis
+@item The item format
+Versioned. Additive in a minor release; anything else needs a new format number
+and a migration. @xref{Compatibility}.
+
+@item JSON output
+@cindex --json
+@command{list}, @command{next}, @command{search}, @command{show},
+@command{log} and @command{config} take @option{--json}. Fields may be added.
+Within a major version, a documented field is never removed, never renamed, and
+never changes type.
+
+Every item in JSON carries @code{id}, @code{title}, @code{type},
+@code{status}, @code{category}, @code{milestone}, @code{assignee},
+@code{labels}, @code{depends_on}, @code{created}, @code{updated},
+@code{source}, @code{ref} and @code{fields}. @command{show} adds @code{body};
+@command{next} adds @code{blockers} and @code{ready}.
+
+@item Identifiers only
+@cindex --ids
+@option{--ids} prints one identifier per line, formatted as the project
+configures. Nothing else is on those lines, ever.
+
+@item Tab-separated output
+@cindex --plain
+@option{--plain} prints machine values, tab-separated, with no header and no
+colour --- @code{doing}, not @samp{in progress}. On @command{list} the columns
+are whatever @option{--columns} says, defaulting to the project's configured
+columns; on @command{next} and @command{search} they are fixed.
+
+@item Counts
+@option{--count} prints one integer and nothing else.
+
+@item The filter grammar
+@cindex filter grammar
+Field names, operators and the pseudo-fields @code{category}, @code{blocked},
+@code{ready} and @code{blockers}. Additive only: an expression that works today
+works in every later release of this major version. @xref{Filters}.
+
+@item Exit codes
+@cindex exit codes
+@table @code
+@item 0
+The command did what was asked.
+@item 1
+The operation failed, or found problems it was asked to look for --- a
+@command{check} that found errors, a confirmation that was declined.
+@item 2
+The command line was wrong. This is clap's, and it is never used for anything
+else.
+@end table
+
+@item MCP tool names and schemas
+@cindex Model Context Protocol
+The eleven tools, their names and their arguments. Arguments may be added.
+Removing a tool, or an argument, is a major release.
+
+@item The interchange document
+Carries its own version. @xref{Interchange}.
+@end table
+
+@section What is deliberately not promised
+
+@cindex unstable surfaces
+This list matters as much as the one above, because it is how the tool stays
+improvable.
+
+@itemize @bullet
+@item
+The exact wording of anything written for a person to read, including error
+messages. Scripts must not match on them; @option{--json} exists so they do not
+have to.
+
+@item
+Colour, table widths, column alignment, and whether a column appears at all in
+the human table --- empty ones are dropped.
+
+@item
+The order of anything not documented as ordered. @option{--sort} is the way to
+depend on an order.
+
+@item
+Anything printed on standard error while standard output carries the answer.
+Notes, warnings and progress live there precisely so they can change.
+
+@item
+The wording and layout of the generated @file{ROADMAP.md} and of
+@command{cairn agent}. Both are generated from the schema and both will improve.
+@end itemize
+
+@section What this costs
+
+@cindex adding a field
+Being specific has a price worth stating plainly: a field named here cannot be
+withdrawn without a major release, so adding one is a decision rather than a
+convenience. That is the intended effect. @file{tests/stability.rs} asserts that
+every documented field is present, so removing one fails the build rather than
+somebody's script.
+
 @node Commands
 @chapter Commands
 
@@ -1177,6 +1294,71 @@ documentation embeds the dates of the items it creates: without it, a recording
 made today differs from the one committed yesterday, and the check guarding
 them fails for a reason unconnected to the program. A value that is not a
 timestamp is ignored.
+
+@section Why these commands and not others
+
+@cindex command surface
+Twenty-eight commands is a lot, and after 1.0 every one of them is a promise.
+They were reviewed as a set before that happened, against one bar: a command
+earns its place if removing it would make a real task @emph{harder}, not merely
+different. If an existing command with a flag would do, that is the answer.
+
+@table @asis
+@item The ones a schema makes necessary
+@command{close}, @command{reopen} and @command{claim} are not shorthands for
+@command{set}. Closing means moving to the first status whose category is
+@code{done}, which the caller would otherwise have to look up; claiming sets an
+assignee and a status together, and two separate writes could interleave with
+somebody else's.
+
+@item The ones that write something @command{set} cannot
+@command{note} appends to the body under a dated heading. @command{milestone}
+edits @file{cairn.toml} rather than an item. @command{init} writes a schema.
+@command{render} writes the roadmap. @command{renumber} repairs identifiers.
+
+@item Three views of one query
+@command{list}, @command{board} and @command{roadmap} could in principle be one
+command with a flag. They are not, because they answer different questions --- 
+what matches, what is in flight, and what is left before a date --- and a flag
+that changes the shape of the output as much as its content is a different
+command wearing a disguise. @command{next} is the fourth: it is the question an
+agent asks, and making it a filter expression people must memorise would be a
+real loss.
+
+@item Two verbs for one round trip
+@command{export} and @command{import} are deliberately not symmetrical.
+Exporting is one thing; importing has to reconcile with what is already there,
+which is where @option{--update}, @option{--dry-run} and provenance live.
+Folding them together would give one command two unrelated halves.
+
+@item Hidden, but reachable
+@command{migrate} and @command{merge-driver} are not in @option{--help}.
+@command{merge-driver} is called by git; @command{migrate} has nothing to
+migrate until there is a format 2. Neither is a command a person needs to find,
+and both are documented here.
+
+@item Removed in the review
+@option{--compact} renumbered a whole project into a gapless sequence. It moved
+every identifier, which silently invalidates every commit message, pull request
+and human memory that referred to one --- and cairn has no way to rewrite any of
+those. That is a large, irreversible cost for a cosmetic benefit, and nothing
+outside its own test ever asked for it. Removing it before 1.0 was free;
+afterwards it would have been a major release.
+@end table
+
+@section One rule about flags
+
+@cindex output shapes
+Output @emph{shapes} --- @option{--json}, @option{--ids}, @option{--plain},
+@option{--count} --- belong on every command that lists items, and now are on
+all of them. Query @emph{controls} --- @option{--sort}, @option{--columns} ---
+belong on @command{list} alone, because @command{next} and @command{search} have
+opinions about order and about which columns matter, and those opinions are the
+reason they exist.
+
+Before the review @command{next} and @command{search} had @option{--json} and
+@option{--ids} but not @option{--plain} or @option{--count}, for no reason
+anybody could name.
 
 @section cairn init
 Writes @file{cairn.toml} and the item directory. @option{--preset} selects

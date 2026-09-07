@@ -102,6 +102,8 @@ pub fn claim(args: ClaimArgs) -> Result<i32> {
                     blocked: false,
                     json: false,
                     ids: false,
+                    plain: false,
+                    count: false,
                 },
             )?;
             match picked.first() {

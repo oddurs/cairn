@@ -86,14 +86,12 @@ The rough edges that show up after a few weeks of daily use, and the pieces that
 
 ## v1.0 — Stable
 
-`#####·····` 42% · 5 of 12 done · due 2027-03-01
+`######····` 58% · 7 of 12 done · due 2027-03-01
 
 Safe to depend on: every scriptable surface carries a promise, the command surface has been reviewed and pruned rather than accumulated, releases can be verified, and it installs from a package manager people already use.
 
 ### backlog
 
-- [ ] [`0050`](https://github.com/oddurs/cairn/blob/main/cairn/items/0050-say-what-is-stable-and-what-the-promise-means.md) Say what is stable, and what the promise means <sup>docs · p0</sup>
-- [ ] [`0051`](https://github.com/oddurs/cairn/blob/main/cairn/items/0051-review-the-command-surface-before-1-0-freezes-it.md) Review the command surface before 1.0 freezes it <sup>chore · p0</sup>
 - [ ] [`0052`](https://github.com/oddurs/cairn/blob/main/cairn/items/0052-sign-releases-and-ship-a-source-tarball.md) Sign releases and ship a source tarball <sup>chore · p0</sup>
 - [ ] [`0053`](https://github.com/oddurs/cairn/blob/main/cairn/items/0053-be-in-a-package-manager-people-already-use.md) Be in a package manager people already use <sup>chore · p0</sup>
 - [ ] [`0054`](https://github.com/oddurs/cairn/blob/main/cairn/items/0054-decide-about-translation-and-write-the-decision-down.md) Decide about translation, and write the decision down <sup>docs · p2</sup>
@@ -107,6 +105,8 @@ Safe to depend on: every scriptable surface carries a promise, the command surfa
 - [x] [`0027`](https://github.com/oddurs/cairn/blob/main/cairn/items/0027-version-the-format-and-promise-compatibility.md) Version the format and promise compatibility <sup>feature · p0 · s4</sup>
 - [x] [`0028`](https://github.com/oddurs/cairn/blob/main/cairn/items/0028-keep-a-golden-corpus-of-items-that-must-always-parse.md) Keep a golden corpus of items that must always parse <sup>chore · p0 · s4</sup>
 - [x] [`0036`](https://github.com/oddurs/cairn/blob/main/cairn/items/0036-publish-the-item-format-as-a-document-in-its-own-right.md) Publish the item format as a document in its own right <sup>docs · p1</sup>
+- [x] [`0050`](https://github.com/oddurs/cairn/blob/main/cairn/items/0050-say-what-is-stable-and-what-the-promise-means.md) Say what is stable, and what the promise means <sup>docs · p0</sup>
+- [x] [`0051`](https://github.com/oddurs/cairn/blob/main/cairn/items/0051-review-the-command-surface-before-1-0-freezes-it.md) Review the command surface before 1.0 freezes it <sup>chore · p0</sup>
 
 ## later — Someday
 

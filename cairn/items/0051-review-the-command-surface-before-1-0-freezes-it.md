@@ -2,10 +2,10 @@
 id: 51
 title: Review the command surface before 1.0 freezes it
 type: chore
-status: backlog
+status: done
 milestone: v1.0
 created: 2026-09-05
-updated: 2026-09-05
+updated: 2026-09-06
 priority: p0
 effort: m
 ---

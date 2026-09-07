@@ -70,6 +70,14 @@ pub struct Args {
     /// Output ids only
     #[arg(long, action = ArgAction::SetTrue)]
     pub ids: bool,
+
+    /// Tab-separated, no header or colour
+    #[arg(long, action = ArgAction::SetTrue)]
+    pub plain: bool,
+
+    /// Print the number of matches only
+    #[arg(long, action = ArgAction::SetTrue)]
+    pub count: bool,
 }
 
 pub fn run(args: Args) -> Result<i32> {
@@ -79,9 +87,35 @@ pub fn run(args: Args) -> Result<i32> {
     let ctx = Ctx::new(&cfg, &items);
     let picked = select(&cfg, &ctx, &items, &args)?;
 
+    if args.count {
+        println!("{}", picked.len());
+        return Ok(0);
+    }
     if args.ids {
         for i in &picked {
             println!("{}", cfg.format_id(i.id));
+        }
+        return Ok(0);
+    }
+    if args.plain {
+        // The same columns the table shows, as machine values rather than
+        // labels — `doing`, not "in progress".
+        for i in &picked {
+            let mut cells = vec![cfg.format_id(i.id)];
+            for f in table_fields(&cfg) {
+                cells.push(resolve(i, &ctx, &f).display());
+            }
+            cells.push(i.status().to_string());
+            cells.push(i.milestone().unwrap_or("").to_string());
+            cells.push(
+                ctx.blockers(i)
+                    .iter()
+                    .map(|b| cfg.format_id(*b))
+                    .collect::<Vec<_>>()
+                    .join(","),
+            );
+            cells.push(i.title().to_string());
+            println!("{}", cells.join("\t"));
         }
         return Ok(0);
     }
