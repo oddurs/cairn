@@ -256,6 +256,23 @@ fn transition(cfg: &Config, ids: &[String], status: &str, quiet: bool, verb: &st
                 style::bold(&cfg.format_id(item.id)),
                 item.title()
             );
+            // Said at the moment somebody declares the work done, against what
+            // they themselves wrote down that done would mean. Never a refusal:
+            // a criterion can stop applying, and a tool that blocked here would
+            // teach people to tick boxes rather than to say what is true.
+            if cfg.category(item.status()).is_closed() {
+                let c = item.criteria(cfg.project.criteria_section.as_deref());
+                if c.any() && !c.complete() {
+                    eprintln!(
+                        "  {}",
+                        style::yellow(&format!(
+                            "{} of {} acceptance criteria are unticked",
+                            c.total - c.done,
+                            c.total
+                        ))
+                    );
+                }
+            }
         }
         changed.push(item);
     }

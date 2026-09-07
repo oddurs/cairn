@@ -59,6 +59,7 @@ Sections, no Front-Cover Texts, and no Back-Cover Texts.
 * Working the backlog::     Finding, claiming and finishing work.
 * Interchange::             Moving a backlog in and out.
 * Stability::               What may be scripted against.
+* Acceptance criteria::     How an item says it is finished.
 * Verifying a release::     Checksums, provenance and signatures.
 * Cookbook::                Recipes for what people arrive wanting.
 * Commands::                Every subcommand.
@@ -1315,6 +1316,103 @@ language rather than several partial ones, for the reason above.
 
 Until then, English messages sit alongside the English that git, cargo and the
 compiler already print to the same person.
+
+@node Acceptance criteria
+@chapter Acceptance criteria
+
+@cindex acceptance criteria
+@cindex checkboxes
+@cindex definition of done
+An item's body may state how you will know it is finished:
+
+@example
+## Acceptance criteria
+
+- [x] Follows renames, so a retitled item keeps its history
+- [ ] Works in a shallow clone, and says what it could not see
+@end example
+
+cairn reads those boxes. It does not write them --- ticking one is a judgement,
+and a judgement belongs to a person or to whatever is answering for the work.
+
+@section What reads them
+
+@table @asis
+@item @command{cairn close}
+Says what is still unticked, at the moment somebody declares the work done
+against what they themselves wrote down that done would mean. It never refuses:
+a criterion can stop applying, and a tool that blocked here would teach people
+to tick boxes rather than to say what is true.
+
+@item @command{cairn show}
+Reports the count, and marks it when every box is ticked.
+
+@item Filters
+@code{criteria}, @code{criteria_done} and @code{criteria_met} are derived from
+the body, so they cannot go stale.
+
+@example
+cairn list -A --filter 'category=done,criteria_met=false'
+@end example
+
+@code{criteria_met} exists rather than leaving you to write
+@code{criteria_done < criteria}, which the grammar cannot express: a comparison
+is always against a literal.
+
+@item The Model Context Protocol server
+@code{close_item} reports what remains, so an agent closing something is told
+what it said done would mean. Again without refusing --- the agent may be right
+and the criteria stale.
+@end table
+
+@section An item that states none
+
+@noindent
+An item with no boxes is @emph{vacuously} complete, and nothing above says
+anything about it. Most items have no criteria and must not be reported as
+unfinished, or the signal is worth nothing within a week.
+
+@section Where they live
+
+@vindex criteria_section
+By default every checkbox in a body counts, because an item that put its
+criteria under a different heading still meant them. A project that keeps them
+somewhere specific can say so:
+
+@example
+[project]
+criteria_section = "Acceptance criteria"
+@end example
+
+@noindent
+Then only boxes under a heading of that name count, matched case-insensitively
+at any heading depth. A body with no such heading states no criteria --- it
+does not fall back to counting everything, which would silently include the
+boxes the setting exists to exclude.
+
+@section Making it a rule
+
+@vindex require_criteria
+@example
+[project]
+require_criteria = true
+@end example
+
+@noindent
+Then @command{cairn check} warns about a closed item whose criteria are
+unticked, and @option{--strict} makes that fail.
+
+It is off by default, and the reason is worth stating rather than assuming. An
+unticked box is not a schema violation the way an undefined status is; it is a
+judgement about process. A project adopting cairn mid-life would turn this on,
+receive a wall of warnings about work finished years ago, turn it off again, and
+from then on it would be worth nothing. The information is actionable at the
+moment of closing, which is why that is where it is reported unconditionally.
+
+@noindent
+This project has not turned it on. Its own backlog holds two hundred unticked
+criteria on closed items, written before anything read them, and mass-ticking
+them retrospectively would be exactly the ritual this feature exists to avoid.
 
 @node Verifying a release
 @chapter Verifying a release

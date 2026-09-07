@@ -120,6 +120,18 @@ pub fn run(args: Args) -> Result<i32> {
             rows.push((f.name.as_str(), v.display()));
         }
     }
+    let criteria = item.criteria(cfg.project.criteria_section.as_deref());
+    if criteria.any() {
+        let text = criteria.display();
+        rows.push((
+            "criteria",
+            if criteria.complete() {
+                style::green(&text)
+            } else {
+                text
+            },
+        ));
+    }
     if !item.meta.depends_on.is_empty() {
         let deps: Vec<String> = item
             .meta

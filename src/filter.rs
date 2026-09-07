@@ -192,6 +192,27 @@ pub fn resolve(item: &Item, ctx: &Ctx, key: &str) -> Field {
         "blocked" => Field::Text(ctx.is_blocked(item).to_string()),
         "ready" => Field::Text(ctx.is_ready(item).to_string()),
         "blockers" => Field::List(ctx.blockers(item).iter().map(u32::to_string).collect()),
+        // Derived from the body rather than stored, so they cannot go stale and
+        // there is nothing to keep in step.
+        "criteria" => Field::Text(
+            item.criteria(ctx.cfg.project.criteria_section.as_deref())
+                .total
+                .to_string(),
+        ),
+        "criteria_done" => Field::Text(
+            item.criteria(ctx.cfg.project.criteria_section.as_deref())
+                .done
+                .to_string(),
+        ),
+        // A boolean rather than leaving people to write `criteria_done <
+        // criteria`, which the grammar cannot express: a comparison is always
+        // against a literal. An item stating no criteria is vacuously met, so
+        // that the common case produces no noise.
+        "criteria_met" => Field::Text(
+            item.criteria(ctx.cfg.project.criteria_section.as_deref())
+                .complete()
+                .to_string(),
+        ),
         _ => item.get(key),
     }
 }
