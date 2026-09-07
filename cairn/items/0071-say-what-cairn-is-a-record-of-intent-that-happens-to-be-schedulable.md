@@ -2,10 +2,10 @@
 id: 71
 title: 'Say what cairn is: a record of intent that happens to be schedulable'
 type: docs
-status: backlog
+status: done
 milestone: v0.2
 created: 2026-09-06
-updated: 2026-09-06
+updated: 2026-09-07
 priority: p1
 effort: s
 sprint: s8
@@ -59,7 +59,7 @@ conflict.
 
 ## Acceptance criteria
 
-- [ ] Stated in the README, the manual and the site
-- [ ] Says what follows from it, not only what it is
-- [ ] Names at least one thing cairn should therefore refuse
-- [ ] Short enough that somebody reads all of it
+- [x] Stated in the README, the manual and the site
+- [x] Says what follows from it, not only what it is
+- [x] Names at least one thing cairn should therefore refuse
+- [x] Short enough that somebody reads all of it

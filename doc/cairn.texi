@@ -93,6 +93,45 @@ through, any additional fields, the milestones, and saved views. The commands
 enforce that schema, so the structure survives contact with many contributors
 --- and with programs, which is the harder case.
 
+@section What an item is
+
+@cindex intent
+@cindex decision record
+Describing cairn as an issue manager is accurate and undersells it enough to
+produce the wrong decisions.
+
+An item is a @dfn{record of intent}. It carries the reasoning that produced it
+--- the problem, the proposal, the costs that were weighed, and how you will
+know when it is done --- it lives with the code it describes, and it is worth
+@emph{more} after it closes than before, because it is then the answer to why
+something is the way it is.
+
+That is true of an architecture decision record and false of a ticket. A ticket
+points at a conversation that happened somewhere else, and is worthless the
+moment it is closed. Scheduling --- statuses, milestones, what is ready to start
+--- exists here to make the record actionable, not the other way round.
+
+@subsection What follows from it
+
+This is not a slogan. It decides things.
+
+Items carry reasoning rather than titles, which is why a type has a
+@code{template} that seeds headings, and why that is a feature rather than
+friction. It is why @command{cairn log} was worth building: a record whose
+history cannot be read is a worse record. It is why the file format is specified
+for a horizon longer than this program's. And it is why the answer to ``can
+filing be made faster by dropping the body'' is no.
+
+@subsection What cairn should therefore refuse
+
+@cindex comments
+A record of intent does not need comment threads, reactions, or a notification
+when somebody begins typing. Those belong to the conversation, and the
+conversation is not the record --- it is the thing the record exists to survive.
+
+That is a concrete refusal, and it is the first place to point when somebody
+asks for a discussion feature. @xref{The promise}, for the other boundary.
+
 @noindent
 cairn is @emph{not}:
 

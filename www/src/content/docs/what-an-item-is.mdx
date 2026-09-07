@@ -1,0 +1,42 @@
+---
+title: What an item is
+description: A cairn item is a record of intent that happens to be schedulable — worth more after it closes than before.
+summary: Calling cairn an issue manager is accurate, and undersells it enough to produce the wrong decisions.
+order: 1
+---
+
+An item is a **record of intent**. It carries the reasoning that produced it —
+the problem, the proposal, the costs weighed, how you will know it is done — it
+lives with the code it describes, and it is worth **more** after it closes than
+before, because it is then the answer to *why is it like this*.
+
+That is true of an architecture decision record and false of a ticket. A ticket
+points at a conversation that happened somewhere else, and is worthless the
+moment it closes.
+
+Scheduling — statuses, milestones, what is ready to start — exists to make the
+record actionable, not the other way round.
+
+## What follows from it
+
+This is not a slogan. It decides things.
+
+- Items carry reasoning rather than titles, so a type's `template` seeds
+  headings — a feature rather than friction.
+- `cairn log` was worth building, because a record whose history cannot be read
+  is a worse record.
+- The file format is [specified](/format) for a horizon longer than this
+  program's.
+- The answer to *can filing be made faster by dropping the body* is no.
+
+## What cairn should therefore refuse
+
+A record of intent does not need comment threads, reactions, or a notification
+when somebody begins typing.
+
+Those belong to the conversation, and the conversation is not the record — it is
+the thing the record exists to survive. That is the first place to point when
+somebody asks for a discussion feature.
+
+The other boundary — what a single repository can and cannot do — is [the
+promise](/promise).

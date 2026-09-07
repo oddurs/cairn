@@ -21,6 +21,32 @@ Note the third command. `0002` depends on `0001`, so it stays off the list until
 `0001` closes: `cairn next` shows work that is genuinely startable, not
 everything that is open.
 
+## What an item is
+
+Calling cairn an issue manager is accurate and undersells it enough to produce
+the wrong decisions.
+
+An item is a **record of intent**. It carries the reasoning that produced it —
+the problem, the proposal, the costs weighed, how you will know it is done — it
+lives with the code it describes, and it is worth **more** after it closes than
+before, because it is then the answer to *why is it like this*.
+
+That is true of an architecture decision record and false of a ticket. A ticket
+points at a conversation that happened somewhere else and is worthless the
+moment it closes. Scheduling — statuses, milestones, what is ready to start —
+exists to make the record actionable, not the other way round.
+
+It decides things, which is why it is written down. Items carry reasoning rather
+than titles, so a type template seeds headings and that is a feature rather than
+friction. `cairn log` was worth building because a record whose history cannot
+be read is a worse record. The format is specified for a horizon longer than
+this program's.
+
+And it says what to refuse: a record of intent does not need comment threads,
+reactions, or a notification when somebody starts typing. Those belong to the
+conversation, and the conversation is not the record — it is the thing the
+record exists to survive.
+
 ## Why
 
 Roadmaps rot because they live somewhere the work does not. A `ROADMAP.md`
