@@ -263,6 +263,11 @@ impl Project {
         self.write("cairn.toml", &filled);
     }
 
+    fn append(&self, rel: &str, extra: &str) {
+        let existing = self.read(rel);
+        self.write(rel, &(existing + extra));
+    }
+
     fn read(&self, rel: &str) -> String {
         std::fs::read_to_string(self.path(rel)).unwrap_or_default()
     }
@@ -3624,6 +3629,50 @@ fn an_id_can_be_recovered_from_a_formatted_filename() {
     );
 }
 
+/// A prefix is compared in bytes, and a byte offset can land inside a
+/// character. `MP` is two bytes and so is `é`, which was enough to bring the
+/// process down.
+#[test]
+fn a_non_ascii_argument_is_refused_rather_than_fatal() {
+    let p = keyed("MP-{n}", None);
+    p.expect(&["new", "First", "-q"]);
+
+    for arg in ["aé", "é", "MPé", "aéb", "日本"] {
+        let out = p.run(&["show", arg]);
+        assert!(
+            !out.all().contains("panicked"),
+            "`cairn show {arg}` panicked: {}",
+            out.all()
+        );
+        assert!(!out.ok(), "`{arg}` is not an id and should be refused");
+        assert_contains(&out.all(), "not a valid item id", "and said why");
+    }
+}
+
+/// The same slice, reached from a filename instead of an argument.
+///
+/// Worse than the argument path, because nobody types this: a file whose name
+/// happens to begin with a multi-byte character is enough, and the crash lands
+/// in `list` rather than in something a person just asked for.
+#[test]
+fn a_non_ascii_filename_does_not_bring_down_a_listing() {
+    let p = keyed("MP-{n}", None);
+    p.expect(&["new", "First", "-q"]);
+    // No `id` in the frontmatter, so the filename is the only place to find one.
+    p.write(
+        "cairn/items/éclair.md",
+        "---\ntitle: Named oddly\nstatus: backlog\n---\nbody\n",
+    );
+
+    let out = p.run(&["list", "-A"]);
+    assert!(
+        !out.all().contains("panicked"),
+        "a filename brought down the listing: {}",
+        out.all()
+    );
+    assert!(out.ok(), "{}", out.all());
+}
+
 /// A project that says nothing gets exactly what it gets today.
 #[test]
 fn the_default_rendering_is_unchanged() {
@@ -5149,5 +5198,173 @@ fn a_dry_run_says_what_it_will_touch_in_files() {
         items.as_array().unwrap().len(),
         4,
         "two items, plus the two milestones it said it would create"
+    );
+}
+
+// --- the schema, checked against itself -------------------------------------
+
+/// `category` is the one key in the file that carries meaning rather than
+/// appearance, and it silently defaulted to `open`. A status somebody named
+/// `shipped` came out as the exact opposite of what they meant.
+#[test]
+fn a_status_with_no_category_is_reported_rather_than_assumed() {
+    let p = Project::new();
+    p.append("cairn.toml", "\n[[status]]\nname = \"shipped\"\n");
+
+    let out = p.expect(&["check"]).all();
+    assert_contains(&out, "status `shipped`", "the status is named");
+    assert_contains(&out, "does not declare a `category`", "and the problem");
+    assert_contains(&out, "treated as `open`", "and what was assumed instead");
+    assert_contains(&out, "cairn.toml:", "at a line, as a diagnostic should be");
+
+    // A warning, not an error: a project that has one still works.
+    assert!(p.run(&["check"]).ok(), "it must not fail the build");
+    assert!(p.run(&["list"]).ok(), "or stop anything working");
+
+    // And the resolved schema does not present a guess as a decision.
+    assert_contains(
+        &p.expect(&["config"]).stdout,
+        "(assumed)",
+        "`cairn config` marks it",
+    );
+    let json: serde_json::Value =
+        serde_json::from_str(&p.expect(&["config", "--json"]).stdout).unwrap();
+    let statuses = json["statuses"].as_array().unwrap();
+    let shipped = statuses
+        .iter()
+        .find(|s| s["name"] == "shipped")
+        .expect("shipped");
+    assert_eq!(shipped["category_declared"], serde_json::json!(false));
+    assert_eq!(
+        statuses[0]["category_declared"],
+        serde_json::json!(true),
+        "a declared category still reads as declared"
+    );
+}
+
+/// `cairn check` validated items against the schema and never the schema
+/// against itself, so a configuration could be comprehensively wrong and pass.
+#[test]
+fn the_schema_is_checked_against_itself() {
+    let p = Project::new();
+    p.append(
+        "cairn.toml",
+        "\n[[view]]\nname = \"typo\"\nfilter = \"stauts=backlog\"\nsort = \"nonesuch\"\n",
+    );
+
+    let out = p.expect(&["check"]).all();
+    assert_contains(&out, "view `typo` filter names `stauts`", "the filter key");
+    assert_contains(
+        &out,
+        "view `typo` sort names `nonesuch`",
+        "and the sort key",
+    );
+    assert!(
+        p.run(&["check"]).ok(),
+        "a warning: frontmatter is open-ended, so a key nothing carries is legal"
+    );
+}
+
+/// A filter that does not parse is the one error here. "No items match" is true
+/// and useless: it sends somebody to look at their backlog instead of the typo.
+#[test]
+fn a_view_whose_filter_does_not_parse_is_an_error() {
+    let p = Project::new();
+    p.append(
+        "cairn.toml",
+        "\n[[view]]\nname = \"bad\"\nfilter = \"nonsense\"\n",
+    );
+
+    let out = p.run(&["check"]);
+    assert!(!out.ok(), "it should fail: {}", out.all());
+    assert_contains(&out.all(), "view `bad`", "naming the view");
+    assert_contains(&out.all(), "filter does not parse", "and the reason");
+}
+
+#[test]
+fn render_settings_that_cannot_work_are_reported() {
+    let p = Project::new();
+    let cfg = p
+        .read("cairn.toml")
+        .replace("[render]", "[render]\nheader = \"docs/missing.md\"")
+        .replace("link_items = false", "link_items = true")
+        .replace("group_by = \"milestone\"", "group_by = \"epic\"");
+    p.write("cairn.toml", &cfg);
+
+    let out = p.expect(&["check"]).all();
+    assert_contains(&out, "render.group_by names `epic`", "an unknown field");
+    assert_contains(&out, "docs/missing.md", "a header that is not there");
+    assert_contains(
+        &out,
+        "project.url is not set",
+        "and links with nowhere to go",
+    );
+}
+
+/// Renaming the milestone field left the schema consistent, `check` clean, and
+/// `roadmap` printing the project name over silence.
+#[test]
+fn a_roadmap_with_nothing_to_group_by_says_so() {
+    let p = Project::new();
+    let cfg = p.read("cairn.toml").replace(
+        "[[field]]\nname = \"milestone\"",
+        "[[field]]\nname = \"release\"",
+    );
+    p.write("cairn.toml", &cfg);
+
+    let out = p.expect(&["roadmap"]).all();
+    assert_contains(
+        &out,
+        "no [[field]] named `milestone`",
+        "it says what is missing",
+    );
+    assert_contains(
+        &out,
+        "looks that name up literally",
+        "and that the name is the reason",
+    );
+
+    // The same defect arriving by the other road.
+    assert_contains(
+        &p.expect(&["check"]).all(),
+        "render.group_by is `milestone`",
+        "`check` reports it too",
+    );
+}
+
+/// A board with no columns is a schema question, not an empty backlog, and the
+/// two looked identical from the outside.
+#[test]
+fn a_board_with_no_columns_says_why() {
+    let p = seeded();
+    let cfg = p.read("cairn.toml").replace("board = false", "");
+    // Every status hidden from the board.
+    let cfg = cfg.replace("category = ", "board = false\ncategory = ");
+    p.write("cairn.toml", &cfg);
+
+    let out = p.expect(&["board"]).all();
+    assert_contains(&out, "nothing to show", "");
+    assert_contains(&out, "board = false", "naming the reason");
+}
+
+/// The message said to run a command that had nothing to do.
+#[test]
+fn an_obsolete_milestone_block_does_not_send_you_to_migrate() {
+    let p = Project::new();
+    p.append("cairn.toml", "\n[[milestone]]\nname = \"v9\"\n");
+
+    let out = p.run(&["list"]);
+    assert!(!out.ok());
+    assert_contains(
+        &out.all(),
+        "no longer read",
+        "it says the block is obsolete",
+    );
+    assert_contains(&out.all(), "v9", "and names it");
+    assert_contains(&out.all(), "-t milestone", "and what to write instead");
+    assert!(
+        !out.all().contains("run `cairn migrate`"),
+        "a project already at the current format has nothing to migrate: {}",
+        out.all()
     );
 }

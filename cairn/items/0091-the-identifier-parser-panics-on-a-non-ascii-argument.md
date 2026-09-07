@@ -2,7 +2,7 @@
 id: 91
 title: The identifier parser panics on a non-ASCII argument
 type: bug
-status: backlog
+status: done
 milestone: v0.1
 created: 2026-09-07
 updated: 2026-09-07
@@ -54,7 +54,11 @@ think to try.
 
 ## Acceptance criteria
 
-- [ ] `cairn show` with a non-ASCII argument reports an error rather than panicking
-- [ ] A non-ASCII filename in the items directory does not crash `cairn list`
-- [ ] Both `strip_prefix_ci` and `strip_suffix_ci` are fixed, not only the one that was reported
-- [ ] A test covers the argument path and the filename path
+- [x] `cairn show` with a non-ASCII argument reports an error rather than panicking
+- [x] A non-ASCII filename in the items directory does not crash `cairn list`
+- [x] Both `strip_prefix_ci` and `strip_suffix_ci` are fixed, not only the one that was reported
+- [x] A test covers the argument path and the filename path
+
+## 2026-09-07
+
+Fixed. Both helpers now ask for the slice with `get`, so an offset that is not a character boundary answers 'not that prefix' instead of aborting. Tested from the argument side and from a filename, which is the worse of the two because nobody types it.

@@ -2,7 +2,7 @@
 id: 92
 title: A status without a category is a guess the tool makes silently
 type: bug
-status: backlog
+status: done
 milestone: v0.1
 created: 2026-09-07
 updated: 2026-09-07
@@ -68,8 +68,12 @@ would still cost a format number" gains a line for making it required.
 
 ## Acceptance criteria
 
-- [ ] `cairn check` warns for each status with no declared category, naming what was assumed
-- [ ] It is a warning, not an error: a project that has one still works
-- [ ] `cairn config` distinguishes an assumed category from a declared one
-- [ ] The manual says why `category` is the key that should not have a default
-- [ ] "What would still cost a format number" records making it required
+- [x] `cairn check` warns for each status with no declared category, naming what was assumed
+- [x] It is a warning, not an error: a project that has one still works
+- [x] `cairn config` distinguishes an assumed category from a declared one
+- [x] The manual says why `category` is the key that should not have a default
+- [x] "What would still cost a format number" records making it required
+
+## 2026-09-07
+
+Done as a warning, as filed. `category` is now `Option<Category>` on the status, so its absence is observable rather than defaulted away at parse time; `cairn check` names the status and what was assumed, and `cairn config` marks it `(assumed)` in both the human and JSON output. Requiring it still costs a format number and still waits for one being spent anyway.

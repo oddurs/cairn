@@ -2,7 +2,7 @@
 id: 95
 title: The obsolete milestone block names a command with nothing to do
 type: bug
-status: backlog
+status: done
 milestone: v0.1
 created: 2026-09-07
 updated: 2026-09-07
@@ -53,8 +53,12 @@ refusal into an instruction.
 
 ## Acceptance criteria
 
-- [ ] At format 1 the message still names `cairn migrate`
-- [ ] At the current format the message says the block is obsolete and is not read
-- [ ] It names the `[[type]]` and `[[field]]` that replace it
-- [ ] Neither message sends anybody to a command with nothing to do
-- [ ] A test covers both, because the wrong one is right for the other project
+- [x] At format 1 the message still names `cairn migrate`
+- [x] At the current format the message says the block is obsolete and is not read
+- [x] It names the `[[type]]` and `[[field]]` that replace it
+- [x] Neither message sends anybody to a command with nothing to do
+- [x] A test covers both, because the wrong one is right for the other project
+
+## 2026-09-07
+
+Done. The message now depends on which project it is talking about. At the current format it says the block is no longer read, names the milestones in it, gives the `cairn new -t milestone` line that replaces them, and reports whether the type and field that replace it are already present.

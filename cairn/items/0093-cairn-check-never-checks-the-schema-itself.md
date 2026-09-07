@@ -2,7 +2,7 @@
 id: 93
 title: cairn check never checks the schema itself
 type: feature
-status: backlog
+status: done
 milestone: v0.1
 created: 2026-09-07
 updated: 2026-09-07
@@ -81,9 +81,13 @@ good order, and this is part of that question.
 
 ## Acceptance criteria
 
-- [ ] `cairn check` validates the configuration before the items
-- [ ] `render.group_by`, `render.include`, `header` and `footer` are checked
-- [ ] Every saved view's filter, sort and columns are checked
-- [ ] A filter that does not parse is an error; an undeclared field is a warning
-- [ ] `link_items` without `project.url` is reported
-- [ ] None of it prevents a read command from working
+- [x] `cairn check` validates the configuration before the items
+- [x] `render.group_by`, `render.include`, `header` and `footer` are checked
+- [x] Every saved view's filter, sort and columns are checked
+- [x] A filter that does not parse is an error; an undeclared field is a warning
+- [x] `link_items` without `project.url` is reported
+- [x] None of it prevents a read command from working
+
+## 2026-09-07
+
+Done. `cairn check` validates the schema before it looks at an item. The list of derived keys moved to `filter::DERIVED_KEYS`, beside `resolve`, so adding one adds it to both and a working saved view is never reported as a typo. Diagnostics carry a line number from a best-effort scan of the raw file, since serde does not keep spans.

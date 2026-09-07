@@ -98,7 +98,21 @@ pub fn run(args: Args) -> Result<i32> {
 
     let columns = column_values(&ctx, &items, &group_by, args.all);
     if columns.is_empty() {
-        eprintln!("{}", style::dim("nothing to show"));
+        // "nothing to show" is true and unhelpful: a board with no columns is a
+        // schema question, not an empty backlog, and the two look identical
+        // from the outside.
+        let why = if group_by == "status" {
+            if cfg.statuses.iter().any(|s| !s.board) {
+                "every status sets `board = false`, so there is no column to draw"
+            } else {
+                "no status is open or active — try `cairn board --all`"
+            }
+        } else if cfg.field(&group_by).is_none() {
+            "nothing to group by: no [[field]] of that name is declared"
+        } else {
+            "no item carries a value for that field yet"
+        };
+        eprintln!("{}", style::dim(&format!("nothing to show: {why}")));
         return Ok(0);
     }
 
@@ -331,7 +345,7 @@ fn column_values(ctx: &Ctx, items: &[Item], key: &str, all: bool) -> Vec<String>
         return cfg
             .statuses
             .iter()
-            .filter(|s| s.board && (all || !s.category.is_closed()))
+            .filter(|s| s.board && (all || !s.category().is_closed()))
             .map(|s| s.name.clone())
             .collect();
     }

@@ -554,7 +554,7 @@ fn claim_item(a: &Value) -> Result<String> {
         None => match cfg
             .statuses
             .iter()
-            .find(|st| st.category == crate::config::Category::Active)
+            .find(|st| st.category() == crate::config::Category::Active)
         {
             Some(st) => st.name.clone(),
             None => bail!("no `active` status is defined in cairn.toml"),

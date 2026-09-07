@@ -185,8 +185,18 @@ pub struct Status {
     pub label: Option<String>,
     /// Drives "is this finished?" logic everywhere: progress bars, default
     /// filters, roadmap rendering.
-    #[serde(default)]
-    pub category: Category,
+    ///
+    /// Optional, and kept as an `Option` rather than defaulted away, because
+    /// the absence is worth reporting. Every other defaulted key in the file is
+    /// presentational — a missing `color` is a colour nobody chose. A missing
+    /// `category` is a claim about what a status *means*, and assuming `open`
+    /// for a status somebody named `shipped` is the tool getting it exactly
+    /// backwards, silently. `cairn check` says so; see `Config::schema_problems`.
+    ///
+    /// Making it required would be right and costs a format number, so it waits
+    /// for one that is being spent anyway.
+    #[serde(default, rename = "category")]
+    pub declared_category: Option<Category>,
     #[serde(default)]
     pub color: Option<String>,
     #[serde(default)]
@@ -204,6 +214,11 @@ pub struct Status {
 }
 
 impl Status {
+    /// The category this status is treated as having.
+    pub fn category(&self) -> Category {
+        self.declared_category.unwrap_or_default()
+    }
+
     pub fn display(&self) -> &str {
         self.label.as_deref().unwrap_or(&self.name)
     }
@@ -588,17 +603,28 @@ impl IdFormat {
     }
 }
 
+/// Both of these ask for a slice at a byte offset, and both use `get` to do it.
+///
+/// A guard in bytes followed by a slice in bytes is correct arithmetic and the
+/// wrong question: the offset can land inside a character, and slicing there
+/// panics. `MP` is two bytes, `é` is two bytes, and `cairn show 'aé'` was enough
+/// to bring the process down. `get` returns `None` for an offset that is not a
+/// boundary, which is the honest answer — a string whose second byte is halfway
+/// through a character does not start with `MP`.
 fn strip_prefix_ci<'a>(s: &'a str, prefix: &str) -> Option<&'a str> {
-    if s.len() >= prefix.len() && s[..prefix.len()].eq_ignore_ascii_case(prefix) {
-        Some(&s[prefix.len()..])
+    let head = s.get(..prefix.len())?;
+    if head.eq_ignore_ascii_case(prefix) {
+        s.get(prefix.len()..)
     } else {
         None
     }
 }
 
 fn strip_suffix_ci<'a>(s: &'a str, suffix: &str) -> Option<&'a str> {
-    if s.len() >= suffix.len() && s[s.len() - suffix.len()..].eq_ignore_ascii_case(suffix) {
-        Some(&s[..s.len() - suffix.len()])
+    let cut = s.len().checked_sub(suffix.len())?;
+    let tail = s.get(cut..)?;
+    if tail.eq_ignore_ascii_case(suffix) {
+        s.get(..cut)
     } else {
         None
     }
@@ -793,10 +819,34 @@ impl Config {
         check_unique("status", self.statuses.iter().map(|s| s.name.as_str()))?;
         check_unique("type", self.types.iter().map(|t| t.name.as_str()))?;
         check_unique("field", self.fields.iter().map(|f| f.name.as_str()))?;
+        // Two different situations wore one sentence, and the sentence was
+        // right for only one of them. At format 1 there is a migration to run.
+        // At the current format there is not — `cairn migrate` answers "nothing
+        // to migrate" — so telling somebody to run it left them between two
+        // commands that contradicted each other with nothing to do about it.
         if !self.milestones.is_empty() && self.format() >= CURRENT_FORMAT {
+            let names: Vec<&str> = self.milestones.iter().map(|m| m.name.as_str()).collect();
+            let has_type = self.item_type(crate::refs::MILESTONE_TYPE).is_some();
+            let has_field = self.field(crate::refs::MILESTONE_FIELD).is_some();
             bail!(
-                "{CONFIG_FILE}: [[milestone]] blocks are format 1. A milestone is an \
-                 item in format 2 — run `cairn migrate`"
+                "{CONFIG_FILE}: [[milestone]] blocks are format 1 and are no longer read.\n\
+                 a milestone is an item now, so delete the block{} ({}) and write {} instead:\n\
+                 \n    cairn new \"{}\" -t milestone\n\n\
+                 this project {} the `[[type]]` and `[[field]]` that replace them",
+                if names.len() == 1 { "" } else { "s" },
+                names.join(", "),
+                if names.len() == 1 {
+                    "the item"
+                } else {
+                    "items"
+                },
+                names.first().copied().unwrap_or("v0.1"),
+                match (has_type, has_field) {
+                    (true, true) => "already has",
+                    (false, false) => "is missing both",
+                    (true, false) => "has the type but not the field:",
+                    (false, true) => "has the field but not the type:",
+                }
             );
         }
         check_unique("view", self.views.iter().map(|v| v.name.as_str()))?;
@@ -868,7 +918,9 @@ impl Config {
     }
 
     pub fn category(&self, status: &str) -> Category {
-        self.status(status).map(|s| s.category).unwrap_or_default()
+        self.status(status)
+            .map(|s| s.category())
+            .unwrap_or_default()
     }
 
     pub fn item_type(&self, name: &str) -> Option<&ItemType> {
@@ -893,7 +945,9 @@ impl Config {
 
     /// First status in the `done` category — the target of `cairn close`.
     pub fn done_status(&self) -> Option<&Status> {
-        self.statuses.iter().find(|s| s.category == Category::Done)
+        self.statuses
+            .iter()
+            .find(|s| s.category() == Category::Done)
     }
 
     pub fn format_id(&self, id: u32) -> String {

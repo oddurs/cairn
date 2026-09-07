@@ -113,11 +113,15 @@ pub fn config(args: ConfigArgs) -> Result<i32> {
     section(
         "statuses",
         cfg.statuses.iter().map(|s| {
-            format!(
-                "{:<12} {}",
-                s.name,
-                style::dim(&format!("category = {}", s.category.as_str()))
-            )
+            // An assumed category is shown as an assumption. The resolved
+            // schema must not present a guess as a decision — `open` for a
+            // status somebody named `shipped` is the one default in this file
+            // that can be silently, consequentially wrong.
+            let category = match s.declared_category {
+                Some(c) => format!("category = {}", c.as_str()),
+                None => format!("category = {} (assumed)", s.category().as_str()),
+            };
+            format!("{:<12} {}", s.name, style::dim(&category))
         }),
     );
     section(
@@ -226,7 +230,8 @@ pub fn schema_json(cfg: &Config, milestones: &crate::refs::Milestones) -> serde_
             "name": t.name, "label": t.label, "description": t.description
         })).collect::<Vec<_>>(),
         "statuses": cfg.statuses.iter().map(|s| json!({
-            "name": s.name, "label": s.label, "category": s.category.as_str(), "board": s.board
+            "name": s.name, "label": s.label, "category": s.category().as_str(),
+            "category_declared": s.declared_category.is_some(), "board": s.board
         })).collect::<Vec<_>>(),
         // Declared fields and the built-in refs in one list, so a model meets
         // one vocabulary rather than a general mechanism plus a special case.
@@ -385,7 +390,7 @@ you tried, what to watch for.\n",
         "- **Statuses**: {}\n",
         cfg.statuses
             .iter()
-            .map(|st| format!("`{}` ({})", st.name, st.category.as_str()))
+            .map(|st| format!("`{}` ({})", st.name, st.category().as_str()))
             .collect::<Vec<_>>()
             .join(", ")
     ));
