@@ -4,8 +4,10 @@ title: Relationships between items are declarable, and composition is the second
 type: feature
 status: backlog
 milestone: v1.0
+depends_on:
+- 79
 created: 2026-09-06
-updated: 2026-09-06
+updated: 2026-09-07
 priority: p0
 effort: l
 sprint: s8
@@ -97,3 +99,33 @@ unchanged. Making it declarable does not change what `depends_on` means.
 - [ ] Two branches that both link the same item merge without a conflict
 - [ ] `check` warns on a chain deeper than four, and does not fail
 - [ ] No format bump
+
+## 2026-09-07: the `[[relation]]` table is superseded
+
+Filing `0079` showed that a second table was the wrong shape.
+
+A ref needs a target type, a cycle check, an inverse and a rollup — which is the
+entire feature set a relation needs. Two tables means implementing that twice,
+documenting it twice, and handing an agent two vocabularies for one idea.
+
+They differ only in cardinality and in how a value addresses its target, so they
+are one thing. `0079` collapses them: everything in an item's frontmatter is a
+field, and a field's kind may be `ref`.
+
+What this item asks for is unchanged, and is now a two-line declaration rather
+than a new subsystem:
+
+```toml
+[[field]]
+name        = "part_of"
+kind        = "ref"
+target      = "*"
+cardinality = "many"
+acyclic     = true
+rollup      = true
+inverse     = "contains"
+```
+
+Everything above about trees, merge behaviour and unbounded depth stands. The
+argument against a `parent` scalar is unaffected: this is still a set of edges,
+and sets union at a merge.

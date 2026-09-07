@@ -6,8 +6,9 @@ status: backlog
 milestone: v1.0
 depends_on:
 - 72
+- 79
 created: 2026-09-06
-updated: 2026-09-06
+updated: 2026-09-07
 priority: p1
 effort: m
 sprint: s8
