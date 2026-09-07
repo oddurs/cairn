@@ -594,15 +594,36 @@ Written down so it is decided rather than discovered.
 @tab every item that has one
 @item @code{labels} becoming references rather than strings
 @tab every item that has one
-@item Any new @emph{optional} key
+@item Any new @emph{optional} key on an @emph{item}
 @tab free, no new number
+@item Any new key in @file{cairn.toml}
+@tab @strong{a new number} --- see below
 @item @code{assignee} accepting a sequence as well as a string
 @tab free --- @code{labels} already sets that precedent
 @end multitable
 
 @noindent
-Only the first is expensive, and it is the only one whose cost grows with
-adoption. Everything else is either free or shaped like format 2, which touched
+The configuration line is the one that surprises people, so it is worth its own
+paragraph.
+
+@cindex configuration
+@cindex unknown keys
+An item reader preserves keys it does not recognise --- that is §4.1 of the
+specification, and it is why an item may gain an optional key for free.
+@file{cairn.toml} is the opposite: an unrecognised key is refused, and the whole
+project with it. That is deliberate. A key cairn does not know in an item came
+from somewhere and dropping it loses data; a key cairn does not know in the
+configuration is a typo, and ignoring it would let a project believe it had
+configured something it had not.
+
+The consequence is that a new configuration key is a format change, whatever it
+costs. Adding one at the same number would make every cairn already in the field
+refuse the project outright --- not degrade, refuse --- which is exactly what a
+format number exists to prevent.
+
+@noindent
+Of the item-shaped changes, only the first is expensive, and it is the only one
+whose cost grows with adoption. Everything else is either free or shaped like format 2, which touched
 no item file at all.
 
 That asymmetry is why the identifier question is a decision to settle rather
@@ -1317,6 +1338,57 @@ required needs a format number and a migration (@pxref{Compatibility}). Format 3
 is not worth spending on one key, so the requirement waits for a number that is
 being spent anyway. The rule survives its first inconvenient instance, which is
 the only test a rule like that ever gets.
+
+@section What the configuration does not promise
+
+@cindex configuration
+Four things about @file{cairn.toml} are true, load-bearing, and easy to
+discover the expensive way. None of them is a defect.
+
+@subsection Order is behaviour
+
+The order of @code{[[status]]} blocks is the column order on
+@command{cairn board} and the sort order in every listing. The order of an
+enum's @code{values} is what @option{--sort priority} sorts by.
+
+So a tool that rewrote the file alphabetically, or a person tidying it, would
+change what cairn does without changing anything they could see. §7 of the
+specification says the order is significant and that nothing may reorder it; the
+shipped configurations say so in a comment where somebody is standing when it
+matters.
+
+@subsection The configuration is deliberately outside the merge driver
+
+@cindex merge driver
+@command{cairn git} registers the driver for the item files and for the rendered
+roadmap, and not for @file{cairn.toml}.
+
+That is the decision, not an oversight. Unioning two branches' schema blocks
+would produce a schema neither branch wrote --- a status list in an order nobody
+chose, a field declared twice with different types --- and a schema conflict
+wants a person. It does mean this is the one file where a bad merge is quiet
+rather than loud, which is worth knowing before it happens.
+
+@subsection Some keys are semantic and some are decoration
+
+@code{category}, @code{values}, @code{required}, @code{acyclic}, @code{rollup},
+@code{target} and @code{by} change what a reader must conclude about an item.
+@code{color}, @code{icon}, @code{label}, @code{board} and @code{column} change
+what a reader draws.
+
+The file presents both in the same block with the same weight, so the
+specification says which half is binding: the category, and nothing else
+(§7). A second implementation may ignore every appearance key and conform.
+
+@subsection Multiplicity is spelled twice
+
+@code{kind = "list"} for an ordinary field, @code{cardinality = "many"} for a
+reference. The same idea under two names, and no way to say a many-valued enum.
+
+@code{cardinality} on every kind would subsume @code{list}, and @code{list} is a
+documented key, so removing it would cost a format number and a migration for a
+tidier vocabulary and nothing else. It stays. This is written down so the next
+person to notice argues with the reasoning rather than rediscovering the wart.
 
 @node Filters
 @chapter Filters

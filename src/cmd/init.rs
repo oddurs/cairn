@@ -476,6 +476,8 @@ format = 2
 name = "{{name}}"
 dir = "{{dir}}"
 
+# Order matters: it is the column order on `cairn board` and the sort order in
+# listings, so reordering these blocks changes behaviour.
 [[status]]
 name = "todo"
 category = "open"

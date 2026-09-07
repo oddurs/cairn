@@ -6,14 +6,13 @@ A markdown-native roadmap and issue manager that lives in your repository.
 
 ## v0.1 — Usable in anger
 
-`#########·` 87% · 20 of 23 done · due 2026-10-15
+`##########` 91% · 21 of 23 done · due 2026-10-15
 
 Enough to run a real project's roadmap without reaching for anything else.
 
 ### backlog
 
 - [ ] [`0066`](https://github.com/oddurs/cairn/blob/main/cairn/items/0066-find-three-people-who-are-not-the-author.md) Find three people who are not the author <sup>chore · p0 · s7</sup>
-- [ ] [`0096`](https://github.com/oddurs/cairn/blob/main/cairn/items/0096-configuration-keys-are-strict-and-the-promise-says-they-are-not.md) Configuration keys are strict, and the promise says they are not <sup>docs · p1 · s9</sup>
 
 ### in progress
 
@@ -41,6 +40,7 @@ Enough to run a real project's roadmap without reaching for anything else.
 - [x] [`0093`](https://github.com/oddurs/cairn/blob/main/cairn/items/0093-cairn-check-never-checks-the-schema-itself.md) cairn check never checks the schema itself <sup>feature · p1 · s9</sup>
 - [x] [`0094`](https://github.com/oddurs/cairn/blob/main/cairn/items/0094-a-renamed-milestone-field-empties-the-roadmap-without-a-word.md) A renamed milestone field empties the roadmap without a word <sup>bug · p1 · s9</sup>
 - [x] [`0095`](https://github.com/oddurs/cairn/blob/main/cairn/items/0095-the-obsolete-milestone-block-names-a-command-with-nothing-to-do.md) The obsolete milestone block names a command with nothing to do <sup>bug · p1 · s9</sup>
+- [x] [`0096`](https://github.com/oddurs/cairn/blob/main/cairn/items/0096-configuration-keys-are-strict-and-the-promise-says-they-are-not.md) Configuration keys are strict, and the promise says they are not <sup>docs · p1 · s9</sup>
 
 ## v0.2 — Comfortable
 
@@ -99,7 +99,7 @@ The rough edges that show up after a few weeks of daily use, and the pieces that
 
 ## v1.0 — Stable
 
-`########··` 78% · 18 of 23 done · due 2027-03-01
+`#########·` 83% · 19 of 23 done · due 2027-03-01
 
 Safe to depend on: every scriptable surface carries a promise, the command surface has been reviewed and pruned rather than accumulated, releases can be verified, and it installs from a package manager people already use.
 
@@ -108,7 +108,6 @@ Safe to depend on: every scriptable surface carries a promise, the command surfa
 - [ ] [`0052`](https://github.com/oddurs/cairn/blob/main/cairn/items/0052-sign-releases-and-ship-a-source-tarball.md) Sign releases and ship a source tarball <sup>chore · p0 · needs-a-key</sup>
 - [ ] [`0053`](https://github.com/oddurs/cairn/blob/main/cairn/items/0053-be-in-a-package-manager-people-already-use.md) Be in a package manager people already use <sup>chore · p0 · blocked-on-a-release</sup>
 - [ ] [`0067`](https://github.com/oddurs/cairn/blob/main/cairn/items/0067-decide-whether-identifiers-should-be-collision-free-by-construction.md) Decide whether identifiers should be collision-free by construction <sup>feature · p1 · s7</sup>
-- [ ] [`0098`](https://github.com/oddurs/cairn/blob/main/cairn/items/0098-write-down-what-the-configuration-does-not-promise.md) Write down what the configuration does not promise <sup>docs · p2</sup>
 
 ### in progress
 
@@ -134,6 +133,7 @@ Safe to depend on: every scriptable surface carries a promise, the command surfa
 - [x] [`0079`](https://github.com/oddurs/cairn/blob/main/cairn/items/0079-a-field-can-name-another-item.md) A field can name another item <sup>feature · p0 · s8</sup>
 - [x] [`0080`](https://github.com/oddurs/cairn/blob/main/cairn/items/0080-merge-sequence-fields-by-union.md) Merge sequence fields by union <sup>feature · p1 · s8</sup>
 - [x] [`0087`](https://github.com/oddurs/cairn/blob/main/cairn/items/0087-the-corpus-keeps-every-format-that-has-ever-existed.md) The corpus keeps every format that has ever existed <sup>chore · p0 · s9</sup>
+- [x] [`0098`](https://github.com/oddurs/cairn/blob/main/cairn/items/0098-write-down-what-the-configuration-does-not-promise.md) Write down what the configuration does not promise <sup>docs · p2</sup>
 
 ## later — Someday
 

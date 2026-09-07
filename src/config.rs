@@ -23,13 +23,31 @@ pub const CONFIG_FILE: &str = "cairn.toml";
 
 /// The on-disk format this build reads and writes.
 ///
-/// Durability is a promise, and this is where it is kept. The rules, in full:
+/// Durability is a promise, and this is where it is kept.
+///
+/// The two halves of a project follow different rules, and saying so was a
+/// correction: the sentence here used to cover both and was true of one.
+///
+/// **An item**, whose keys the specification documents:
 ///
 /// * A patch or minor release may add optional keys, and nothing else.
-/// * Removing a key, changing its meaning, or making an optional key required
-///   needs a new format number, a major release, and a migration.
 /// * A reader preserves keys it does not recognise, so a project opened by an
 ///   older cairn is never silently stripped of data a newer one wrote.
+///
+/// **The configuration**, which is `deny_unknown_fields`:
+///
+/// * A new key is a format change. An older cairn does not ignore a key it does
+///   not know, it refuses the project, so adding one at the same format number
+///   breaks every reader in the field.
+/// * That strictness stays. An unknown key in an item came from somewhere and
+///   dropping it loses data; an unknown key in `cairn.toml` is a typo, and
+///   ignoring it means a project believes it has configured something it has
+///   not.
+///
+/// **Both**:
+///
+/// * Removing a key, changing its meaning, or making an optional key required
+///   needs a new format number, a major release, and a migration.
 /// * A project recording a format this build does not know is refused with an
 ///   explanation, rather than misread.
 pub const CURRENT_FORMAT: u32 = 2;
@@ -611,6 +629,67 @@ impl IdFormat {
 /// to bring the process down. `get` returns `None` for an offset that is not a
 /// boundary, which is the honest answer — a string whose second byte is halfway
 /// through a character does not start with `MP`.
+/// Say more about an unknown configuration key than serde can.
+///
+/// serde lists the keys it expected, which is genuinely useful and stops one
+/// step short of the question being asked. Two very different things arrive
+/// looking identical: a typo, and a file written by a newer cairn. The first
+/// wants the nearest key; the second wants to know that `cairn.toml` refuses
+/// keys rather than ignoring them, so this is not a bug to hunt.
+fn advise_on_unknown_key(message: &str) -> anyhow::Error {
+    let Some(advice) = unknown_key_advice(message) else {
+        return anyhow::anyhow!("{message}");
+    };
+    anyhow::anyhow!("{message}\n{advice}")
+}
+
+fn unknown_key_advice(message: &str) -> Option<String> {
+    let (_, rest) = message.split_once("unknown field `")?;
+    let (found, rest) = rest.split_once('`')?;
+
+    let mut advice = String::new();
+    if let Some((_, list)) = rest.split_once("expected one of ") {
+        let candidates: Vec<&str> = list
+            .split(',')
+            .filter_map(|s| s.trim().trim_end_matches('\n').split('`').nth(1))
+            .collect();
+        // Within two edits: far enough to catch a transposition or a dropped
+        // letter, near enough that the suggestion is not noise.
+        if let Some(near) = candidates
+            .iter()
+            .map(|c| (edits(found, c), *c))
+            .filter(|(d, _)| *d <= 2)
+            .min_by_key(|(d, _)| *d)
+            .map(|(_, c)| c)
+        {
+            advice.push_str(&format!("did you mean `{near}`?\n"));
+        }
+    }
+    advice.push_str(&format!(
+        "this is cairn {}, which reads format {CURRENT_FORMAT}. A key it does not know is\n\
+         refused rather than ignored, so a key from a newer cairn arrives looking like a typo.",
+        env!("CARGO_PKG_VERSION"),
+    ));
+    Some(advice)
+}
+
+/// Levenshtein distance, iterative and small. Written out rather than pulled in:
+/// one suggestion in one error message is not worth a dependency.
+fn edits(a: &str, b: &str) -> usize {
+    let b: Vec<char> = b.chars().collect();
+    let mut prev: Vec<usize> = (0..=b.len()).collect();
+    let mut cur = vec![0; b.len() + 1];
+    for (i, ca) in a.chars().enumerate() {
+        cur[0] = i + 1;
+        for (j, cb) in b.iter().enumerate() {
+            let cost = usize::from(ca != *cb);
+            cur[j + 1] = (prev[j] + cost).min(prev[j + 1] + 1).min(cur[j] + 1);
+        }
+        std::mem::swap(&mut prev, &mut cur);
+    }
+    prev[b.len()]
+}
+
 fn strip_prefix_ci<'a>(s: &'a str, prefix: &str) -> Option<&'a str> {
     let head = s.get(..prefix.len())?;
     if head.eq_ignore_ascii_case(prefix) {
@@ -711,8 +790,9 @@ impl Config {
         // which sends the reader looking for a typo that is not there.
         Config::check_format(&text, path, true)?;
 
-        let mut cfg: Config =
-            toml::from_str(&text).with_context(|| format!("parsing {}", path.display()))?;
+        let mut cfg: Config = toml::from_str(&text)
+            .map_err(|e| advise_on_unknown_key(&e.to_string()))
+            .with_context(|| format!("parsing {}", path.display()))?;
         cfg.root = path
             .parent()
             .map(Path::to_path_buf)
