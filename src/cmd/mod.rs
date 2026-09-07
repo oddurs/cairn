@@ -185,6 +185,7 @@ pub fn item_json(
     let mut o = serde_json::Map::new();
     o.insert("id".into(), json!(item.id));
     o.insert("ref".into(), json!(cfg.format_id(item.id)));
+    o.insert("key".into(), opt_json(item.key()));
     o.insert("title".into(), json!(item.title()));
     o.insert("type".into(), opt_json(item.kind()));
     o.insert("status".into(), json!(item.status()));

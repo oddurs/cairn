@@ -21,6 +21,7 @@ mod hooks;
 mod interchange;
 mod item;
 mod lock;
+mod refs;
 mod render;
 mod store;
 mod style;

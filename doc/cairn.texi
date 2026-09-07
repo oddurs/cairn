@@ -59,6 +59,7 @@ Sections, no Front-Cover Texts, and no Back-Cover Texts.
 * Working the backlog::     Finding, claiming and finishing work.
 * Interchange::             Moving a backlog in and out.
 * Stability::               What may be scripted against.
+* Fields that name items::  References, keys and containers.
 * Acceptance criteria::     How an item says it is finished.
 * Verifying a release::     Checksums, provenance and signatures.
 * Cookbook::                Recipes for what people arrive wanting.
@@ -1316,6 +1317,130 @@ language rather than several partial ones, for the reason above.
 
 Until then, English messages sit alongside the English that git, cargo and the
 compiler already print to the same person.
+
+@node Fields that name items
+@chapter Fields that name items
+
+@cindex ref
+@cindex reference
+@cindex key
+Most fields describe an item. A @dfn{reference} names another one.
+
+The difference is whether the value has its own existence. @code{priority = p0}
+is a string: there is nothing more to know about @code{p0}. A milestone is not a
+string --- it has a due date, a reason for that date, and a history of the date
+moving --- and a field whose values are milestones is naming things rather than
+describing this one.
+
+@example
+[[field]]
+name        = "milestone"
+kind        = "ref"
+target      = "milestone"    # values name an item of this type
+cardinality = "one"          # or "many"
+by          = "key"          # or "id"
+acyclic     = true           # refuse a value that closes a cycle
+rollup      = true           # contribute to what is named
+inverse     = "scheduled"    # what the question is called backwards
+@end example
+
+@section Why there is one mechanism and not two
+
+@cindex depends_on
+@command{depends_on} was hardcoded for as long as cairn had only one kind of
+edge, and it was the single place where ``the schema is yours'' was untrue: the
+one relationship a project could not declare, redefine, or give a sibling.
+
+The obvious repair was a second table for declarable edges, and it would have
+been a mistake. A reference needs a target type, a cycle check, an inverse and a
+rollup, which is the entire feature set an edge needs. Two tables means building
+that twice, documenting it twice, and handing a model two vocabularies for one
+idea.
+
+They differ in exactly two ways: how many values are allowed, and how a value
+names its target. So there is one table, and it is @code{[[field]]}.
+@code{depends_on} is now described as what it always was --- a many-valued
+reference to any item, addressed by identifier, acyclic --- and
+@command{cairn config --json} reports it alongside the fields a project
+declares.
+
+@section Keys
+
+@vindex key
+@example
+---
+id: 42
+key: v0.1
+title: Usable in anger
+type: milestone
+---
+@end example
+
+@noindent
+A key is what keeps @code{milestone: v0.1} readable in a file instead of
+becoming @code{milestone: 42}. That readability is a large part of why this
+format is worth having, and it would be a poor trade for internal tidiness.
+
+@cindex identity
+A key is @emph{not} an identity. @code{id} is unique across the project, is what
+identity means, and does not change. A key is a handle: unique only among items
+of one type, chosen rather than allocated, and permitted to change. The
+precedent is already in the schema one level down --- a status has a @code{name}
+for machines and a @code{label} for people.
+
+Two rules keep it unambiguous.
+
+A key must not read as an identifier under the project's @code{id_format}
+(@pxref{Identifiers}). Otherwise @code{milestone: 0042} could name either a key
+or a number depending on what happened to exist, and two spellings must never be
+able to mean different items. cairn refuses such a key when it is set.
+
+A key-addressed reference resolves @emph{only} by key --- never by identifier
+and never by title. A value that names nothing is refused, and the refusal lists
+what would have worked, which is most of what somebody who mistyped a milestone
+wants.
+
+@subsection Changing one
+
+@cindex renaming a key
+A key is what other items call this one, so changing it is a rename rather than
+an assignment. cairn rewrites every reference under the same lock and says which
+items it touched:
+
+@example
+$ cairn set 1 key=v2.0
+updated 0001  Version one
+  also 0002
+  also 0003
+@end example
+
+@noindent
+Leaving them behind would orphan every reference silently, which is the failure
+this exists to prevent. @command{renumber} already does exactly this when an
+identifier moves; this is the same job one level up.
+
+@section Containers
+
+@cindex container
+A type named as a specific @code{target} --- not @code{*} --- is a
+@dfn{container}: the thing work belongs to rather than work itself. Items of a
+container type do not appear in @command{cairn next} or on the board.
+
+This is derived rather than declared, so there is nothing to configure and
+nothing to forget. It is also why @code{target = "*"} exists: @code{depends_on}
+can name any item without turning every type into a container and emptying
+@command{cairn next}.
+
+It settles a second problem too. Containers naturally depend on one another ---
+a roadmap is a sequence --- and without this they would read as blocked work and
+crowd out the real thing.
+
+@section What this does not change
+
+Nothing on disk. @code{kind = "ref"} and its properties are new optional keys in
+the configuration, @code{key} is a new optional key in an item, and
+@code{depends_on} is declared as exactly what it already meant. A project that
+declares nothing behaves as it did before, and the format is still 1.
 
 @node Acceptance criteria
 @chapter Acceptance criteria

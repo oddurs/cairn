@@ -27,6 +27,35 @@ There is deliberately no library target, because linking cairn makes the caller
 a derivative work and reading its files does not.  A test fails if a [lib]
 appears in Cargo.toml.
 
+** A field can name another item
+
+`kind = "ref"` declares a field whose values name other items rather than
+describing this one — a milestone, a component, a parent.  It carries a target
+type, a cardinality, whether it is addressed by id or by key, whether it is
+acyclic, and what the question is called backwards.
+
+`depends_on` was hardcoded for as long as cairn had one kind of edge, and was
+the single place where "the schema is yours" was untrue.  It is now declared as
+what it always was, and `cairn config --json` reports it beside the fields a
+project declares, so a model meets one vocabulary rather than a general
+mechanism plus a special case.
+
+Items gained an optional `key`: a short handle, unique among items of one type,
+which is what keeps `milestone: v0.1` readable in a file instead of becoming
+`milestone: 42`.  A key is not an identity — identity is still the integer — and
+two rules keep it unambiguous: it must not read as an identifier under the
+project's id_format, and a key-addressed reference resolves only by key.
+Changing a key rewrites every reference under one lock, because a key is what
+other items call this one and changing it is a rename.
+
+A type named as a specific target is a container: the thing work belongs to
+rather than work itself.  Containers do not appear in `cairn next` or on the
+board, which is derived rather than configured.
+
+Nothing on disk changes.  Every new key is optional and `depends_on` is declared
+as exactly what it already meant, so the format is still 1 and no project needs
+migrating.  Specification §4.3 documents keys and references.
+
 ** Acceptance criteria are read
 
 Every item cairn's templates produce carries `- [ ]` boxes under a heading, and

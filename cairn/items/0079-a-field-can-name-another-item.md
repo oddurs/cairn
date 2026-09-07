@@ -2,7 +2,7 @@
 id: 79
 title: A field can name another item
 type: feature
-status: backlog
+status: done
 milestone: v1.0
 created: 2026-09-07
 updated: 2026-09-07
@@ -151,14 +151,33 @@ the configuration — not on this.
 
 ## Acceptance criteria
 
-- [ ] `kind = "ref"` exists, with `target`, `cardinality`, `by` and `inverse`
-- [ ] `depends_on` is declared rather than hardcoded, and behaves identically
-- [ ] `acyclic` and `ordering` are properties of a field, not of one built-in
-- [ ] A key is unique within its type, and cannot parse as an identifier
-- [ ] An unresolvable ref is an error naming the keys that exist
-- [ ] Changing a key rewrites the references atomically, and says what it did
-- [ ] Items of a named target type are absent from `next` and from the board
-- [ ] Refs are filterable, sortable and showable as columns, like any field
-- [ ] `cairn agent` and `get_schema` describe refs in one vocabulary, not two
-- [ ] A project that declares nothing behaves exactly as it does today
-- [ ] No format bump
+- [x] `kind = "ref"` exists, with `target`, `cardinality`, `by` and `inverse`
+- [x] `depends_on` is declared rather than hardcoded, and behaves identically
+- [x] `acyclic` and `ordering` are properties of a field, not of one built-in
+- [x] A key is unique within its type, and cannot parse as an identifier
+- [x] An unresolvable ref is an error naming the keys that exist
+- [x] Changing a key rewrites the references atomically, and says what it did
+- [x] Items of a named target type are absent from `next` and from the board
+- [x] Refs are filterable, sortable and showable as columns, like any field
+- [x] `cairn agent` and `get_schema` describe refs in one vocabulary, not two
+- [x] A project that declares nothing behaves exactly as it does today
+- [x] No format bump
+
+## 2026-09-07: built
+
+One caveat worth recording rather than leaving to be discovered.
+
+`depends_on` is *described* through the general mechanism — `cairn config
+--json` reports it as a many-valued, id-addressed, acyclic reference alongside
+every declared field — but it is still *stored* on `Meta` as a typed
+`Vec<u32>` rather than in the generic bag. That is deliberate: the key is
+documented in the specification as a sequence of unsigned integers, and typing
+it is what keeps `renumber`, import and the interchange document honest.
+
+So the schema has one vocabulary and the storage has two paths. The second is
+invisible to anybody reading or writing a file, and collapsing it would mean
+untyping a specified key for tidiness. Worth knowing before somebody assumes
+the generic path covers everything.
+
+`rollup` is declared and reported in the schema but nothing derives from it yet.
+`0073` is what reads it.

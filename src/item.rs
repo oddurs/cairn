@@ -93,6 +93,13 @@ pub struct Meta {
     pub id: Option<u32>,
     #[serde(default)]
     pub title: Option<String>,
+    /// A short human handle, unique among items of this type.
+    ///
+    /// Not an identity — identity is `id`. This is what a ref field addressed
+    /// `by = "key"` names, and it is why `milestone: v0.1` stays readable
+    /// instead of becoming `milestone: 42`.
+    #[serde(default)]
+    pub key: Option<String>,
     #[serde(default, rename = "type")]
     pub kind: Option<String>,
     #[serde(default)]
@@ -156,6 +163,10 @@ pub struct Item {
 }
 
 impl Item {
+    pub fn key(&self) -> Option<&str> {
+        self.meta.key.as_deref().filter(|k| !k.trim().is_empty())
+    }
+
     pub fn title(&self) -> &str {
         self.meta.title.as_deref().unwrap_or("(untitled)")
     }
@@ -386,6 +397,9 @@ impl Item {
             m.insert(Value::String(k.to_string()), v);
         };
         put("id", Value::Number(self.id.into()));
+        if let Some(v) = &self.meta.key {
+            put("key", Value::String(v.clone()));
+        }
         if let Some(v) = &self.meta.title {
             put("title", Value::String(v.clone()));
         }

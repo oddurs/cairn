@@ -166,6 +166,24 @@ fn section(title: &str, rows: impl Iterator<Item = String>) {
     println!();
 }
 
+/// A ref in one phrase, for a person reading `cairn config` and for the
+/// instruction block a model reads. Both get the same words, because two
+/// vocabularies for one idea is what this mechanism exists to avoid.
+fn describe_ref(f: &crate::config::FieldDef, verb: &str) -> String {
+    let what = match f.target.as_deref() {
+        Some("*") | None => "any item".to_string(),
+        Some(t) => format!("a `{t}` item"),
+    };
+    let how = match f.by {
+        crate::config::Addressing::Key => "by key",
+        crate::config::Addressing::Id => "by id",
+    };
+    match f.cardinality {
+        crate::config::Cardinality::One => format!("{verb} {what}, {how}"),
+        crate::config::Cardinality::Many => format!("{verb} {what}s, {how}, several allowed"),
+    }
+}
+
 fn describe_field(f: &crate::config::FieldDef) -> String {
     let kind = match f.kind {
         FieldKind::Enum => format!("one of: {}", f.values.join(", ")),
@@ -177,6 +195,7 @@ fn describe_field(f: &crate::config::FieldDef) -> String {
                 format!("list of: {}", f.values.join(", "))
             }
         }
+        FieldKind::Ref => describe_ref(f, "names"),
         FieldKind::Date => "date (YYYY-MM-DD)".into(),
         FieldKind::Number => "number".into(),
         FieldKind::Bool => "true / false".into(),
@@ -203,14 +222,35 @@ pub fn schema_json(cfg: &Config) -> serde_json::Value {
         "statuses": cfg.statuses.iter().map(|s| json!({
             "name": s.name, "label": s.label, "category": s.category.as_str(), "board": s.board
         })).collect::<Vec<_>>(),
-        "fields": cfg.fields.iter().map(|f| json!({
-            "name": f.name,
-            "kind": format!("{:?}", f.kind).to_lowercase(),
-            "values": f.values,
-            "required": f.required,
-            "default": f.default,
-            "description": f.description,
-        })).collect::<Vec<_>>(),
+        // Declared fields and the built-in refs in one list, so a model meets
+        // one vocabulary rather than a general mechanism plus a special case.
+        "fields": cfg.fields.iter().cloned()
+            .chain(cfg.builtin_ref_fields())
+            .map(|f| {
+                let mut v = json!({
+                    "name": f.name,
+                    "kind": format!("{:?}", f.kind).to_lowercase(),
+                    "values": f.values,
+                    "required": f.required,
+                    "default": f.default,
+                    "description": f.description,
+                });
+                if f.kind == FieldKind::Ref {
+                    v["target"] = json!(f.target.as_deref().unwrap_or("*"));
+                    v["cardinality"] = json!(match f.cardinality {
+                        crate::config::Cardinality::One => "one",
+                        crate::config::Cardinality::Many => "many",
+                    });
+                    v["by"] = json!(match f.by {
+                        crate::config::Addressing::Key => "key",
+                        crate::config::Addressing::Id => "id",
+                    });
+                    v["acyclic"] = json!(f.acyclic);
+                    v["rollup"] = json!(f.rollup);
+                    v["inverse"] = json!(f.inverse);
+                }
+                v
+            }).collect::<Vec<_>>(),
         "milestones": cfg.milestones_ordered().iter().map(|m| json!({
             "name": m.name, "title": m.title, "due": m.due,
             "description": m.description, "status": m.status
@@ -345,6 +385,7 @@ you tried, what to watch for.\n",
                 FieldKind::Number => "number".to_string(),
                 FieldKind::Bool => "true or false".to_string(),
                 FieldKind::Text => "free text".to_string(),
+                FieldKind::Ref => describe_ref(f, "names"),
             },
             if f.required { " (required)" } else { "" },
             f.description

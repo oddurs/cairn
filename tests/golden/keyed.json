@@ -1,0 +1,18 @@
+{
+  "assignee": null,
+  "body": "A key is unique among items of one type, and is what a reference addressed\n`by = \"key\"` names. It is not an identifier: `id` is still 12.\n",
+  "category": "active",
+  "created": null,
+  "depends_on": [],
+  "fields": {},
+  "id": 12,
+  "key": "v0.1",
+  "labels": [],
+  "milestone": null,
+  "ref": "0012",
+  "source": null,
+  "status": "doing",
+  "title": "A key is a handle, not an identifier",
+  "type": "docs",
+  "updated": null
+}

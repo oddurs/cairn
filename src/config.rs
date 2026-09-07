@@ -209,6 +209,38 @@ pub enum FieldKind {
     Date,
     Number,
     Bool,
+    /// A value that names another item rather than describing this one.
+    ///
+    /// The difference from an enum is that the value has its own existence: a
+    /// milestone has a due date, a reason for that date, and a history of the
+    /// date moving. An enum value is a string.
+    Ref,
+}
+
+/// How many items a ref field may name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum Cardinality {
+    /// `milestone: v0.1` — an item ships in one release.
+    #[default]
+    One,
+    /// `depends_on: [12, 13]`.
+    Many,
+}
+
+/// How a ref field's value names its target.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum Addressing {
+    /// The identifier. What identity is.
+    #[default]
+    Id,
+    /// A short human handle, unique within the target type.
+    ///
+    /// This is what keeps `milestone: v0.1` readable in a file. It is not a
+    /// second identity: identity is the integer, and a key is a handle, in the
+    /// same way a status has a `name` for machines and a `label` for people.
+    Key,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -217,6 +249,31 @@ pub struct FieldDef {
     pub name: String,
     #[serde(default = "default_kind")]
     pub kind: FieldKind,
+
+    /// For `kind = "ref"`: the type of item this names, or `*` for any.
+    ///
+    /// A field naming a *specific* type makes that type a container: its items
+    /// are the thing work belongs to rather than work itself.
+    #[serde(default)]
+    pub target: Option<String>,
+
+    #[serde(default)]
+    pub cardinality: Cardinality,
+
+    #[serde(default)]
+    pub by: Addressing,
+
+    /// Refuse a value that would close a cycle.
+    #[serde(default)]
+    pub acyclic: bool,
+
+    /// Contribute to the progress of whatever is named.
+    #[serde(default)]
+    pub rollup: bool,
+
+    /// What to call the question asked backwards: `contains`, `blocks`.
+    #[serde(default)]
+    pub inverse: Option<String>,
     #[serde(default)]
     pub values: Vec<String>,
     #[serde(default)]
@@ -668,6 +725,21 @@ impl Config {
                     f.name
                 );
             }
+            if f.kind == FieldKind::Ref {
+                let target = f.target.as_deref().unwrap_or("*");
+                if target != "*" && self.item_type(target).is_none() {
+                    bail!(
+                        "{CONFIG_FILE}: field `{}` targets `{target}`, which is not a \
+                         declared [[type]]",
+                        f.name
+                    );
+                }
+            } else if f.target.is_some() {
+                bail!(
+                    "{CONFIG_FILE}: field `{}` has a `target` but is not kind = \"ref\"",
+                    f.name
+                );
+            }
             if f.kind == FieldKind::Enum && f.values.is_empty() {
                 bail!(
                     "{CONFIG_FILE}: field `{}` is kind = \"enum\" but has no `values`",
@@ -820,6 +892,7 @@ impl Config {
 /// Field names that are always present on an item and cannot be redefined.
 pub const RESERVED_FIELDS: &[&str] = &[
     "id",
+    "key",
     "title",
     "type",
     "status",
