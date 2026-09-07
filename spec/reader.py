@@ -77,6 +77,7 @@ for _tag, _pattern, _first in [
 # §4. Every key the specification names. Anything else is a custom field.
 KNOWN = (
     "id",
+    "key",
     "title",
     "type",
     "status",
@@ -168,6 +169,7 @@ def read(path, text=None):
 
     return {
         "id": int(ident),
+        "key": text_or_none("key"),
         "title": text_or_none("title"),
         "type": text_or_none("type"),
         "status": text_or_none("status"),

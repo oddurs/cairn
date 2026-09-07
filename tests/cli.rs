@@ -3879,3 +3879,245 @@ fn closing_over_mcp_reports_unticked_criteria_without_refusing() {
         "and is not refused"
     );
 }
+
+// --- fields that name other items -------------------------------------------
+
+/// A project whose schema declares a container type and a ref field pointing at
+/// it. This is the shape `0078` will use for milestones, exercised here through
+/// the general mechanism.
+fn with_refs(extra: &str) -> Project {
+    let p = Project::new();
+    let cfg = p.read("cairn.toml").replacen(
+        "[[field]]",
+        &format!(
+            "[[type]]\nname = \"milestone\"\n\n[[field]]\nname = \"release\"\n\
+             kind = \"ref\"\ntarget = \"milestone\"\nby = \"key\"\n{extra}\n\n[[field]]"
+        ),
+        1,
+    );
+    p.write("cairn.toml", &cfg);
+    p
+}
+
+#[test]
+fn a_ref_field_names_an_item_by_key() {
+    let p = with_refs("");
+    p.expect(&["new", "Version one", "-t", "milestone", "-q"]);
+    p.expect(&["set", "1", "key=v1.0"]);
+    p.expect(&["new", "Support OAuth", "-q"]);
+
+    p.expect(&["set", "2", "release=v1.0"]);
+
+    // The point of addressing by key: the file stays readable.
+    let raw = p.expect(&["show", "2", "--raw"]).stdout;
+    assert_contains(&raw, "release: v1.0", "the key is what the file says");
+    assert!(
+        !raw.contains("release: 1"),
+        "an identifier leaked into the file:\n{raw}"
+    );
+
+    assert_eq!(
+        p.expect(&["list", "-A", "--ids", "--filter", "release=v1.0"])
+            .lines(),
+        vec!["0002".to_string()],
+        "and refs are filterable like any other field"
+    );
+}
+
+/// Naming the alternatives is most of the value: somebody mistyping a milestone
+/// wants the list far more than the word "invalid".
+#[test]
+fn a_ref_that_names_nothing_is_refused_with_the_alternatives() {
+    let p = with_refs("");
+    p.expect(&["new", "Version one", "-t", "milestone", "-q"]);
+    p.expect(&["set", "1", "key=v1.0"]);
+    p.expect(&["new", "Support OAuth", "-q"]);
+
+    let out = p.fails(&["set", "2", "release=v9.9"]);
+    assert_contains(&out.all(), "does not exist", "it refuses");
+    assert_contains(&out.all(), "known: v1.0", "and says what would have worked");
+
+    // Refusing on write is what keeps `check` and the write path agreeing: a
+    // project must never be left in a state the tool itself rejects.
+    p.expect(&["check"]);
+}
+
+/// A key-addressed field resolves only by key. Accepting an identifier as well
+/// would make one spelling mean two things depending on what exists.
+#[test]
+fn a_key_addressed_ref_does_not_fall_back_to_an_identifier() {
+    let p = with_refs("");
+    p.expect(&["new", "Version one", "-t", "milestone", "-q"]);
+    p.expect(&["set", "1", "key=v1.0"]);
+    p.expect(&["new", "Support OAuth", "-q"]);
+
+    let out = p.fails(&["set", "2", "release=1"]);
+    assert_contains(
+        &out.all(),
+        "does not exist",
+        "an identifier is not a key, even when it names the right item",
+    );
+}
+
+/// The same rule identifier prefixes obey, for the same reason.
+#[test]
+fn a_key_that_reads_as_an_identifier_is_refused() {
+    let p = with_refs("");
+    p.expect(&["new", "Version one", "-t", "milestone", "-q"]);
+    let out = p.fails(&["set", "1", "key=0042"]);
+    assert_contains(
+        &out.all(),
+        "reads as an identifier",
+        "a numeric key would make a reference ambiguous",
+    );
+}
+
+/// A key is what other items call this one, so changing it is a rename. Left
+/// alone, every reference would be orphaned silently.
+#[test]
+fn renaming_a_key_carries_the_references_with_it() {
+    let p = with_refs("");
+    p.expect(&["new", "Version one", "-t", "milestone", "-q"]);
+    p.expect(&["set", "1", "key=v1.0"]);
+    for title in ["First", "Second"] {
+        p.expect(&["new", title, "-q"]);
+    }
+    p.expect(&["set", "2", "3", "release=v1.0"]);
+
+    let out = p.expect(&["set", "1", "key=v2.0"]);
+    assert_contains(&out.all(), "also", "it says what else it touched");
+
+    for id in ["2", "3"] {
+        assert_contains(
+            &p.expect(&["show", id, "--raw"]).stdout,
+            "release: v2.0",
+            "the reference followed the rename",
+        );
+    }
+    p.expect(&["check"]);
+}
+
+/// A container is what work belongs to, not work. Offering one in answer to
+/// "what can I start" would push real work off the list.
+#[test]
+fn container_types_are_not_offered_as_work() {
+    let p = with_refs("");
+    p.expect(&["new", "Version one", "-t", "milestone", "-q"]);
+    p.expect(&["new", "Support OAuth", "-q"]);
+
+    assert_eq!(
+        p.expect(&["next", "--ids"]).lines(),
+        vec!["0002".to_string()],
+        "the milestone is not startable work"
+    );
+    assert!(
+        !p.expect(&["board"]).stdout.contains("Version one"),
+        "nor is it on the board"
+    );
+    // But it is still an item, and still listed.
+    assert_eq!(p.expect(&["list", "-A", "--ids"]).lines().len(), 2);
+}
+
+/// `target = "*"` must not make every type a container, or `depends_on` would
+/// empty `cairn next`.
+#[test]
+fn a_ref_targeting_anything_makes_nothing_a_container() {
+    let p = Project::new();
+    let cfg = p.read("cairn.toml").replacen(
+        "[[field]]",
+        "[[field]]\nname = \"part_of\"\nkind = \"ref\"\ntarget = \"*\"\n\
+         cardinality = \"many\"\nacyclic = true\n\n[[field]]",
+        1,
+    );
+    p.write("cairn.toml", &cfg);
+    p.add("One", &[]);
+    p.add("Two", &[]);
+    assert_eq!(
+        p.expect(&["next", "--ids"]).lines().len(),
+        2,
+        "everything is still startable work"
+    );
+}
+
+#[test]
+fn an_acyclic_ref_refuses_a_cycle_however_far_around() {
+    let p = Project::new();
+    let cfg = p.read("cairn.toml").replacen(
+        "[[field]]",
+        "[[field]]\nname = \"part_of\"\nkind = \"ref\"\ntarget = \"*\"\n\
+         cardinality = \"many\"\nacyclic = true\n\n[[field]]",
+        1,
+    );
+    p.write("cairn.toml", &cfg);
+    for title in ["One", "Two", "Three"] {
+        p.add(title, &[]);
+    }
+
+    p.expect(&["set", "1", "part_of=2"]);
+    p.expect(&["set", "2", "part_of=3"]);
+
+    let out = p.fails(&["set", "3", "part_of=1"]);
+    assert_contains(&out.all(), "cycle", "three deep is still a cycle");
+
+    let direct = p.fails(&["set", "1", "part_of+=1"]);
+    assert_contains(&direct.all(), "cycle", "and an item is not part of itself");
+}
+
+#[test]
+fn a_single_valued_ref_refuses_two_names() {
+    let p = with_refs("");
+    p.expect(&["new", "One", "-t", "milestone", "-q"]);
+    p.expect(&["set", "1", "key=v1.0"]);
+    p.expect(&["new", "Two", "-t", "milestone", "-q"]);
+    p.expect(&["set", "2", "key=v2.0"]);
+    p.expect(&["new", "Work", "-q"]);
+
+    let out = p.fails(&["set", "3", "release=v1.0,v2.0"]);
+    assert_contains(
+        &out.all(),
+        "names one item",
+        "an item ships in one release, and the schema says so",
+    );
+}
+
+/// A schema that describes a general mechanism plus one special case that
+/// predates it is two vocabularies. An agent should meet one.
+#[test]
+fn depends_on_is_described_as_the_ref_it_is() {
+    let p = Project::new();
+    let schema: serde_json::Value =
+        serde_json::from_str(&p.expect(&["config", "--json"]).stdout).expect("JSON");
+    let depends = schema["fields"]
+        .as_array()
+        .expect("fields")
+        .iter()
+        .find(|f| f["name"] == "depends_on")
+        .expect("depends_on is in the schema");
+
+    assert_eq!(depends["kind"], "ref");
+    assert_eq!(depends["target"], "*");
+    assert_eq!(depends["cardinality"], "many");
+    assert_eq!(depends["by"], "id");
+    assert_eq!(depends["acyclic"], true);
+    assert_eq!(depends["inverse"], "blocks");
+    // `depends_on` orders work; it does not compose it. Progress rolls up
+    // through composition, which is a different field. 0073 derives it.
+    assert_eq!(depends["rollup"], false);
+}
+
+#[test]
+fn a_ref_field_must_target_a_declared_type() {
+    let p = Project::new();
+    let cfg = p.read("cairn.toml").replacen(
+        "[[field]]",
+        "[[field]]\nname = \"release\"\nkind = \"ref\"\ntarget = \"nonexistent\"\n\n[[field]]",
+        1,
+    );
+    p.write("cairn.toml", &cfg);
+    let out = p.fails(&["list"]);
+    assert_contains(
+        &out.all(),
+        "not a declared [[type]]",
+        "a ref pointing at a type nobody declared is a typo, caught at load",
+    );
+}

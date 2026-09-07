@@ -260,6 +260,43 @@ fn collect_inner(
             }
         }
 
+        if let Some(problem) = crate::refs::key_problems(cfg, items)
+            .into_iter()
+            .find(|(id, _)| *id == item.id)
+            .map(|(_, m)| m)
+        {
+            r.error_at(&at, item, "key", problem);
+        }
+
+        for def in cfg.ref_fields() {
+            for value in crate::refs::values(item, def) {
+                if crate::refs::resolve(items, def, &value).is_none() {
+                    let known = crate::refs::permitted(items, cfg, def);
+                    r.error_at(
+                        &at,
+                        item,
+                        &def.name,
+                        format!(
+                            "`{}` names `{value}`, which does not exist{}",
+                            def.name,
+                            if known.is_empty() {
+                                String::new()
+                            } else {
+                                format!(" (known: {})", known.join(", "))
+                            }
+                        ),
+                    );
+                } else if def.acyclic && crate::refs::would_cycle(items, def, item.id, &value) {
+                    r.error_at(
+                        &at,
+                        item,
+                        &def.name,
+                        format!("`{}` = `{value}` closes a cycle", def.name),
+                    );
+                }
+            }
+        }
+
         let expected = cfg.filename_for(item.id, item.title());
         let actual = item
             .path

@@ -60,6 +60,9 @@ pub fn run(args: Args) -> Result<i32> {
     let cfg = Config::discover()?;
     let store = Store::new(&cfg);
     let mut items = store.load_for_reading()?;
+    // A board shows work in flight. A container is not in flight; it is the
+    // column heading somebody would have written by hand.
+    items.retain(|i| !cfg.is_container(i.kind()));
 
     let mut group_by = args.group_by.clone();
     let mut filter = Filter::default();

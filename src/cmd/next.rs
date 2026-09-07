@@ -225,6 +225,11 @@ pub fn select<'a>(
     let me = crate::store::whoami();
     let mut chosen: Vec<Item> = items
         .iter()
+        // Containers are what work belongs to, not work. A milestone cannot be
+        // started, and offering one in answer to "what can I start" would push
+        // real work off the list. This is also what stops containers that
+        // depend on each other — a roadmap is a sequence — reading as blocked.
+        .filter(|i| !cfg.is_container(i.kind()))
         .filter(|i| !ctx.is_closed(i))
         .filter(|i| args.blocked || !ctx.is_blocked(i))
         .filter(|i| filter.matches(i, ctx))

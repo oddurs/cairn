@@ -78,6 +78,7 @@ The frontmatter is a YAML mapping. All keys are optional except where noted.
 | Key | Type | Notes |
 | --- | --- | --- |
 | `id` | unsigned integer | Unique within a project. Required, except that a reader **may** take it from the filename when absent — see §4.1. |
+| `key` | string | A short handle, unique among items of the same `type`. Optional. See §4.3. |
 | `title` | string | Required in practice; an item without one is invalid. |
 | `type` | string | Names a type the project declares. |
 | `status` | string | Names a status the project declares. Required. |
@@ -124,6 +125,36 @@ A reader **may** additionally recover the identifier by applying the project's
 configured rendering to the filename. A reader that cannot determine the
 identifier **must** report the file as invalid rather than guess: an item whose
 identity is unknown is worse than an item that fails to load.
+
+### 4.3 Keys, and fields that name items
+
+A project **may** declare that a field's values name other items rather than
+describing this one — a milestone, a component, a parent. Such a field is a
+**reference**.
+
+A reference names its target either by `id` or by `key`. `key` exists so that a
+reference stays readable in a file: `milestone: v0.1` rather than
+`milestone: 42`.
+
+A key is **not** an identifier. `id` is unique across a project, is what
+`depends_on` and every id-addressed reference point at, and does not change. A
+key is a handle: unique only among items sharing a `type`, chosen rather than
+allocated, and permitted to change — in which case whatever changes it is
+responsible for the references that named it.
+
+Two rules make a key unambiguous, and a reader **must** apply both when
+validating:
+
+- A key **must not** be a value that the project's identifier rendering would
+  produce (§4.2). Otherwise `milestone: 0042` could name either a key or a
+  number depending on what happens to exist.
+- A key-addressed reference resolves **only** by key. A reader **must not** fall
+  back to matching an identifier or a title.
+
+Which fields are references, what they target, and whether they are addressed by
+id or by key are declared in the project's configuration, which §7 places
+outside this specification. A reader that does not consult the configuration
+**should** treat such values as opaque strings, which is what they are.
 
 ## 5. Ordering and layout
 

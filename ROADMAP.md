@@ -88,7 +88,7 @@ The rough edges that show up after a few weeks of daily use, and the pieces that
 
 ## v1.0 — Stable
 
-`#####·····` 47% · 9 of 19 done · due 2027-03-01
+`######····` 53% · 10 of 19 done · due 2027-03-01
 
 Safe to depend on: every scriptable surface carries a promise, the command surface has been reviewed and pruned rather than accumulated, releases can be verified, and it installs from a package manager people already use.
 
@@ -103,7 +103,6 @@ Safe to depend on: every scriptable surface carries a promise, the command surfa
 - [ ] [`0076`](https://github.com/oddurs/cairn/blob/main/cairn/items/0076-separate-who-is-working-from-who-owns-and-record-what-created-an-item.md) Separate who is working from who owns, and record what created an item <sup>feature · p1 · s8</sup>
 - [ ] [`0077`](https://github.com/oddurs/cairn/blob/main/cairn/items/0077-ship-no-level-names.md) Ship no level names <sup>docs · p1 · s8</sup>
 - [ ] [`0078`](https://github.com/oddurs/cairn/blob/main/cairn/items/0078-decide-whether-milestones-should-be-items.md) Decide whether milestones should be items <sup>docs · p0 · s8</sup>
-- [ ] [`0079`](https://github.com/oddurs/cairn/blob/main/cairn/items/0079-a-field-can-name-another-item.md) A field can name another item <sup>feature · p0 · s8</sup>
 
 ### done
 
@@ -116,6 +115,7 @@ Safe to depend on: every scriptable surface carries a promise, the command surfa
 - [x] [`0051`](https://github.com/oddurs/cairn/blob/main/cairn/items/0051-review-the-command-surface-before-1-0-freezes-it.md) Review the command surface before 1.0 freezes it <sup>chore · p0</sup>
 - [x] [`0054`](https://github.com/oddurs/cairn/blob/main/cairn/items/0054-decide-about-translation-and-write-the-decision-down.md) Decide about translation, and write the decision down <sup>docs · p2</sup>
 - [x] [`0061`](https://github.com/oddurs/cairn/blob/main/cairn/items/0061-a-second-implementation-of-the-reader.md) A second implementation of the reader <sup>feature · p1</sup>
+- [x] [`0079`](https://github.com/oddurs/cairn/blob/main/cairn/items/0079-a-field-can-name-another-item.md) A field can name another item <sup>feature · p0 · s8</sup>
 
 ## later — Someday
 

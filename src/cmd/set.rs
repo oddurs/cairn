@@ -117,6 +117,7 @@ pub fn run(args: Args) -> Result<i32> {
     for id in &targets {
         let mut item = store.find(*id)?;
         let before = item.meta.depends_on.clone();
+        let before_key = item.meta.key.clone();
         for (key, assign) in &parsed {
             // A failure part-way through has already written the items before
             // it, so the error says which — silence here would leave somebody
@@ -139,6 +140,17 @@ pub fn run(args: Args) -> Result<i32> {
         if item.meta.depends_on != before {
             check_no_cycle(&store, &item)?;
         }
+        crate::refs::validate_on_write(&cfg, &store, &item)?;
+        // A key is what other items call this one, so changing it is a rename
+        // rather than an assignment. Left alone, every reference would be
+        // orphaned silently; `renumber` already rewrites references when an
+        // identifier moves, and this is that, one level up.
+        let renamed = match (&before_key, &item.meta.key) {
+            (Some(old), Some(new)) if old != new => {
+                crate::refs::rename_key(&cfg, &store, &item, old, new)?
+            }
+            _ => Vec::new(),
+        };
         item.touch(&today());
         item.save()?;
         store.sync_path(&mut item)?;
@@ -149,6 +161,9 @@ pub fn run(args: Args) -> Result<i32> {
                 style::bold(&cfg.format_id(item.id)),
                 item.title()
             );
+            for id in &renamed {
+                println!("  {} {}", style::dim("also"), cfg.format_id(*id));
+            }
         }
         changed.push(item);
     }
@@ -316,6 +331,23 @@ pub fn check_no_cycle(store: &Store, item: &Item) -> Result<()> {
 pub fn apply(item: &mut Item, cfg: &Config, key: &str, assign: Assign) -> Result<()> {
     match key {
         "id" => bail!("`id` cannot be changed"),
+        "key" => match assign {
+            Assign::Set(v) if v.trim().is_empty() => item.meta.key = None,
+            Assign::Set(v) => {
+                let v = v.trim().to_string();
+                // The same rule identifier prefixes obey: a key that reads as a
+                // number would make a reference ambiguous, and two spellings
+                // must not be able to name different items.
+                if cfg.id_format().read(&v).is_ok() {
+                    bail!(
+                        "key `{v}` reads as an identifier; a reference to it \
+                         could not be told from a number"
+                    );
+                }
+                item.meta.key = Some(v);
+            }
+            _ => bail!("`key` is not a list field; use key=..."),
+        },
         "title" => match assign {
             Assign::Set(v) if v.is_empty() => bail!("title cannot be empty"),
             Assign::Set(v) => item.meta.title = Some(v),
@@ -446,6 +478,40 @@ fn apply_custom(item: &mut Item, cfg: &Config, key: &str, assign: Assign) -> Res
     };
 
     match def.kind {
+        // Checked here rather than in `validate_scalar`, which sees only the
+        // definition: whether a name resolves is a question about the backlog.
+        FieldKind::Ref => {
+            let mut current = match item.get(key) {
+                Field::List(v) => v,
+                Field::Text(t) if !t.is_empty() => vec![t],
+                _ => vec![],
+            };
+            match assign {
+                Assign::Set(v) => current = split_list(&v),
+                Assign::Add(v) => {
+                    for x in split_list(&v) {
+                        if !current.iter().any(|c| c.eq_ignore_ascii_case(&x)) {
+                            current.push(x);
+                        }
+                    }
+                }
+                Assign::Remove(v) => {
+                    let drop = split_list(&v);
+                    current.retain(|x| !drop.iter().any(|d| d.eq_ignore_ascii_case(x)));
+                }
+            }
+            if !crate::refs::is_many(def) && current.len() > 1 {
+                bail!("`{key}` names one item, but {} were given", current.len());
+            }
+            item.set_extra(
+                key,
+                match (current.is_empty(), crate::refs::is_many(def)) {
+                    (true, _) => None,
+                    (false, true) => Some(Field::List(current)),
+                    (false, false) => Some(Field::Text(current.remove(0))),
+                },
+            );
+        }
         FieldKind::List => {
             let mut current = match item.get(key) {
                 Field::List(v) => v,
@@ -499,6 +565,10 @@ pub fn validate_scalar(def: &crate::config::FieldDef, value: &str) -> Result<()>
                 );
             }
         }
+        // A ref names something that has to exist, which cannot be checked
+        // against the definition alone. `check` and the write path resolve it
+        // where the items are in hand.
+        FieldKind::Ref => {}
         FieldKind::Date => check_date(&def.name, value)?,
         FieldKind::Number => {
             if value.parse::<f64>().is_err() {
