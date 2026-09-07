@@ -41,7 +41,8 @@ reports the same to an agent.
 
 `criteria`, `criteria_done` and `criteria_met` are filterable and derived from
 the body, so they cannot go stale.  An item stating no criteria is vacuously
-complete and is never reported.
+complete and is never reported, and a box with nothing written after it is a
+placeholder rather than a criterion — the shipped template ends with one.
 
 `[project] criteria_section` restricts counting to one heading.  `[project]
 require_criteria` makes `check` warn about closed items with unticked boxes; it
