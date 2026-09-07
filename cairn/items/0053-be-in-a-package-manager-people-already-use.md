@@ -4,8 +4,10 @@ title: Be in a package manager people already use
 type: chore
 status: backlog
 milestone: v1.0
+labels:
+- blocked-on-a-release
 created: 2026-09-05
-updated: 2026-09-05
+updated: 2026-09-06
 priority: p0
 effort: l
 ---
@@ -43,3 +45,20 @@ installing from it on a clean machine rather than assumed to work.
 - [ ] Every path verified by installing on a machine that has never built cairn
 - [ ] The install page lists them in the order a reader should try them
 - [ ] A release checklist covers updating each one
+
+## 2026-09-06
+
+The part that does not need an account is done: `doc/RELEASING.md` carries the
+checklist, including a table of every downstream package, what to change in each
+and who can change it. That existed only in somebody's memory, which is the
+failure mode this item is about — a package nobody remembers to bump becomes
+somebody installing a stale cairn and reporting a bug fixed months ago.
+
+The rest is blocked, and on a chain rather than on effort. Every packaging
+recipe needs a published release to point at and a checksum to pin; crates.io
+needs a token (`0001`); Debian and Fedora want a signature (`0052`). Writing a
+PKGBUILD or a nix derivation now would mean placeholder hashes and no way to
+verify either, and this item's own criterion is that each path is verified by
+installing on a machine that has never built cairn.
+
+So: `0001` first, then a release, then these.
