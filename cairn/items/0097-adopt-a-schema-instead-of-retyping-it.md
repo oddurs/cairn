@@ -2,7 +2,7 @@
 id: 97
 title: Adopt a schema instead of retyping it
 type: feature
-status: backlog
+status: done
 milestone: v0.2
 created: 2026-09-07
 updated: 2026-09-07
@@ -59,9 +59,13 @@ not something this tool should learn to do.
 
 ## Acceptance criteria
 
-- [ ] `cairn init --from PATH` starts from that project's schema
-- [ ] `[project]` is this project's own: name, directory, url, nothing inherited
-- [ ] Milestones do not come along, because they are items
-- [ ] Comments in the source file survive the copy, since they are half of what makes a schema legible
-- [ ] It refuses a path that is not a cairn project, and says so
-- [ ] The manual explains why this is a copy rather than an include
+- [x] `cairn init --from PATH` starts from that project's schema
+- [x] `[project]` is this project's own: name, directory, url, nothing inherited
+- [x] Milestones do not come along, because they are items
+- [x] Comments in the source file survive the copy, since they are half of what makes a schema legible
+- [x] It refuses a path that is not a cairn project, and says so
+- [x] The manual explains why this is a copy rather than an include
+
+## 2026-09-07
+
+Done. `cairn init --from PATH` copies the schema with toml_edit, so the comments survive; `[project]` is replaced with this project's own name and directory, and a description and url are dropped. `render.link_items` is turned off with the url so the new project does not arrive failing its own check, and starter milestones are only written when the adopted schema declares the type and field for them. A source at an older format is refused and told to migrate first, rather than having the migration quietly duplicated here.
