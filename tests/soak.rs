@@ -90,6 +90,35 @@ impl Soak {
         }
     }
 
+    /// Run with something on standard input, for the operations that speak a
+    /// protocol rather than take arguments.
+    fn run_stdin(&self, args: &[&str], input: &str) -> Out {
+        use std::io::Write;
+        let mut child = Command::new(env!("CARGO_BIN_EXE_cairn"))
+            .args(args)
+            .current_dir(self.dir.path())
+            .env("NO_COLOR", "1")
+            .env("CAIRN_USER", "soak")
+            .env("PATH", path_with_binary())
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("spawning cairn");
+        child
+            .stdin
+            .take()
+            .expect("stdin")
+            .write_all(input.as_bytes())
+            .expect("writing to cairn");
+        let out = child.wait_with_output().expect("waiting for cairn");
+        Out {
+            code: out.status.code().unwrap_or(-1),
+            stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
+            stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
+        }
+    }
+
     fn expect(&self, args: &[&str]) -> Out {
         let out = self.run(args);
         assert_eq!(
@@ -137,7 +166,11 @@ fn a_long_sequence_of_ordinary_use_leaves_the_backlog_intact() {
     for step in 0..ops {
         let live = s.ids();
         let target = s.rng.pick(&live).copied();
-        let choice = s.rng.below(100);
+        // 0..=99 are the weighted operations below; 100 and 101 are the
+        // export/import round trip. Widening this range without moving the
+        // catch-all is how that round trip became unreachable once, which is
+        // the kind of thing a coverage count at the end exists to catch.
+        let choice = s.rng.below(102);
 
         let op = match (choice, target) {
             (0..=24, _) | (_, None) => {
@@ -203,24 +236,114 @@ fn a_long_sequence_of_ordinary_use_leaves_the_backlog_intact() {
                 }
                 "depends"
             }
-            (90..=93, Some(id)) => {
+            (90..=91, Some(id)) => {
                 let title = format!("Renamed at step {step}");
                 s.expect(&["set", &id.to_string(), &format!("title={title}"), "-q"]);
                 "rename"
             }
-            (94..=96, _) => {
+            (92..=93, _) => {
                 s.expect(&["render", "-q"]);
                 s.expect(&["render", "--check", "-q"]);
                 "render"
             }
-            (97..=98, _) => {
+            (94, _) => {
                 s.expect(&["renumber"]);
                 // Identifiers may have moved; the model is keyed by them, so it
                 // is rebuilt from what cairn now reports.
                 s.expected = current_state(&s);
                 "renumber"
             }
-            (_, _) => {
+            (95, _) => {
+                // `--compact` closes the gaps that `remove` leaves, so it moves
+                // far more identifiers than a plain renumber ever does.
+                s.expect(&["renumber", "--compact"]);
+                s.expected = current_state(&s);
+                "renumber --compact"
+            }
+            (96, Some(id)) => {
+                s.expect(&[
+                    "note",
+                    &id.to_string(),
+                    "--bare",
+                    "-q",
+                    "--",
+                    &format!("Noted at step {step}"),
+                ]);
+                "note"
+            }
+            (97, Some(id)) => {
+                // Milestones are created on demand, so this exercises the path
+                // that writes to cairn.toml rather than to an item.
+                let name = format!("v0.{}", s.rng.below(3));
+                // Adding one that exists is a refusal rather than a no-op,
+                // which is the right call and means the soak has to tolerate it.
+                let out = s.run(&["milestone", "add", &name]);
+                assert!(
+                    out.code == 0 || out.stderr.contains("already exists"),
+                    "milestone add failed unexpectedly: {}",
+                    out.stderr
+                );
+                s.expect(&["set", &id.to_string(), &format!("milestone={name}"), "-q"]);
+                "milestone"
+            }
+            (98, _) => {
+                // Every read, run for its exit status: a view that panics on a
+                // backlog reached by an odd route is still a bug.
+                for args in [
+                    vec!["board"],
+                    vec!["roadmap"],
+                    vec!["next"],
+                    vec!["list", "-A"],
+                    vec!["search", "step"],
+                    vec!["config"],
+                    vec!["agent"],
+                    vec!["check", "--strict"],
+                ] {
+                    let out = s.run(&args);
+                    assert!(
+                        out.code == 0 || out.code == 1,
+                        "read command {args:?} exited {}\n{}{}",
+                        out.code,
+                        out.stdout,
+                        out.stderr
+                    );
+                    assert!(
+                        !out.stderr.contains("panicked at"),
+                        "read command {args:?} panicked\n{}",
+                        out.stderr
+                    );
+                }
+                "reads"
+            }
+            (99, _) => {
+                // The MCP server is how agents reach the backlog, and until now
+                // nothing here had ever spoken to it.
+                let request = concat!(
+                    r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":"#,
+                    r#"{"protocolVersion":"2024-11-05","capabilities":{},"#,
+                    r#""clientInfo":{"name":"soak","version":"0"}}}"#,
+                    "\n",
+                    r#"{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}"#,
+                    "\n",
+                    r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":"#,
+                    r#"{"name":"list_items","arguments":{}}}"#,
+                    "\n"
+                );
+                let out = s.run_stdin(&["mcp"], request);
+                assert_eq!(out.code, 0, "the MCP server failed: {}", out.stderr);
+                let replies = out.stdout.lines().count();
+                assert_eq!(replies, 3, "expected three replies, got:\n{}", out.stdout);
+                for line in out.stdout.lines() {
+                    let v: serde_json::Value =
+                        serde_json::from_str(line).expect("each reply is JSON");
+                    assert!(
+                        v.get("error").is_none(),
+                        "the MCP server returned an error: {line}"
+                    );
+                }
+                "mcp"
+            }
+            (100..=101, _) | (_, _) => {
                 let doc = s.expect(&["export"]).stdout;
                 let round = tempfile::tempdir().unwrap();
                 let mirror = Soak {
@@ -257,6 +380,131 @@ fn a_long_sequence_of_ordinary_use_leaves_the_backlog_intact() {
     for (op, n) in &performed {
         println!("      {n:>4}  {op}");
     }
+
+    // An operation that never ran tested nothing, and a table that quietly
+    // stops reaching one is invisible without this.
+    for op in [
+        "new",
+        "set status",
+        "close",
+        "reopen",
+        "remove",
+        "render",
+        "renumber",
+        "export/import",
+    ] {
+        assert!(
+            performed.contains_key(op),
+            "`{op}` never ran in {ops} operations; the operation table no \
+             longer reaches it"
+        );
+    }
+}
+
+/// Two processes writing at once.
+///
+/// Identifiers are allocated as one more than the highest in use, which is only
+/// safe because a lock makes the read and the write one step. The unit tests
+/// race the lock directly; this races it through ordinary commands, which is
+/// how it is actually reached.
+#[test]
+#[ignore = "long-running; run with --ignored"]
+fn concurrent_writers_leave_one_consistent_backlog() {
+    let writers: usize = std::env::var("CAIRN_SOAK_WRITERS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(4);
+    let each: usize = std::env::var("CAIRN_SOAK_EACH")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(25);
+
+    println!("soak: {writers} concurrent writers, {each} operations each");
+
+    let s = Soak {
+        dir: tempfile::tempdir().expect("temp dir"),
+        rng: Rng(0),
+        expected: BTreeMap::new(),
+    };
+    s.expect(&["init", "--bare", "--name", "Concurrent"]);
+
+    let root = s.dir.path().to_path_buf();
+    let mut threads = Vec::new();
+    for writer in 0..writers {
+        let root = root.clone();
+        threads.push(std::thread::spawn(move || {
+            let mut made = Vec::new();
+            for n in 0..each {
+                let title = format!("writer {writer} item {n}");
+                let out = Command::new(env!("CARGO_BIN_EXE_cairn"))
+                    .args(["new", &title, "-q"])
+                    .current_dir(&root)
+                    .env("NO_COLOR", "1")
+                    .env("CAIRN_USER", format!("writer-{writer}"))
+                    .env("PATH", path_with_binary())
+                    .stdin(Stdio::null())
+                    .output()
+                    .expect("running cairn");
+                assert!(
+                    out.status.success(),
+                    "writer {writer} could not create an item: {}",
+                    String::from_utf8_lossy(&out.stderr)
+                );
+                let id: u32 = String::from_utf8_lossy(&out.stdout)
+                    .trim()
+                    .parse()
+                    .expect("an id");
+                made.push(id);
+
+                // And a write to an item this writer owns, so the lock is
+                // contended by more than creation.
+                let out = Command::new(env!("CARGO_BIN_EXE_cairn"))
+                    .args(["set", &id.to_string(), "status=doing", "-q"])
+                    .current_dir(&root)
+                    .env("NO_COLOR", "1")
+                    .env("CAIRN_USER", format!("writer-{writer}"))
+                    .env("PATH", path_with_binary())
+                    .stdin(Stdio::null())
+                    .output()
+                    .expect("running cairn");
+                assert!(
+                    out.status.success(),
+                    "writer {writer} could not update {id}: {}",
+                    String::from_utf8_lossy(&out.stderr)
+                );
+            }
+            made
+        }));
+    }
+
+    let mut allocated: Vec<u32> = Vec::new();
+    for t in threads {
+        allocated.extend(t.join().expect("a writer panicked"));
+    }
+
+    // The property that matters: no two commands were handed the same id.
+    let unique: std::collections::HashSet<u32> = allocated.iter().copied().collect();
+    assert_eq!(
+        unique.len(),
+        allocated.len(),
+        "two writers were given the same identifier"
+    );
+    assert_eq!(
+        allocated.len(),
+        writers * each,
+        "an item went missing between the writers and the backlog"
+    );
+
+    let ids = s.ids();
+    assert_eq!(
+        ids.len(),
+        writers * each,
+        "the backlog holds a different number of items than were created"
+    );
+    check_invariants(&s, 0, "concurrent");
+    s.expect(&["check", "--strict"]);
+
+    println!("soak: {} items, every identifier distinct", ids.len());
 }
 
 /// Read the backlog through the machine interface, which reports status names

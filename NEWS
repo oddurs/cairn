@@ -27,6 +27,33 @@ There is deliberately no library target, because linking cairn makes the caller
 a derivative work and reading its files does not.  A test fails if a [lib]
 appears in Cargo.toml.
 
+** import no longer drops dependencies
+
+`cairn import` silently discarded every dependency in the document it was
+reading.  It matched each written item back to the record that produced it by
+comparing `source`, which a cairn export does not carry — the field was
+synthesised locally for the item and left absent on the record, so the two never
+compared equal.  Nothing failed and `cairn check` was satisfied; the backlog was
+simply missing the thing `cairn next` uses to decide what is startable.
+
+Found by a new property test rather than by reading.
+
+** Testing where the defects have been
+
+The soak test now covers every mutating command, `renumber --compact`, notes,
+milestones, the read-only views, and the MCP server, and asserts at the end that
+each operation actually ran — an operation the table stops reaching tests
+nothing.  A second soak races four processes writing at once.
+
+`tests/fuzz_args.rs` drives the real binary with arbitrary argument vectors and
+asserts that cairn may refuse anything but may not panic.  32,000 invocations
+found nothing, which is worth stating plainly.
+
+`tests/interchange.rs` states the export/import round trip as a property, and
+`tests/filter_laws.rs` states the filter grammar's laws: negation partitions the
+backlog, alternation is union, a comma is intersection and does not care about
+order.
+
 ** Changing several items at once
 
 `cairn set` takes a list of ids, matching close, reopen, release and remove,
