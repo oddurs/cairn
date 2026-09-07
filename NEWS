@@ -27,6 +27,31 @@ There is deliberately no library target, because linking cairn makes the caller
 a derivative work and reading its files does not.  A test fails if a [lib]
 appears in Cargo.toml.
 
+** A cookbook, and a test that the manual is true
+
+A new Cookbook chapter, and a page on the site, with recipes for what people
+arrive wanting to do: adopting cairn where GitHub issues exist, weekly triage,
+wiring it into CI, scoping a slice of the backlog for an agent, moving a backlog
+between schemas, finding stalled work, and recovering after a bad merge.
+
+tests/manual.rs extracts every command the manual shows and runs it against the
+real program, failing on any the program would reject.  Documentation was the
+least-tested surface here, and had twice claimed a flag nobody implemented.  It
+found two problems on its first run, one of which was a genuine gap:
+
+`cairn claim --next` now takes --filter, so an agent can claim from a scoped
+slice.  Scoping the claim rather than the listing is what makes it safe — doing
+it as list-then-claim leaves a gap in which another claimer can take the item,
+which is the gap the lock exists to close.
+
+** Translation
+
+cairn is not translated and will not be before 1.0, and the manual now says so
+as a position rather than leaving it an oversight.  Most of what cairn prints is
+prose rather than labels, a half-translated diagnostic cannot be searched for,
+and the cost is sustained maintenance rather than one-off extraction.  What
+would reverse it is written down: a contributor volunteering to own a language.
+
 ** Merges keep the published identifier
 
 When two branches each allocated the same identifier, `cairn renumber` moved the
