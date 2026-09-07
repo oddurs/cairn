@@ -3107,3 +3107,161 @@ fn a_shallow_clone_does_not_claim_a_creation_it_cannot_see() {
         serde_json::from_str(&clone.expect(&["log", "2", "--json"]).stdout).expect("JSON");
     assert_eq!(v["truncated"], true, "a caller can tell too");
 }
+
+// --- changing several items at once -----------------------------------------
+
+/// `close`, `reopen`, `release` and `remove` all take a list of ids. `set` —
+/// the most-used mutating command — took exactly one, so the common case of
+/// triaging a handful of items the same way was a shell loop.
+#[test]
+fn set_accepts_several_ids() {
+    let p = Project::new();
+    for title in ["One", "Two", "Three"] {
+        p.add(title, &[]);
+    }
+
+    p.expect(&["set", "1", "2", "3", "priority=p0"]);
+    assert_eq!(
+        p.expect(&["list", "--ids", "--filter", "priority=p0"])
+            .lines()
+            .len(),
+        3,
+        "every named item was changed"
+    );
+}
+
+/// Ids first, then assignments. Anything else is a typo worth refusing rather
+/// than a shape worth guessing at.
+#[test]
+fn an_id_after_an_assignment_is_refused() {
+    let p = Project::new();
+    p.add("One", &[]);
+    p.add("Two", &[]);
+
+    let out = p.fails(&["set", "1", "status=doing", "2"]);
+    assert_contains(
+        &out.all(),
+        "comes after an assignment",
+        "it should say what is wrong",
+    );
+    assert_contains(
+        &out.all(),
+        "cairn set 1 2 status=doing",
+        "and show the command that was meant",
+    );
+
+    // And crucially it changed nothing, rather than applying to the first id
+    // and then complaining.
+    assert!(
+        p.expect(&["list", "--ids", "--filter", "status=doing"])
+            .trimmed()
+            .is_empty(),
+        "a refused command must not have written anything"
+    );
+}
+
+/// The dangerous case: the person running it has not seen the list.
+#[test]
+fn a_filtered_change_shows_what_it_matched_and_asks() {
+    let p = Project::new();
+    for title in ["One", "Two", "Three"] {
+        p.add(title, &[]);
+    }
+    p.expect(&["set", "1", "2", "priority=p0"]);
+
+    let declined = p.run_stdin(&["set", "--filter", "priority=p0", "status=doing"], "n\n");
+    assert!(!declined.ok(), "declining should not succeed");
+    assert_contains(
+        &declined.all(),
+        "One",
+        "the list is shown before the question",
+    );
+    assert_contains(&declined.all(), "change 2 item(s)?", "and it says how many");
+
+    // Assert on the stored value rather than what `show` prints: the status
+    // named `doing` is displayed as its label, "in progress".
+    assert!(
+        p.expect(&["list", "--ids", "--filter", "status=doing"])
+            .trimmed()
+            .is_empty(),
+        "declining must leave every item alone"
+    );
+
+    let accepted = p.run_stdin(&["set", "--filter", "priority=p0", "status=doing"], "y\n");
+    assert!(accepted.ok(), "{}", accepted.all());
+    let moved = p
+        .expect(&["list", "--ids", "--filter", "status=doing"])
+        .lines();
+    assert_eq!(moved.len(), 2, "it applied to what matched, and only that");
+}
+
+/// A script has no terminal to answer at, so the answer to an unanswered
+/// question is no.
+#[test]
+fn a_filtered_change_with_no_answer_does_nothing() {
+    let p = Project::new();
+    p.add("One", &[]);
+
+    let out = p.run(&["set", "--filter", "status=backlog", "priority=p0"]);
+    assert!(!out.ok(), "silence is not consent");
+    assert!(
+        p.expect(&["list", "--ids", "--filter", "priority=p0"])
+            .trimmed()
+            .is_empty(),
+        "an unanswered question must change nothing"
+    );
+
+    p.expect(&["set", "--filter", "status=backlog", "--yes", "priority=p0"]);
+    assert_eq!(
+        p.expect(&["list", "--ids", "--filter", "priority=p0"])
+            .lines()
+            .len(),
+        1,
+        "--yes is how a script says yes"
+    );
+}
+
+#[test]
+fn a_filter_matching_nothing_is_an_error_rather_than_a_silent_success() {
+    let p = Project::new();
+    p.add("One", &[]);
+    let out = p.fails(&["set", "--filter", "priority=p9", "--yes", "status=doing"]);
+    assert_contains(
+        &out.all(),
+        "no item matches",
+        "an empty selection is a mistake, not a no-op",
+    );
+}
+
+/// A bad assignment must not leave half the items changed. Everything is parsed
+/// before anything is written.
+#[test]
+fn a_typo_in_the_last_assignment_writes_nothing() {
+    let p = Project::new();
+    p.add("One", &[]);
+    p.add("Two", &[]);
+
+    let out = p.fails(&["set", "1", "2", "priority=p0", "status=nonsense"]);
+    assert!(!out.ok());
+    assert!(
+        p.expect(&["list", "--ids", "--filter", "priority=p0"])
+            .trimmed()
+            .is_empty(),
+        "an item was written before the invalid assignment was noticed"
+    );
+}
+
+#[test]
+fn set_still_takes_exactly_one_id() {
+    // The old shape has to keep working: this is the most-used command.
+    let p = Project::new();
+    p.add("Only", &[]);
+    p.expect(&["set", "1", "status=doing", "priority=p1"]);
+    assert_eq!(
+        p.expect(&["list", "--ids", "--filter", "status=doing,priority=p1"])
+            .lines()
+            .len(),
+        1,
+        "both assignments landed on the one item named"
+    );
+}

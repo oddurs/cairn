@@ -25,13 +25,21 @@ use clap::ArgAction;
 
 #[derive(clap::Args)]
 pub struct Args {
-    /// Item id
-    #[arg(value_name = "ID")]
-    pub id: String,
+    /// Item ids, then assignments: `cairn set 1 2 3 status=doing`
+    ///
+    /// Ids and assignments share one list because an assignment always
+    /// contains `=` and an id never can, so the split is unambiguous and the
+    /// command reads the way the other bulk commands do.
+    #[arg(value_name = "ID... FIELD=VALUE...", required = true)]
+    pub args: Vec<String>,
 
-    /// Assignments: `status=doing`, `labels+=auth`, `assignee=`
-    #[arg(value_name = "FIELD=VALUE", required = true)]
-    pub assignments: Vec<String>,
+    /// Change every item matching a filter instead of naming ids
+    #[arg(long, value_name = "EXPR")]
+    pub filter: Option<String>,
+
+    /// Do not ask before a filtered change
+    #[arg(short = 'y', long, action = ArgAction::SetTrue)]
+    pub yes: bool,
 
     /// Print nothing on success
     #[arg(short, long, action = ArgAction::SetTrue)]
@@ -69,32 +77,137 @@ pub struct ReopenArgs {
 pub fn run(args: Args) -> Result<i32> {
     let cfg = Config::discover()?;
     let store = Store::new(&cfg);
+
+    let (ids, assignments) = split_arguments(&args)?;
+    if assignments.is_empty() {
+        bail!("nothing to set: give at least one `field=value`");
+    }
+    // Parsed before anything is written, so a typo in the third assignment does
+    // not leave the first two applied to half the items.
+    let parsed: Vec<(String, Assign)> = assignments
+        .iter()
+        .map(|raw| parse_assignment(raw))
+        .collect::<Result<_>>()?;
+
+    let targets: Vec<u32> = match &args.filter {
+        None => ids.iter().map(|raw| parse_id(raw)).collect::<Result<_>>()?,
+        Some(expr) => {
+            let items = store.load_all()?;
+            let ctx = crate::filter::Ctx::new(&cfg, &items);
+            let filter = crate::filter::Filter::parse(expr)?;
+            let matched: Vec<&Item> = items.iter().filter(|i| filter.matches(i, &ctx)).collect();
+            if matched.is_empty() {
+                bail!("no item matches `{expr}`");
+            }
+            if !args.yes && !confirm(&cfg, &matched)? {
+                eprintln!("aborted");
+                return Ok(1);
+            }
+            matched.iter().map(|i| i.id).collect()
+        }
+    };
+
+    // One lock for the whole operation: a bulk edit must not be a window during
+    // which the backlog is half-changed.
     let lock = Lock::acquire(&cfg)?;
-    let mut item = store.find(parse_id(&args.id)?)?;
-
-    let before = item.meta.depends_on.clone();
-    for raw in &args.assignments {
-        let (key, assign) = parse_assignment(raw)?;
-        apply(&mut item, &cfg, &key, assign)?;
+    let mut changed = Vec::new();
+    for id in &targets {
+        let mut item = store.find(*id)?;
+        let before = item.meta.depends_on.clone();
+        for (key, assign) in &parsed {
+            // A failure part-way through has already written the items before
+            // it, so the error says which — silence here would leave somebody
+            // guessing how far it got.
+            apply(&mut item, &cfg, key, assign.clone()).map_err(|e| {
+                if changed.is_empty() {
+                    e
+                } else {
+                    e.context(format!(
+                        "already written: {}",
+                        changed
+                            .iter()
+                            .map(|i: &Item| cfg.format_id(i.id))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ))
+                }
+            })?;
+        }
+        if item.meta.depends_on != before {
+            check_no_cycle(&store, &item)?;
+        }
+        item.touch(&today());
+        item.save()?;
+        store.sync_path(&mut item)?;
+        if !args.quiet {
+            println!(
+                "{} {}  {}",
+                style::green("updated"),
+                style::bold(&cfg.format_id(item.id)),
+                item.title()
+            );
+        }
+        changed.push(item);
     }
-    if item.meta.depends_on != before {
-        check_no_cycle(&store, &item)?;
-    }
-    item.touch(&today());
-    item.save()?;
-    store.sync_path(&mut item)?;
     drop(lock);
-    hooks::item(&cfg, &store, hooks::Event::AfterChange, &item);
 
-    if !args.quiet {
-        println!(
-            "{} {}  {}",
-            style::green("updated"),
-            style::bold(&cfg.format_id(item.id)),
-            item.title()
-        );
+    for item in &changed {
+        hooks::item(&cfg, &store, hooks::Event::AfterChange, item);
     }
     Ok(0)
+}
+
+/// Split the positional list into ids and assignments.
+///
+/// An assignment contains `=`; an id cannot. Once the first assignment is seen
+/// everything after it must be one, so `cairn set 1 status=doing 2` is refused
+/// rather than quietly ignoring the trailing id.
+fn split_arguments(args: &Args) -> Result<(Vec<String>, Vec<String>)> {
+    let mut ids = Vec::new();
+    let mut assignments = Vec::new();
+    for arg in &args.args {
+        if arg.contains('=') {
+            assignments.push(arg.clone());
+        } else if assignments.is_empty() {
+            ids.push(arg.clone());
+        } else {
+            bail!(
+                "`{arg}` looks like an id but comes after an assignment\n\
+                 ids go first: cairn set {} {}",
+                ids.iter()
+                    .chain(std::iter::once(arg))
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(" "),
+                assignments.join(" ")
+            );
+        }
+    }
+    if args.filter.is_some() && !ids.is_empty() {
+        bail!("give ids or --filter, not both");
+    }
+    if args.filter.is_none() && ids.is_empty() {
+        bail!("no item named: give an id, or --filter to select by field");
+    }
+    Ok((ids, assignments))
+}
+
+/// A filtered write is the dangerous one: the person running it has not seen
+/// the list. Showing it is the whole point, so the confirmation is informed
+/// rather than nominal.
+fn confirm(cfg: &Config, matched: &[&Item]) -> Result<bool> {
+    for item in matched {
+        println!("  {}  {}", cfg.format_id(item.id), item.title());
+    }
+    eprint!("change {} item(s)? [y/N] ", matched.len());
+    use std::io::Write;
+    std::io::stderr().flush()?;
+    let mut answer = String::new();
+    std::io::stdin().read_line(&mut answer)?;
+    Ok(matches!(
+        answer.trim().to_ascii_lowercase().as_str(),
+        "y" | "yes"
+    ))
 }
 
 pub fn close(args: CloseArgs) -> Result<i32> {

@@ -220,6 +220,16 @@ colour) are all available:
 cairn list --ids --filter 'priority=p0' | xargs -n1 cairn show
 ```
 
+Triage takes the same grammar, so the loop is rarely needed:
+
+```sh
+cairn set 1 2 3 priority=p0
+cairn set --filter 'milestone=v0.1,status=backlog' priority=p1
+```
+
+A filtered write prints what it matched and asks before touching anything,
+unless `--yes` is given.
+
 ## How an item got here
 
 The repository is the database, and a repository has one thing a database does

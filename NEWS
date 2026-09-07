@@ -27,6 +27,20 @@ There is deliberately no library target, because linking cairn makes the caller
 a derivative work and reading its files does not.  A test fails if a [lib]
 appears in Cargo.toml.
 
+** Changing several items at once
+
+`cairn set` takes a list of ids, matching close, reopen, release and remove,
+which all did already:
+
+  cairn set 1 2 3 priority=p0
+  cairn set --filter 'milestone=v0.1,status=backlog' priority=p1
+
+A filtered write prints what it matched and asks before touching anything
+unless --yes is given, in the same shape cairn remove uses; an unanswered
+question is answered no.  Assignments are parsed before anything is written, so
+a typo in the last one does not leave the first applied to half the items, and
+the whole operation takes one lock.
+
 ** An item's history
 
 `cairn log 12` shows how an item reached its present state, read from the
