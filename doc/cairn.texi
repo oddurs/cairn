@@ -2530,7 +2530,40 @@ anybody could name.
 @section cairn init
 Writes @file{cairn.toml} and the item directory. @option{--preset} selects
 @code{standard} or @code{minimal}; @option{--bare} skips the example item;
-@option{--force} overwrites an existing configuration.
+@option{--force} overwrites an existing configuration; @option{--git} adds the
+git integration to a project that already exists.
+
+@cindex adopting a schema
+@option{--from} starts from another project's schema instead of a preset:
+
+@example
+cairn init --from ../other-project --name "New thing"
+@end example
+
+@noindent
+Everything that describes the @emph{schema} comes across --- types, statuses,
+fields, saved views, the render block, hooks --- and so do the comments, which
+are half of what makes a schema legible. What does not come across is
+@code{[project]}: the name and directory are this project's own, and a
+description and a repository url belonged to whoever wrote them.
+@code{render.link_items} is turned off with the url, so the new project does not
+arrive already failing its own @command{cairn check}.
+
+Milestones do not come across either. They are items now, and somebody else's
+schedule is not a schema.
+
+@subsection Why a copy and not an include
+
+@cindex extends
+There is no @code{extends}. An include would end @file{cairn.toml} being the
+whole truth about a project: reading it would mean resolving a path that may be
+outside the repository, may not exist on a clone, and may have changed since.
+Somebody who clones a repository can understand its backlog, and that is worth
+more than saving a copy.
+
+The cost of copying is real --- two files that started identical drift apart ---
+and it is the right cost. A schema two projects share is two projects that
+cannot change independently.
 
 @section cairn new
 Creates an item. @samp{cairn new "@var{title}"} with @option{--type},

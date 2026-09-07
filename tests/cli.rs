@@ -5397,3 +5397,67 @@ fn an_unknown_configuration_key_says_which_kind_it_is() {
     );
     assert_contains(&out, "which reads format", "but it still says what it is");
 }
+
+// --- adopting a schema ------------------------------------------------------
+
+/// Half of the schema in every project using cairn was the same schema, retyped.
+#[test]
+fn a_schema_can_be_adopted_from_another_project() {
+    let source = Project::new();
+    let cfg = source.read("cairn.toml").replace(
+        "[project]",
+        "[project]\nurl = \"https://example.invalid/theirs\"",
+    ) + "\n# A comment worth keeping.\n[[field]]\nname = \"team\"\nkind = \"text\"\n";
+    source.write("cairn.toml", &cfg);
+
+    let p = Project::empty();
+    p.expect(&[
+        "init",
+        "--from",
+        &source.root().display().to_string(),
+        "--name",
+        "Borrowed",
+        "--dir",
+        "issues",
+    ]);
+
+    let adopted = p.read("cairn.toml");
+    assert!(adopted.contains("name = \"team\""), "the field came across");
+    assert!(
+        adopted.contains("# A comment worth keeping."),
+        "and so did the comments, which are half of what makes a schema legible"
+    );
+    // `[project]` belongs to whoever wrote it.
+    assert!(adopted.contains("name = \"Borrowed\""), "{adopted}");
+    assert!(adopted.contains("dir = \"issues\""), "{adopted}");
+    assert!(
+        !adopted.lines().any(|l| l.trim_start().starts_with("url =")),
+        "a repository url is about the other project: {adopted}"
+    );
+
+    // The new project must not arrive already failing its own check.
+    assert!(p.run(&["check"]).ok(), "{}", p.run(&["check"]).all());
+    assert_contains(
+        &p.expect(&["config"]).stdout,
+        "team",
+        "and the schema is live",
+    );
+}
+
+#[test]
+fn adopting_refuses_what_it_cannot_copy() {
+    let p = Project::empty();
+    let out = p.run(&["init", "--from", "/nonexistent-directory"]);
+    assert!(!out.ok());
+    assert_contains(&out.all(), "not a cairn project", "");
+
+    // A schema from an older format would be copied forward silently, and the
+    // migration that does it properly already exists.
+    let old = Project::new();
+    let cfg = old.read("cairn.toml").replace("format = 2", "format = 1");
+    old.write("cairn.toml", &cfg);
+    let out = p.run(&["init", "--from", &old.root().display().to_string()]);
+    assert!(!out.ok());
+    assert_contains(&out.all(), "is format 1", "it says what it found");
+    assert_contains(&out.all(), "cairn migrate", "and names the way forward");
+}

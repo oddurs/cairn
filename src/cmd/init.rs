@@ -32,9 +32,13 @@ pub struct Args {
     #[arg(long, value_name = "DIR", default_value = "cairn/items")]
     pub dir: String,
 
-    /// How much schema to start from
-    #[arg(long, value_enum, default_value = "standard")]
-    pub preset: Preset,
+    /// How much schema to start from [default: standard]
+    #[arg(long, value_enum, conflicts_with = "from")]
+    pub preset: Option<Preset>,
+
+    /// Start from another cairn project's schema instead of a preset
+    #[arg(long, value_name = "PATH")]
+    pub from: Option<PathBuf>,
 
     /// Do not create the example item
     #[arg(long, action = ArgAction::SetTrue)]
@@ -82,14 +86,26 @@ pub fn run(args: Args) -> Result<i32> {
             .unwrap_or_else(|| "Project".into())
     });
 
-    let template = match args.preset {
-        Preset::Minimal => MINIMAL,
-        Preset::Standard => STANDARD,
+    let toml = match &args.from {
+        Some(path) => adopt(path, &name, &args.dir)?,
+        None => {
+            let template = match args.preset.unwrap_or(Preset::Standard) {
+                Preset::Minimal => MINIMAL,
+                Preset::Standard => STANDARD,
+            };
+            template
+                .replace("{{name}}", &escape(&name))
+                .replace("{{dir}}", &escape(&args.dir))
+        }
     };
-    let toml = template
-        .replace("{{name}}", &escape(&name))
-        .replace("{{dir}}", &escape(&args.dir));
     crate::store::write_atomic(&config_path, toml.as_bytes())?;
+    if let Some(path) = &args.from {
+        println!(
+            "{} {}",
+            style::dim("schema from"),
+            style::dim(&path.display().to_string())
+        );
+    }
 
     let items_dir = cwd.join(&args.dir);
     std::fs::create_dir_all(&items_dir)?;
@@ -125,7 +141,12 @@ pub fn run(args: Args) -> Result<i32> {
     // A milestone is an item now, so a project that wants a roadmap needs some.
     // `--bare` gets none, for the same reason it gets no example item: it asked
     // for the schema and nothing else.
-    if !args.bare {
+    // An adopted schema need not have milestones in it at all, and writing
+    // items of a type it does not declare would hand somebody a new project
+    // that fails its own `cairn check`.
+    let has_milestones = cfg.item_type(crate::refs::MILESTONE_TYPE).is_some()
+        && cfg.field(crate::refs::MILESTONE_FIELD).is_some();
+    if !args.bare && has_milestones {
         for (n, (key, title, due, why)) in [
             (
                 "v0.1",
@@ -155,7 +176,12 @@ pub fn run(args: Args) -> Result<i32> {
 
     if !args.bare {
         // After the milestones, and pointing at the first of them.
-        let path = write_example(&cfg, &items_dir, 4, Some("v0.1"))?;
+        let (id, milestone) = if has_milestones {
+            (4, Some("v0.1"))
+        } else {
+            (1, None)
+        };
+        let path = write_example(&cfg, &items_dir, id, milestone)?;
         println!(
             "{} {}",
             style::green("created"),
@@ -551,4 +577,85 @@ fn write_milestone(
     item.set_body(body);
     item.save()?;
     Ok(path)
+}
+
+/// Start from another project's schema.
+///
+/// A copy, and deliberately not an include. An `extends` key would end
+/// `cairn.toml` being the whole truth about a project: reading it would mean
+/// resolving a path that may be outside the repository, may not exist on a
+/// clone, and may have changed since. Somebody who clones a repository can
+/// understand its backlog, and that is worth more than saving a copy.
+///
+/// The cost is real — the two files drift — and it is the right cost. A schema
+/// two projects share is two projects that cannot change independently.
+///
+/// `toml_edit` rather than a parse-and-print, because the comments are half of
+/// what makes a schema legible and a round trip through serde would drop every
+/// one of them.
+fn adopt(from: &Path, name: &str, dir: &str) -> Result<String> {
+    let source = if from.is_dir() {
+        from.join(CONFIG_FILE)
+    } else {
+        from.to_path_buf()
+    };
+    if !source.is_file() {
+        bail!(
+            "{} is not a cairn project ({} is not there)",
+            from.display(),
+            source.display()
+        );
+    }
+
+    // Read it as a project first, so an unreadable or newer schema is refused
+    // here rather than copied and refused later in the new project.
+    let cfg = Config::load_for_migration(&source)?;
+    if cfg.format() < crate::config::CURRENT_FORMAT {
+        bail!(
+            "{} is format {}, and a new project is written at format {}\n\
+             run `cairn migrate` there first, then copy its schema",
+            from.display(),
+            cfg.format(),
+            crate::config::CURRENT_FORMAT
+        );
+    }
+
+    let text = std::fs::read_to_string(&source)?;
+    let mut doc: toml_edit::DocumentMut = text.parse()?;
+
+    // `[project]` is the one table that is about *this* project rather than
+    // about the schema. Everything in it is either replaced or dropped: a name,
+    // a description and a repository url belong to whoever wrote them.
+    let project = doc
+        .entry("project")
+        .or_insert(toml_edit::Item::Table(Default::default()));
+    if let Some(table) = project.as_table_mut() {
+        table.insert("name", toml_edit::value(name));
+        table.insert("dir", toml_edit::value(dir));
+        for gone in ["description", "url"] {
+            table.remove(gone);
+        }
+    }
+
+    // The url went with the other project, so linking items would link them
+    // nowhere. Turned off rather than left to warn: a project should not be
+    // handed to somebody already failing its own check.
+    let mut unlinked = false;
+    if let Some(render) = doc.get_mut("render").and_then(|r| r.as_table_mut())
+        && render
+            .get("link_items")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+    {
+        render.insert("link_items", toml_edit::value(false));
+        unlinked = true;
+    }
+    if unlinked {
+        println!(
+            "{}",
+            style::dim("render.link_items turned off — set project.url and turn it back on")
+        );
+    }
+
+    Ok(doc.to_string())
 }

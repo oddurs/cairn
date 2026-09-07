@@ -44,14 +44,13 @@ Enough to run a real project's roadmap without reaching for anything else.
 
 ## v0.2 — Comfortable
 
-`##########` 95% · 41 of 43 done · due 2026-12-01
+`##########` 98% · 42 of 43 done · due 2026-12-01
 
 The rough edges that show up after a few weeks of daily use, and the pieces that make the central claim true rather than merely stated.
 
 ### backlog
 
 - [ ] [`0056`](https://github.com/oddurs/cairn/blob/main/cairn/items/0056-collect-a-contributor-licence-agreement.md) Collect a contributor licence agreement <sup>chore · p0</sup>
-- [ ] [`0097`](https://github.com/oddurs/cairn/blob/main/cairn/items/0097-adopt-a-schema-instead-of-retyping-it.md) Adopt a schema instead of retyping it <sup>feature · p2</sup>
 
 ### done
 
@@ -96,6 +95,7 @@ The rough edges that show up after a few weeks of daily use, and the pieces that
 - [x] [`0086`](https://github.com/oddurs/cairn/blob/main/cairn/items/0086-a-migration-says-what-it-will-touch-before-it-touches-it.md) A migration says what it will touch before it touches it <sup>feature · p1 · s9</sup>
 - [x] [`0088`](https://github.com/oddurs/cairn/blob/main/cairn/items/0088-prefer-schema-over-documented-keys.md) Prefer schema over documented keys <sup>docs · p1 · s9</sup>
 - [x] [`0090`](https://github.com/oddurs/cairn/blob/main/cairn/items/0090-the-body-may-be-interpreted-and-the-specification-should-say-so.md) The body may be interpreted, and the specification should say so <sup>bug · p1 · s9</sup>
+- [x] [`0097`](https://github.com/oddurs/cairn/blob/main/cairn/items/0097-adopt-a-schema-instead-of-retyping-it.md) Adopt a schema instead of retyping it <sup>feature · p2</sup>
 
 ## v1.0 — Stable
 
