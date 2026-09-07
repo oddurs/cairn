@@ -47,6 +47,12 @@ and commit the regenerated SVG.
 
 Then `cairn close 23` and open a pull request.
 
+## Releasing
+
+`doc/RELEASING.md` is the checklist. Most of it is automated; the parts that are
+not are decisions somebody has to make, and they are written down so they are
+not remembered instead.
+
 ## Reporting a bug
 
 Open a GitHub issue. You are not expected to learn cairn to report a problem

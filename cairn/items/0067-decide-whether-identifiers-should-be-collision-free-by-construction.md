@@ -64,3 +64,37 @@ the bias to be suspicious of, so it should not be decided alone.
 - [ ] If changed: a format version, a migration, and the corpus extended
 - [ ] If kept: the specification says why, so the question is settled
 - [ ] Somebody other than the author reads the argument first
+
+## 2026-09-06: three pieces of evidence this decision did not have
+
+Recorded because they all arrived after the argument above was written, and two
+of them point the same way.
+
+**Identifiers being integers, and present in the file, is load-bearing in a
+place nobody predicted.** `cairn log` follows renames, so that retitling an item
+does not lose its history. Git's rename detection concludes that item 2 was
+renamed from item 1 — every cairn item has the same shape, and a fresh one is
+largely boilerplate — and follows into a different item's history. The
+correction is to read the `id` at each revision and cut the trail where it
+changes. Any scheme where identity is not a small stable value carried in the
+file would have to answer this, and per-clone prefixes would have to answer it
+without the ordering property that makes `max + 1` allocation work.
+
+**The rendering answer already covers most of the demand.** `0062` shipped:
+a project can write its identifiers `MP-1002` or `A24` while `id` stays an
+unsigned integer. That was the case people actually asked about, and it cost no
+format change at all. The remaining case for per-clone identifiers is narrower
+than it was: it is now purely about collisions, not about how identifiers read.
+
+**The collision repair got better rather than staying broken.** `0057` taught
+`renumber` to keep the identifier on the side already published, by asking the
+repository which side a merge came through. The cost of collisions is therefore
+lower than when this item was filed. That is an argument for the status quo, and
+it is also exactly the argument a person who just built the repair machinery
+would find persuasive — which is the bias the item already warns about, now with
+a concrete instance of me being subject to it.
+
+**Recommendation unchanged, confidence higher:** keep integers. But this still
+needs somebody who did not write the repair machinery to read the argument,
+and that has not happened.
+
