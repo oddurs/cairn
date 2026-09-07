@@ -2,7 +2,7 @@
 id: 87
 title: The corpus keeps every format that has ever existed
 type: chore
-status: backlog
+status: done
 milestone: v1.0
 depends_on:
 - 86
@@ -64,10 +64,14 @@ format; it is a specification of the moment.
 
 ## Acceptance criteria
 
-- [ ] A directory per format, each with items and their expectations
-- [ ] Every format parses correctly under the current cairn, checked in CI
-- [ ] Migrating an older corpus produces the current expectations exactly
-- [ ] An older corpus is frozen: a test fails if one is edited after its format
+- [x] A directory per format, each with items and their expectations
+- [x] Every format parses correctly under the current cairn, checked in CI
+- [x] Migrating an older corpus produces the current expectations exactly
+- [x] An older corpus is frozen: a test fails if one is edited after its format
       stopped being current
-- [ ] `spec/conformance.py` runs against every format, not only the newest
-- [ ] Adding a format without adding its corpus fails the build
+- [x] `spec/conformance.py` runs against every format, not only the newest
+- [x] Adding a format without adding its corpus fails the build
+
+## 2026-09-07
+
+Done. tests/golden/format-1/ holds twelve cases as format 1 wrote them. Four things are checked: every format still parses under the current cairn, migrating an older corpus produces the current expectations exactly, each frozen corpus matches a committed FNV-1a digest, and a format below CURRENT_FORMAT without a corpus fails the build. spec/conformance.py runs the second reader over every format.

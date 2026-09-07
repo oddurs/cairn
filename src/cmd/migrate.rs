@@ -15,11 +15,14 @@
 // You should have received a copy of the GNU General Public License along with
 // this program.  If not, see <https://www.gnu.org/licenses/>.
 //
-// There is nothing to migrate yet: format 1 is the only format there has ever
-// been. The command exists anyway, and is tested, because a migration path
-// invented at the moment it is first needed is a migration path nobody has
-// tried. This one is exercised on every run, so when a format 2 arrives the
-// scaffolding around it is already known to work.
+// This command was written and tested while there was nothing to migrate,
+// because a migration path invented at the moment it is first needed is a
+// migration path nobody has tried. Format 2 then arrived and the scaffolding
+// was already known to work, which is the whole argument for having done it.
+//
+// What a step reports matters as much as what it does: the question before
+// running this over years of work is whether the item files are about to be
+// rewritten, so every step answers that in files rather than in steps.
 use crate::config::{CONFIG_FILE, CURRENT_FORMAT, Config};
 use crate::lock::Lock;
 use crate::store::Store;
@@ -77,22 +80,27 @@ pub fn run(args: Args) -> Result<i32> {
     }
 
     let steps = plan(from, CURRENT_FORMAT);
-    for (from, to) in &steps {
-        println!("  format {from} -> {to}");
+    let store = Store::new(&cfg);
+    let items = store.load_all()?;
+
+    for (a, b) in &steps {
+        let effect = effect_of(*a, *b, &cfg, &items);
+        println!("  format {a} -> {b}  {}", style::dim(&effect.summary));
     }
+
     if args.dry_run {
-        println!(
-            "{} {} step(s) would run",
-            style::dim("dry run:"),
-            steps.len()
-        );
+        let total = steps
+            .iter()
+            .map(|(a, b)| effect_of(*a, *b, &cfg, &items))
+            .fold(Effect::default(), Effect::and);
+        print!("{}", report(&total));
         return Ok(0);
     }
 
-    let _lock = Lock::acquire(&cfg)?;
-    let store = Store::new(&cfg);
-    // A migration must never run against a backlog it cannot fully read.
-    let items = store.load_all()?;
+    // The one command that may hold the lock on an older project.
+    // A migration must never run against a backlog it cannot fully read; the
+    // load above did that.
+    let _lock = Lock::acquire_for_migration(&cfg)?;
     for (from, to) in &steps {
         apply(&cfg, &items, *from, *to)?;
     }
@@ -263,4 +271,126 @@ fn stamp(cfg: &Config, format: u32) -> Result<()> {
     let mut doc: toml_edit::DocumentMut = text.parse()?;
     doc["format"] = toml_edit::value(format as i64);
     crate::store::write_atomic(&path, doc.to_string().as_bytes())
+}
+
+/// What a migration step will touch.
+///
+/// The step count `--dry-run` used to print is the one thing nobody wants to
+/// know. The question before running a migration over years of work is what it
+/// will change, and specifically whether the item files are about to be
+/// rewritten — so each step answers that, and the dry run reports it in files
+/// rather than in steps.
+#[derive(Default)]
+struct Effect {
+    /// Whole files replaced, named.
+    rewritten: Vec<String>,
+    /// New items written.
+    created: usize,
+    /// Existing items rewritten, named. Empty is the good case and the common
+    /// one, and saying so plainly is the point of all this.
+    modified: Vec<String>,
+    summary: String,
+}
+
+impl Effect {
+    fn and(mut self, other: Effect) -> Effect {
+        self.rewritten.extend(other.rewritten);
+        self.created += other.created;
+        self.modified.extend(other.modified);
+        self
+    }
+}
+
+/// What `--dry-run` prints, as a string, so that both branches are testable —
+/// including the one no migration has needed yet.
+fn report(total: &Effect) -> String {
+    let mut out = String::from("\n");
+    for f in &total.rewritten {
+        out += &format!("  {:<10} {f}\n", style::dim("rewritten"));
+    }
+    out += &format!(
+        "  {:<10} {} new item(s)\n",
+        style::dim("created"),
+        total.created
+    );
+    // The sentence somebody actually wants before running this on years of
+    // work, printed only when it is true.
+    if total.modified.is_empty() {
+        out += &format!(
+            "\n{}\n",
+            style::green("nothing already in the item directory will be changed.")
+        );
+    } else {
+        out += &format!(
+            "\n{} {} existing item(s) would be rewritten:\n",
+            style::yellow("careful:"),
+            total.modified.len()
+        );
+        for f in &total.modified {
+            out += &format!("    {f}\n");
+        }
+    }
+    out
+}
+
+fn effect_of(from: u32, to: u32, cfg: &Config, _items: &[crate::item::Item]) -> Effect {
+    match (from, to) {
+        (1, 2) => Effect {
+            rewritten: vec![CONFIG_FILE.to_string()],
+            created: cfg.milestones.len(),
+            modified: Vec::new(),
+            summary: "milestones move from cairn.toml into items".into(),
+        },
+        _ => Effect {
+            summary: "unknown step".into(),
+            ..Default::default()
+        },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The good case, and the one every migration so far has been.
+    #[test]
+    fn a_migration_that_touches_no_item_says_so() {
+        let out = report(&Effect {
+            rewritten: vec![CONFIG_FILE.to_string()],
+            created: 2,
+            modified: Vec::new(),
+            summary: String::new(),
+        });
+        assert!(out.contains("rewritten"), "{out}");
+        assert!(out.contains("2 new item(s)"), "{out}");
+        assert!(
+            out.contains("nothing already in the item directory will be changed."),
+            "{out}"
+        );
+        assert!(!out.contains("careful"), "{out}");
+    }
+
+    /// No migration has needed to rewrite an item yet. The day one does, the
+    /// person running it must be told which files, by name, before it happens —
+    /// so the branch is written and held to account now rather than then.
+    #[test]
+    fn a_migration_that_rewrites_items_names_them() {
+        let out = report(&Effect {
+            rewritten: vec![CONFIG_FILE.to_string()],
+            created: 0,
+            modified: vec!["0001-a.md".into(), "0002-b.md".into()],
+            summary: String::new(),
+        });
+        assert!(out.contains("careful:"), "{out}");
+        assert!(
+            out.contains("2 existing item(s) would be rewritten"),
+            "{out}"
+        );
+        assert!(out.contains("0001-a.md"), "{out}");
+        assert!(out.contains("0002-b.md"), "{out}");
+        assert!(
+            !out.contains("nothing already in the item directory"),
+            "the reassuring sentence must not appear when it is false: {out}"
+        );
+    }
 }

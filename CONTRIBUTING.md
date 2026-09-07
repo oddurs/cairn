@@ -59,10 +59,12 @@ Open a GitHub issue. You are not expected to learn cairn to report a problem
 with it — write it however is natural, and a maintainer will bring it into the
 backlog with `cairn import --from github`.
 
-## Three rules
+## Four rules
 
-These are short because each of them was learned the expensive way, and each is
-enforced by a test in `tests/rules.rs` so that it cannot be quietly undone.
+These are short because each of them was learned the expensive way. The three
+that a test can hold to account are held by `tests/rules.rs`, so that they
+cannot be quietly undone; the fourth is a judgment, and lives here because
+judgments are what review is for.
 
 ### A new command has to earn its line
 
@@ -85,6 +87,26 @@ Both are hidden and both are documented in the manual: hidden is not the same
 as undocumented. When there is genuinely something to migrate, `migrate` stops
 being a command that exists to be tested, and the test in `tests/rules.rs` will
 tell you to unhide it.
+
+### Prefer schema over a documented key
+
+> A documented key is a promise to everyone who will ever write a cairn file.
+> Schema is a promise to one project. Reach for the second first.
+
+Format 2 moved milestones out of `cairn.toml` and into items. It touched **zero
+item files** across seven real projects and three hundred items: the whole cost
+was one configuration file per project and a command nobody had to think hard
+about. What moved was schema, which is one project's business. What did not move
+was the format, which is everybody's.
+
+That is the same instinct that made status *categories* fixed while status
+*names* are chosen — a small permanent axis underneath, everything expressive
+above it.
+
+So the answer to "cairn should have a field for X" is usually a `[[field]]`
+block. A pull request that adds a key to §4 of the specification has to say why
+schema would not do. What it costs if you get it wrong is in the manual, under
+"What would still cost a format number".
 
 ### The specification changes first
 
@@ -124,7 +146,14 @@ accident:
 - `tests/golden/` pins how item files parse. Changing an expectation there is a
   format change and needs a format number and a migration. See "Compatibility"
   in the manual.
-- `tests/rules.rs` guards the three rules above, and the promise.
+- `tests/golden/format-N/` is that format's corpus, frozen the day it stopped
+  being current, and a digest is asserted so it cannot be quietly edited. If a
+  frozen case looks wrong, it was wrong then — add a case to the current corpus
+  instead. Bumping the format means freezing the outgoing one in the same
+  change; the build fails otherwise.
+- `tests/rules.rs` guards what of the four rules a test can guard — no library
+  target, no command that reaches the network, no hidden command, and a
+  specification that never defers to this implementation — and the promise.
 - The concurrency tests race real processes. If you touch the lock, the write
   path, or identifier allocation, they are the ones that matter.
 - The property tests generate adversarial titles and bodies. If you touch the

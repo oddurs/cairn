@@ -44,7 +44,33 @@ pub struct Lock {
 
 impl Lock {
     /// Take the lock, waiting for another writer to finish if necessary.
+    ///
+    /// Also the one place a project behind the current format is turned away.
+    /// Every command that changes the backlog takes the lock and no read ever
+    /// does, so this is the whole boundary — and it means the rule can be
+    /// stated in one sentence rather than repeated at twenty call sites:
+    ///
+    /// > A format bump may cost somebody a command. It must never cost them
+    /// > their data, and it must never cost them the ability to look.
     pub fn acquire(cfg: &Config) -> Result<Lock> {
+        if cfg.format() < crate::config::CURRENT_FORMAT {
+            anyhow::bail!(
+                "this project is format {}, and writing needs format {}\n\
+                 run `cairn migrate` (`--dry-run` first to see what it would change)\n\
+                 reading works meanwhile: list, show, next, search, board, roadmap, log, export",
+                cfg.format(),
+                crate::config::CURRENT_FORMAT
+            );
+        }
+        Lock::acquire_unchecked(cfg)
+    }
+
+    /// Take the lock without the format check, for `cairn migrate` itself.
+    pub fn acquire_for_migration(cfg: &Config) -> Result<Lock> {
+        Lock::acquire_unchecked(cfg)
+    }
+
+    fn acquire_unchecked(cfg: &Config) -> Result<Lock> {
         let path = Self::path(cfg);
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)

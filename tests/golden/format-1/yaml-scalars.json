@@ -1,0 +1,21 @@
+{
+  "assignee": "no",
+  "body": "Unquoted values that look like numbers, booleans or times are resolved by YAML\nitself. cairn quotes anything it writes, so this only affects hand-written\nfiles; quote such values to keep them verbatim.\n",
+  "category": "open",
+  "created": null,
+  "depends_on": [],
+  "fields": {},
+  "id": 11,
+  "labels": [
+    "12:30",
+    "31",
+    "1.2"
+  ],
+  "milestone": null,
+  "ref": "0011",
+  "source": null,
+  "status": "backlog",
+  "title": "Scalars YAML resolves before cairn sees them",
+  "type": null,
+  "updated": null
+}

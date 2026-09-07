@@ -578,6 +578,122 @@ The command was exercised on every run for as long as there was nothing to
 migrate, so that a path first attempted when it is needed was not a path nobody
 had tried. That turned out to be worth doing.
 
+@section What would still cost a format number
+
+@cindex format number
+@cindex migration
+Written down so it is decided rather than discovered.
+
+@multitable @columnfractions .55 .45
+@headitem Change @tab Cost
+@item @code{id} stops being an unsigned integer
+@tab @strong{every item file, every project}
+@item Removing @code{milestone} or @code{depends_on} as documented keys
+@tab configuration only, as format 2 was
+@item @code{created} or @code{updated} gaining a time
+@tab every item that has one
+@item @code{labels} becoming references rather than strings
+@tab every item that has one
+@item Any new @emph{optional} key
+@tab free, no new number
+@item @code{assignee} accepting a sequence as well as a string
+@tab free --- @code{labels} already sets that precedent
+@end multitable
+
+@noindent
+Only the first is expensive, and it is the only one whose cost grows with
+adoption. Everything else is either free or shaped like format 2, which touched
+no item file at all.
+
+That asymmetry is why the identifier question is a decision to settle rather
+than a feature to schedule: the cheapest moment to change what an identifier is
+was yesterday, and the second cheapest is today.
+
+@section Roles: a decision taken by not taking it
+
+@cindex roles
+@cindex field names
+@cindex vocabulary
+Every documented key is also a word. A project whose people are
+@emph{maintainers} still writes @code{assignee:}; a project with no releases
+still writes @code{milestone:} or nothing at all. That is a promise about
+vocabulary, and vocabulary is the part of a schema most likely to be wrong for
+somebody. Changing one of those words costs a format number.
+
+There is a mechanism that would make it cost nothing. A field would declare the
+@emph{role} it plays, and the role, not the name, would be what the format
+promises:
+
+@example
+[[field]]
+name = "maintainer"
+role = "assignee"      # this project's word for the assignee role
+@end example
+
+@noindent
+A small closed set of roles --- identity, title, state, scheduled-for,
+blocked-by, composed-into, worker, owner, provenance --- and each project maps
+its own names onto them. It is the trick behind status categories
+(@pxref{Configuration}) moved one level up: a fixed axis underneath, chosen names
+above.
+
+cairn does not do this, and the reasoning is recorded here rather than left as
+an absence.
+
+@cindex grep
+The case against is that it costs the thing that makes these files worth
+having. Today anyone can @command{grep} for @code{assignee:} across every cairn
+project in the world and get the right answer. Under roles they would first have
+to read a configuration file to learn what this project calls it, and a format
+whose meaning requires a lookup is a worse format. Nobody has asked for it,
+either: the names have not yet been wrong for anybody. Building a mechanism for
+a problem that has not occurred is how a schema becomes a framework.
+
+@cindex compatibility promise
+Most of all, @strong{waiting costs nothing}. A @code{role} attribute would be a
+new optional key, and by the rules above a new optional key is free --- no
+format number, no migration, no item file touched. This is one of the rare
+decisions that does not get more expensive by being deferred, which is the whole
+argument for deferring it.
+
+If it is ever taken, the shape to take is the cheap one: the names stay
+@emph{defaults} rather than promises. A field called @code{assignee} plays the
+assignee role without saying so, and only a project that wants a different word
+declares one. Grep keeps working for everybody who never touches it.
+
+@quotation
+@strong{The condition that would reverse this.} A real project whose word for
+one of these is wrong enough that its people keep having to translate --- not a
+preference, a recurring translation. That is the evidence this decision is
+waiting for, and until it appears the absence of the mechanism is the feature.
+@end quotation
+
+@section What a format bump may cost you
+
+@cindex compatibility promise
+@quotation
+A format bump may cost you a command. It must never cost you your data, and it
+must never cost you the ability to look.
+@end quotation
+
+@noindent
+A project written by an older cairn is read, not refused. Every command that
+only reads --- @command{list}, @command{show}, @command{next}, @command{search},
+@command{board}, @command{roadmap}, @command{log}, @command{export},
+@command{config}, @command{check}, @command{agent} --- works against it, and
+works @emph{correctly}: cairn knows what an older format meant, so an older
+project's roadmap is the roadmap its own cairn would have drawn.
+
+Writing is where it stops, at the lock every mutating command takes and no read
+ever does. The refusal names @command{cairn migrate}, and a single line on
+standard error says the project is behind --- on standard error, so a script
+reading @option{--json} is unaffected.
+
+A project written by a @emph{newer} cairn is still refused outright, for reading
+as well as writing. That is what §8 of the specification is about, and it is
+right: reading a format nobody has seen on a best-effort basis means misreading
+data in ways nobody can predict.
+
 @section What is guaranteed by test
 
 @cindex golden corpus
@@ -586,6 +702,37 @@ must parse to. It includes files cairn would not write itself: bare strings
 where a sequence belongs, a missing id, CRLF endings, keys from a version that
 does not exist. Every run checks them. Changing one of those expectations is a
 deliberate act, and by the rules above it is a format change.
+
+@cindex frozen corpus
+That corpus tests today against today, which is not the thing that breaks
+people. So beside it sits one directory per format that has ever existed ---
+@file{tests/golden/format-1} and so on --- holding items as that format wrote
+them, with the values they parsed to @emph{then}.
+
+Three things are checked on every run, and one at build time:
+
+@itemize @bullet
+@item
+Every format still parses. A file written by any cairn that ever existed is
+read correctly by this one --- values, not merely the absence of an error.
+@item
+Migrating an older corpus produces the current corpus's expectations exactly,
+which is the only thing that makes a format bump honest.
+@item
+An older corpus is frozen. A digest of each one is asserted, so a case cannot be
+edited to make a later reader agree with it. If a case is wrong, the fix is a
+new case in the current corpus; the old one is the record of how that format
+actually read.
+@item
+A format cannot arrive without its corpus: @code{CURRENT_FORMAT} is read from
+the source, and a missing @file{format-N} directory fails the build on the bump
+rather than on the release.
+@end itemize
+
+@noindent
+The second reader (@pxref{File format}) runs against every format too, not
+only the newest. A specification that describes only the current format is not a
+specification of the format; it is a specification of the moment.
 
 @section Where the defects have actually come from
 

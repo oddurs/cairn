@@ -1,0 +1,17 @@
+{
+  "assignee": "no",
+  "body": "A body whose first line looks like a key: value.\n",
+  "category": "open",
+  "created": null,
+  "depends_on": [],
+  "fields": {},
+  "id": 8,
+  "labels": [],
+  "milestone": null,
+  "ref": "0008",
+  "source": null,
+  "status": "backlog",
+  "title": "Quotes: colons, #hashes and *stars",
+  "type": null,
+  "updated": null
+}

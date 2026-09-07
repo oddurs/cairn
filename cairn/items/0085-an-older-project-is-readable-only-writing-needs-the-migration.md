@@ -2,7 +2,7 @@
 id: 85
 title: An older project is readable; only writing needs the migration
 type: bug
-status: backlog
+status: done
 milestone: v0.2
 created: 2026-09-07
 updated: 2026-09-07
@@ -65,9 +65,13 @@ is the promise that makes a version number tolerable rather than a threat.
 
 ## Acceptance criteria
 
-- [ ] Every read-only command works against a format 1 project
-- [ ] Every writing command refuses, naming `cairn migrate`
-- [ ] The notice goes to standard error, so `--json` is unaffected
-- [ ] A newer format is still refused for reading as well as writing
-- [ ] A test drives a real format 1 project through every read command
-- [ ] The manual states the rule, not only the behaviour
+- [x] Every read-only command works against a format 1 project
+- [x] Every writing command refuses, naming `cairn migrate`
+- [x] The notice goes to standard error, so `--json` is unaffected
+- [x] A newer format is still refused for reading as well as writing
+- [x] A test drives a real format 1 project through every read command
+- [x] The manual states the rule, not only the behaviour
+
+## 2026-09-07
+
+Done. Reading an older project works because the format check moved from load to the write lock: every read command is unaffected, and the one line saying the project is behind goes to standard error so --json is untouched. A newer format is still refused outright.

@@ -692,7 +692,26 @@ impl Config {
             .map(Path::to_path_buf)
             .unwrap_or_else(|| PathBuf::from("."));
         cfg.validate()?;
+        cfg.notice_if_behind();
         Ok(cfg)
+    }
+
+    /// Say once, on standard error, that the project is behind.
+    ///
+    /// Standard error because standard output is somebody's `--json`, and a
+    /// notice that breaks a pipeline is worse than no notice. Once because
+    /// `Config::load` runs more than once in some commands and nobody needs to
+    /// be told twice.
+    fn notice_if_behind(&self) {
+        static SAID: std::sync::OnceLock<()> = std::sync::OnceLock::new();
+        if self.format() >= CURRENT_FORMAT || SAID.set(()).is_err() {
+            return;
+        }
+        eprintln!(
+            "{} this project is format {}; reading works, writing needs `cairn migrate`",
+            crate::style::dim("note:"),
+            self.format()
+        );
     }
 
     /// Load by searching upward from the current directory.
@@ -745,13 +764,15 @@ impl Config {
                 path.display()
             );
         }
-        if strict && found < CURRENT_FORMAT {
-            bail!(
-                "{} is format {found}, and this cairn writes format {CURRENT_FORMAT}\n\
-                 run `cairn migrate` to bring it up to date (`--dry-run` to see what would change)",
-                path.display()
-            );
-        }
+        // An older project is *not* refused. §8 requires refusing a version a
+        // reader does not understand, which is about a version from the future,
+        // where best-effort reading means misreading data nobody can predict.
+        // This cairn understands format 1 exactly, and refusing to show
+        // somebody their own backlog over a command they have not run yet is
+        // the tool being difficult for its own sake.
+        //
+        // Writing is where it stops: see `Lock::acquire`.
+        let _ = strict;
         Ok(())
     }
 

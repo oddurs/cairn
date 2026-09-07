@@ -2,7 +2,7 @@
 id: 89
 title: Decide whether a field name is a promise or a default
 type: docs
-status: backlog
+status: doing
 milestone: v1.0
 depends_on:
 - 88
@@ -83,7 +83,11 @@ enough that its people keep having to translate.
 
 ## Acceptance criteria
 
-- [ ] The decision is recorded either way, with the argument on both sides
-- [ ] If no: the condition that would reverse it is named
-- [ ] It is stated that adding roles later is free, so waiting costs nothing
+- [x] The decision is recorded either way, with the argument on both sides
+- [x] If no: the condition that would reverse it is named
+- [x] It is stated that adding roles later is free, so waiting costs nothing
 - [ ] Somebody other than the author reads it before it is settled
+
+## 2026-09-07
+
+Settled as recommended: not now, not never. The manual has it as 'Roles: a decision taken by not taking it', with the argument on both sides, the point that a role attribute would be a new optional key and therefore free to add later, and the condition that would reverse it — a real project whose word for one of these is wrong enough that its people keep having to translate. Open until somebody other than the author has read it.

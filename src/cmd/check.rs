@@ -122,6 +122,10 @@ fn collect_inner(
         warnings: Vec::new(),
     };
 
+    // What a reference may resolve against: the items, plus whatever an older
+    // format keeps somewhere other than the item directory.
+    let universe = crate::refs::universe(cfg, items);
+
     let mut by_id: HashMap<u32, Vec<&Item>> = HashMap::new();
     for i in items {
         by_id.entry(i.id).or_default().push(i);
@@ -278,8 +282,8 @@ fn collect_inner(
 
         for def in cfg.ref_fields() {
             for value in crate::refs::values(item, def) {
-                if crate::refs::resolve(items, def, &value).is_none() {
-                    let known = crate::refs::permitted(items, cfg, def);
+                if crate::refs::resolve(&universe, def, &value).is_none() {
+                    let known = crate::refs::permitted(&universe, cfg, def);
                     r.error_at(
                         &at,
                         item,

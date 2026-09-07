@@ -2,7 +2,7 @@
 id: 88
 title: Prefer schema over documented keys
 type: docs
-status: backlog
+status: done
 milestone: v0.2
 created: 2026-09-07
 updated: 2026-09-07
@@ -64,7 +64,11 @@ build later.
 
 ## Acceptance criteria
 
-- [ ] The rule is in `CONTRIBUTING.md` beside the other three
-- [ ] The table is in the manual, next to the compatibility rules
-- [ ] A pull request adding a documented key has to say why schema would not do
-- [ ] It reads as a design principle, not as a warning about paperwork
+- [x] The rule is in `CONTRIBUTING.md` beside the other three
+- [x] The table is in the manual, next to the compatibility rules
+- [x] A pull request adding a documented key has to say why schema would not do
+- [x] It reads as a design principle, not as a warning about paperwork
+
+## 2026-09-07
+
+Done. The rule is the fourth in CONTRIBUTING.md, the cost table is in the manual beside the compatibility rules, and the pull request template now asks, for a change that adds a documented key, why a schema field would not do.
