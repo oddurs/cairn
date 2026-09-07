@@ -27,6 +27,21 @@ There is deliberately no library target, because linking cairn makes the caller
 a derivative work and reading its files does not.  A test fails if a [lib]
 appears in Cargo.toml.
 
+** Position in a hierarchy is a query
+
+`contains`, `descendants`, `progress`, `depth` and `leaf` are derived from the
+composition graph and available to --filter, --sort and --columns.  Nothing is
+stored in an item, so nothing can go stale.
+
+  cairn list --filter 'depth=0,progress<50'    # big things that are behind
+  cairn list --filter 'leaf=true,ready=true'   # work that can start today
+
+This is why there is no `scale` field: a declared size is a claim that goes
+stale, while `descendants` cannot be wrong.  An item containing nothing reports
+no progress rather than zero, so ordinary work does not sink to the bottom of a
+sort.  A field marked `rollup` contributes whatever its cardinality, so there is
+one derivation however many fields point in.
+
 ** Composition
 
 `cairn init` now scaffolds a `part_of` field, so a new project can say that one

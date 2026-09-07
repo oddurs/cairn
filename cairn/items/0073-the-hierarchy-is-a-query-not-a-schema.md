@@ -2,7 +2,7 @@
 id: 73
 title: The hierarchy is a query, not a schema
 type: feature
-status: backlog
+status: done
 milestone: v1.0
 depends_on:
 - 72
@@ -60,8 +60,20 @@ migration, which is not true of the relation itself.
 
 ## Acceptance criteria
 
-- [ ] Every field above is available to `--filter` and `--sort`
-- [ ] Nothing new is stored in an item file
-- [ ] Cycles cannot make a derivation loop forever
-- [ ] A project using no relations sees no change
-- [ ] The manual explains why scale is derived rather than declared
+- [x] Every field above is available to `--filter` and `--sort`
+- [x] Nothing new is stored in an item file
+- [x] Cycles cannot make a derivation loop forever
+- [x] A project using no relations sees no change
+- [x] The manual explains why scale is derived rather than declared
+
+## 2026-09-07: built, with one part of the proposal deferred
+
+The proposal said `cairn roadmap` and `cairn board` should take their progress
+from this rather than from a count of items carrying a milestone name. They do
+not yet, and the reason is a dependency rather than a decision: a milestone is
+still a name declared in `cairn.toml`, not an item, so there is nothing for
+`part_of` to point at and no graph to derive its progress from.
+
+`0078` is what makes a milestone an item. The roadmap changes with it, and doing
+it before would mean two progress mechanisms rather than the one this item
+exists to establish.

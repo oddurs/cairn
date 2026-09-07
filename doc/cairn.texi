@@ -1484,6 +1484,44 @@ Past about four levels @command{cairn check} says so, as a warning rather than
 an error, because a hierarchy that deep is usually a taxonomy where a plan was
 wanted. It is a remark, not a rule.
 
+@subsection Asking about position
+
+@cindex progress
+@cindex descendants
+@cindex depth
+@cindex leaf
+Where an item sits is derived from the graph rather than declared on the item.
+Nothing is stored, so nothing can go stale.
+
+@table @code
+@item contains
+What is directly beneath it.
+@item descendants
+How many items are beneath it at any depth.
+@item progress
+What proportion of those are finished. Absent for an item containing nothing:
+a leaf has no progress to report, and reporting zero would put every ordinary
+item at the bottom of @code{--sort progress}.
+@item depth
+How far below a root it sits.
+@item leaf
+Whether anything is beneath it.
+@end table
+
+@example
+cairn list --filter 'depth=0,progress<50'      # big things that are behind
+cairn list --filter 'leaf=true,ready=true'     # work that can start today
+@end example
+
+@noindent
+This is why there is no @code{scale} field. A declared size is a claim that goes
+stale --- something filed as large turns out to be an afternoon, and nobody
+returns to correct the label --- while @code{descendants} cannot be wrong.
+
+A field marked @code{rollup} contributes to all of this, whatever its
+cardinality or addressing, so there is one derivation however many fields point
+in rather than a mechanism for each.
+
 @subsection Filing stays free
 
 @command{cairn new} takes a title and nothing else, always. Structure is added

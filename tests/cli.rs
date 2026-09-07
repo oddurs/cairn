@@ -4281,3 +4281,137 @@ fn composition_conflicts_in_the_item_rather_than_losing_an_edge() {
         "both edges must still be present for somebody to keep:\n{conflicted}"
     );
 }
+
+// --- position, derived from the graph ---------------------------------------
+
+/// A `scale` field would be a claim that goes stale — you tag something an epic
+/// and it turns out to be an afternoon. "Has four things beneath it" cannot be
+/// wrong.
+#[test]
+fn position_in_the_hierarchy_is_derived_rather_than_stored() {
+    let p = Project::new();
+    p.add("Ship OAuth", &[]);
+    for n in 1..=3 {
+        p.add(&format!("Piece {n}"), &[]);
+    }
+    p.add("Sub-piece", &[]);
+    p.expect(&["set", "2", "3", "4", "part_of=1"]);
+    p.expect(&["set", "5", "part_of=2"]);
+
+    let selects = |expr: &str| p.expect(&["list", "-A", "--ids", "--filter", expr]).lines();
+
+    assert!(selects("descendants=4").contains(&"0001".to_string()));
+    assert!(selects("depth=0").contains(&"0001".to_string()));
+    assert!(selects("depth=2").contains(&"0005".to_string()));
+    assert!(selects("leaf=true").contains(&"0005".to_string()));
+    assert!(!selects("leaf=true").contains(&"0001".to_string()));
+
+    // Nothing was written to the file: this is a fact about the set.
+    let raw = p.expect(&["show", "1", "--raw"]).stdout;
+    for derived in ["descendants", "depth", "leaf", "progress"] {
+        assert!(
+            !raw.contains(derived),
+            "`{derived}` was stored in the item:\n{raw}"
+        );
+    }
+}
+
+#[test]
+fn progress_is_the_proportion_of_what_is_beneath_that_is_done() {
+    let p = Project::new();
+    p.add("Ship OAuth", &[]);
+    for n in 1..=4 {
+        p.add(&format!("Piece {n}"), &[]);
+    }
+    p.expect(&["set", "2", "3", "4", "5", "part_of=1"]);
+    p.expect(&["close", "2", "3"]);
+
+    assert_eq!(
+        p.expect(&["list", "-A", "--ids", "--filter", "progress=50"])
+            .lines(),
+        vec!["0001".to_string()],
+        "two of four beneath it are done"
+    );
+
+    // A leaf reports nothing rather than zero. Reporting 0 would put every
+    // ordinary item at the bottom of `--sort progress` and drown the signal.
+    assert!(
+        p.expect(&["list", "-A", "--ids", "--filter", "progress="])
+            .lines()
+            .contains(&"0004".to_string()),
+        "an item containing nothing has no progress to report"
+    );
+
+    // The query the whole thing exists for.
+    assert_eq!(
+        p.expect(&["list", "-A", "--ids", "--filter", "depth=0,progress<60"])
+            .lines(),
+        vec!["0001".to_string()],
+        "big things that are behind"
+    );
+}
+
+#[test]
+fn contains_names_what_is_directly_beneath() {
+    let p = Project::new();
+    p.add("Ship OAuth", &[]);
+    p.add("Token endpoint", &[]);
+    p.add("Refresh flow", &[]);
+    p.expect(&["set", "2", "3", "part_of=1"]);
+
+    let rows = p.expect(&["list", "-A", "--plain", "--columns", "id,contains"]);
+    let line = rows
+        .lines()
+        .into_iter()
+        .find(|l| l.starts_with("0001"))
+        .expect("the container");
+    assert_contains(&line, "0002", "the first child");
+    assert_contains(&line, "0003", "and the second");
+}
+
+/// A cycle that reached disk by hand must not make a query run forever. `check`
+/// reports the cycle; a filter is the wrong place to discover it.
+#[test]
+fn a_cycle_on_disk_does_not_hang_a_query() {
+    let p = Project::new();
+    p.add("One", &[]);
+    p.add("Two", &[]);
+    p.expect(&["set", "2", "part_of=1"]);
+
+    // Written by hand, because the write path refuses to create this.
+    let path = p.expect(&["show", "1", "--path"]).trimmed();
+    let text = std::fs::read_to_string(&path).expect("read");
+    std::fs::write(&path, text.replace("status:", "part_of:\n- 2\nstatus:")).expect("write");
+
+    let out = p.expect(&["list", "-A", "--plain", "--columns", "id,depth,descendants"]);
+    assert_eq!(out.lines().len(), 2, "the query still answered");
+
+    let checked = p.fails(&["check"]);
+    assert_contains(&checked.all(), "cycle", "and check is what reports it");
+}
+
+/// A project that declares no composition sees none of this.
+#[test]
+fn a_project_without_composition_is_unaffected() {
+    let p = Project::new();
+    let cfg: String = p
+        .read("cairn.toml")
+        .split("\n\n")
+        .filter(|block| !block.contains("name = \"part_of\""))
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    p.write("cairn.toml", &cfg);
+    p.add("One", &[]);
+
+    assert_eq!(
+        p.expect(&["list", "-A", "--ids", "--filter", "leaf=true"])
+            .lines(),
+        vec!["0001".to_string()],
+        "everything is a leaf when nothing composes"
+    );
+    assert!(
+        p.expect(&["list", "-A", "--ids", "--filter", "descendants=0"])
+            .lines()
+            .contains(&"0001".to_string())
+    );
+}
