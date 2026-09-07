@@ -362,6 +362,53 @@ Outside a repository, or on an ordinary commit, the older item keeps the
 identifier and the filename breaks a tie --- which is what cairn did before, and
 is the best that can be done with no history to consult.
 
+@section What a merge resolves, and what it does not
+
+@cindex merge driver
+@cindex conflicts
+Two branches that both touched the backlog meet in three kinds of file, and
+cairn treats each differently.
+
+@table @asis
+@item The generated roadmap
+Re-derived. Two renderings of different inputs cannot be reconciled, and there
+is nothing in it that is not in the items.
+
+@item Identifiers
+Repaired by @command{renumber}, keeping the number on the side already
+published. @xref{Identifiers}.
+
+@item Item files
+Resolved only where the disagreement has an answer.
+@end table
+
+@subsection The two rules, and no others
+
+A @strong{sequence} merges by union. Two branches each adding a dependency, a
+label, or a second thing an item is part of both meant what they added, and
+neither meant to remove the other's.
+
+The union is aware of the common ancestor, so a value one side deliberately
+@emph{removed} stays removed rather than being restored by the other side
+simply not having touched it. It is also order-stable, because an unchanged item
+that becomes a diff would churn the tree and fail a @option{--check} in
+continuous integration for no reason.
+
+@code{updated} takes the later date, because it is a stamp rather than a
+statement.
+
+@subsection Everything else stays a conflict
+
+Two people saying different things about one fact --- a priority, a status, a
+title, a body --- is not a merge to guess at. cairn writes the usual markers and
+a person decides.
+
+That conservatism is the point. The reason the driver can be trusted with
+generated files is that it only ever touches what it could rebuild from
+scratch; an item cannot be rebuilt, so the bar for resolving anything in one is
+higher rather than lower. A driver that resolved too much would lose an edit
+somebody meant, silently, which is worse than any conflict.
+
 @section Interrupted renumbering
 
 @command{cairn renumber} moves a file aside before writing it back under its new

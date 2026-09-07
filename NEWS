@@ -27,6 +27,23 @@ There is deliberately no library target, because linking cairn makes the caller
 a derivative work and reading its files does not.  A test fails if a [lib]
 appears in Cargo.toml.
 
+** Merges resolve what has an answer
+
+The merge driver now handles item files as well as the generated roadmap.  Two
+branches adding to the same sequence — a dependency, a label, a second thing an
+item is part of — merge by union, because both meant what they added and neither
+meant to remove the other's.  The union is aware of the common ancestor, so a
+value one side deliberately removed stays removed.  `updated` takes the later
+date.
+
+Everything else stays a conflict.  Two people saying different things about one
+fact is not a merge to guess at, and a driver that resolved too much would
+silently lose an edit somebody meant.
+
+This also repairs a wart that predates composition: two branches adding a
+dependency to the same item used to conflict, and the resolution was always the
+union.
+
 ** What a cairn item is
 
 The README, the manual and the site now say it: an item is a record of intent
