@@ -1,0 +1,6 @@
+# The golden corpus is a record of exact bytes, line endings included. A case
+# written to test a CRLF checkout has to arrive as CRLF, and a frozen format's
+# digest has to be the same number on every platform. `-text` turns off
+# end-of-line conversion in both directions, so what is committed is what is
+# checked out, on Windows as anywhere else.
+tests/golden/** -text
