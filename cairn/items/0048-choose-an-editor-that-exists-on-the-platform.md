@@ -2,10 +2,10 @@
 id: 48
 title: Choose an editor that exists on the platform
 type: bug
-status: backlog
+status: done
 milestone: v0.2
 created: 2026-09-05
-updated: 2026-09-05
+updated: 2026-09-06
 priority: p1
 effort: s
 ---

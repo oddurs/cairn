@@ -2,10 +2,10 @@
 id: 47
 title: Say where to report bugs, in the program itself
 type: bug
-status: backlog
+status: done
 milestone: v0.2
 created: 2026-09-05
-updated: 2026-09-05
+updated: 2026-09-06
 priority: p1
 effort: s
 ---

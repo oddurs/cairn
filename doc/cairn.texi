@@ -1091,6 +1091,20 @@ Do not run configured hooks. @xref{Hooks}.
 
 @item --version
 Print version, copyright and licence.
+
+@item --bug-report
+@cindex bug reports
+@cindex reporting bugs
+Print the details a maintainer will ask for --- version, platform, format
+number, the shape of the schema, how many items there are, and how many hooks
+are configured --- so they can be pasted into an issue without a conversation
+first.
+
+It deliberately reports nothing a reporter would mind publishing: no item
+titles, no paths outside the project, nothing of the environment beyond the
+platform. It also runs without a project, and describes a @file{cairn.toml}
+that will not parse rather than failing on it, because that is exactly when
+somebody reaches for it.
 @end table
 
 @cindex SOURCE_DATE_EPOCH
@@ -1181,8 +1195,22 @@ Move items to the first @code{done} status, or back to the default open
 status. @option{--status} overrides the target.
 
 @section cairn edit
-Opens an item in @env{VISUAL}, or @env{EDITOR}, or @command{vi}, then
-re-reads it so a malformed edit is reported at once rather than later.
+@cindex editor
+@vindex VISUAL
+@vindex EDITOR
+Opens an item in @env{VISUAL}, or failing that @env{EDITOR}, then re-reads it
+so a malformed edit is reported at once rather than later.
+
+A variable that is set but empty is not a choice of editor --- shell profiles
+export empty variables constantly --- so an empty @env{VISUAL} falls through to
+@env{EDITOR} rather than shadowing it.
+
+With neither set, the fallback is @command{vi} on a Unix, which POSIX requires,
+and @command{notepad} on Windows, where there is no @command{vi} and
+@command{notepad} is the one editor that has always shipped with the system. If
+the chosen editor is not on @env{PATH}, cairn says which variable to set rather
+than reporting that a process could not be spawned: the usual problem is not a
+broken editor but no editor, and naming the variable is the whole of the fix.
 
 @section cairn remove
 Deletes items, asking first unless @option{--force} is given. Aliased as

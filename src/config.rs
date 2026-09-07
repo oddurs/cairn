@@ -253,6 +253,23 @@ pub struct Hooks {
     pub after_render: Option<Hook>,
 }
 
+impl Hooks {
+    /// How many events have a hook attached. A bug report says this because a
+    /// configured hook is the most common reason cairn appears to do something
+    /// it does not do.
+    pub fn count(&self) -> usize {
+        [
+            &self.after_create,
+            &self.after_change,
+            &self.after_remove,
+            &self.after_render,
+        ]
+        .iter()
+        .filter(|h| h.is_some())
+        .count()
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RenderConfig {

@@ -255,14 +255,51 @@ pub fn remove(args: RemoveArgs) -> Result<i32> {
     Ok(0)
 }
 
+/// The editor to open when neither VISUAL nor EDITOR is set.
+///
+/// `vi` is required by POSIX, so it is a safe assumption on a Unix. It is not
+/// present on Windows, where the fallback has to be something that ships with
+/// the system, and `notepad` is the only such thing that has always been there.
+#[cfg(windows)]
+const DEFAULT_EDITOR: &str = "notepad";
+#[cfg(not(windows))]
+const DEFAULT_EDITOR: &str = "vi";
+
 pub fn launch_editor(path: &Path) -> Result<()> {
-    let editor = std::env::var("VISUAL")
-        .or_else(|_| std::env::var("EDITOR"))
-        .unwrap_or_else(|_| "vi".to_string());
-    let status = std::process::Command::new(&editor)
-        .arg(path)
-        .status()
-        .with_context(|| format!("launching editor `{editor}`"))?;
+    // Each variable is checked for emptiness on its own. Applying the filter
+    // after the chain looks equivalent and is not: `var("VISUAL")` returns
+    // `Ok("")` for an exported-but-empty variable, so `or_else` never runs and
+    // an empty VISUAL silently shadows a perfectly good EDITOR.
+    fn from_env(name: &str) -> Option<String> {
+        std::env::var(name)
+            .ok()
+            .filter(|value| !value.trim().is_empty())
+    }
+    let chosen = from_env("VISUAL").or_else(|| from_env("EDITOR"));
+    let from_environment = chosen.is_some();
+    let editor = chosen.unwrap_or_else(|| DEFAULT_EDITOR.to_string());
+
+    let status = match std::process::Command::new(&editor).arg(path).status() {
+        Ok(s) => s,
+        // The common failure is not a broken editor but no editor: an empty
+        // environment, or a machine without the one cairn guessed. Saying which
+        // variable to set is the whole of the fix, so say it rather than
+        // reporting that a process could not be spawned.
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            let source = if from_environment {
+                "VISUAL or EDITOR names"
+            } else {
+                "cairn fell back to"
+            };
+            bail!(
+                "no editor: {source} `{editor}`, which is not on PATH\n\
+                 set EDITOR to one that is, or edit {} directly",
+                path.display()
+            );
+        }
+        Err(e) => return Err(e).with_context(|| format!("launching editor `{editor}`")),
+    };
+
     if !status.success() {
         bail!("editor `{editor}` exited with {status}");
     }
