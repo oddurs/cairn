@@ -2,7 +2,7 @@
 id: 90
 title: The body may be interpreted, and the specification should say so
 type: bug
-status: backlog
+status: done
 milestone: v0.2
 created: 2026-09-07
 updated: 2026-09-07
@@ -56,10 +56,14 @@ for such a check if anybody thinks of a way to write one.
 
 ## Acceptance criteria
 
-- [ ] §3 says what is true, and keeps the guarantee that matters
-- [ ] It says explicitly that a project's reading is a convention, not a format
+- [x] §3 says what is true, and keeps the guarantee that matters
+- [x] It says explicitly that a project's reading is a convention, not a format
       property
-- [ ] The version number does not move — this is a clarification, and calling it
+- [x] The version number does not move — this is a clarification, and calling it
       anything else would cheapen the number
-- [ ] The acceptance-criteria convention is described where a second implementer
+- [x] The acceptance-criteria convention is described where a second implementer
       would find it
+
+## 2026-09-07
+
+Done. Spec §3 now says the body may be given meaning by a project and that any such reading is a convention rather than a property of the format, so two readers that disagree are both conforming. A non-normative §10 describes how cairn actually reads acceptance criteria, including that a box with nothing after it is a placeholder. The version number does not move.

@@ -1,0 +1,23 @@
+{
+  "assignee": null,
+  "body": "Body.\n",
+  "category": "open",
+  "created": null,
+  "depends_on": [],
+  "fields": {
+    "invented_by_a_later_version": "kept",
+    "nested_thing": {
+      "a": 1,
+      "b": "two"
+    }
+  },
+  "id": 3,
+  "labels": [],
+  "milestone": null,
+  "ref": "0003",
+  "source": null,
+  "status": "backlog",
+  "title": "Keys this cairn has never heard of",
+  "type": null,
+  "updated": null
+}

@@ -4749,3 +4749,405 @@ fn a_key_is_queryable_like_any_other_field() {
         vec!["0002".to_string()],
     );
 }
+
+// --- an older project ------------------------------------------------------
+
+/// A project as format 1 wrote it: milestones in the configuration, and items
+/// naming them by the same string they use today.
+fn format_one() -> Project {
+    let p = Project::new();
+    let cfg = p.read("cairn.toml").replace("format = 2", "format = 1")
+        + "\n[[milestone]]\nname = \"v0.1\"\ntitle = \"First\"\ndue = \"2026-12-01\"\n\
+           description = \"The first one.\"\n\n[[milestone]]\nname = \"later\"\n\
+           title = \"Someday\"\n";
+    p.write("cairn.toml", &cfg);
+    p.write(
+        "cairn/items/0001-scheduled.md",
+        "---\nid: 1\ntitle: Scheduled\nstatus: backlog\nmilestone: v0.1\n---\nbody\n",
+    );
+    p.write(
+        "cairn/items/0002-unscheduled.md",
+        "---\nid: 2\ntitle: Unscheduled\nstatus: backlog\n---\nbody\n",
+    );
+    p
+}
+
+/// Bumping the format made seven real projects stop working entirely — not
+/// their writes, everything. Nothing about them was unreadable: the migration
+/// changed no item file at all.
+///
+/// §8 requires refusing a version a reader *does not understand*, which is
+/// about a version from the future. A cairn that writes format 2 understands
+/// format 1 exactly.
+#[test]
+fn an_older_project_can_still_be_read() {
+    let p = format_one();
+
+    for args in [
+        vec!["list", "-A"],
+        vec!["show", "1"],
+        vec!["next"],
+        vec!["search", "Scheduled"],
+        vec!["board"],
+        vec!["roadmap"],
+        vec!["export"],
+        vec!["config"],
+        vec!["check"],
+        vec!["agent"],
+    ] {
+        let out = p.run(&args);
+        assert!(out.ok(), "`cairn {args:?}` should work: {}", out.all());
+    }
+}
+
+/// Reading it is not the same as reading it *approximately*. cairn knows what
+/// format 1 means, so an older project's roadmap is the roadmap its own cairn
+/// would have drawn — milestones, order, dates and descriptions.
+#[test]
+fn an_older_projects_milestones_are_understood_not_ignored() {
+    let p = format_one();
+    let out = p.expect(&["roadmap"]).stdout;
+
+    assert_contains(&out, "v0.1", "the milestone is there");
+    assert_contains(&out, "First", "with its title");
+    assert_contains(&out, "2026-12-01", "and its date");
+    assert_contains(&out, "The first one.", "and its description as the body");
+    assert!(
+        out.find("v0.1").unwrap() < out.find("later").unwrap(),
+        "in the order it was declared:\n{out}"
+    );
+
+    // And the item scheduled against it is under it rather than adrift.
+    assert_eq!(
+        p.expect(&["list", "-A", "--ids", "--filter", "milestone=v0.1"])
+            .lines(),
+        vec!["0001".to_string()],
+    );
+}
+
+/// A format bump may cost somebody a command. It must never cost them the
+/// ability to look, and it must never cost them their data.
+#[test]
+fn an_older_project_refuses_writes_and_says_what_to_run() {
+    let p = format_one();
+
+    for args in [
+        vec!["new", "Something"],
+        vec!["set", "1", "status=doing"],
+        vec!["close", "1"],
+        vec!["remove", "1", "--force"],
+    ] {
+        let out = p.run(&args);
+        assert!(!out.ok(), "`cairn {args:?}` should be refused");
+        assert_contains(&out.all(), "cairn migrate", "and name the way forward");
+    }
+
+    // Nothing was touched by any of that.
+    assert_contains(
+        &p.read("cairn/items/0001-scheduled.md"),
+        "status: backlog",
+        "a refused write changes nothing",
+    );
+
+    // And migrating is the one write that is allowed.
+    p.expect(&["migrate"]);
+    p.expect(&["new", "Now allowed", "-q"]);
+}
+
+/// The notice goes to standard error, so a script reading `--json` is
+/// unaffected by somebody else's project being behind.
+#[test]
+fn the_notice_about_an_older_project_stays_out_of_the_output() {
+    let p = format_one();
+    let out = p.expect(&["list", "-A", "--json"]);
+
+    assert_contains(&out.stderr, "format 1", "it is said");
+    assert!(
+        !out.stdout.contains("format 1"),
+        "but not on standard output:\n{}",
+        out.stdout
+    );
+    serde_json::from_str::<serde_json::Value>(&out.stdout).expect("still valid JSON");
+}
+
+/// A version from the *future* is still refused, for reading as well as
+/// writing. That half of §8 is right: best-effort reading of a format nobody
+/// has seen means misreading data in ways nobody can predict.
+#[test]
+fn a_newer_project_is_still_refused_outright() {
+    let p = Project::new();
+    p.write(
+        "cairn.toml",
+        &p.read("cairn.toml").replace("format = 2", "format = 99"),
+    );
+
+    let out = p.fails(&["list"]);
+    assert_contains(&out.all(), "format 99", "the format it found");
+    assert_contains(&out.all(), "upgrade cairn", "and what to do about it");
+}
+
+/// A file written by any cairn that ever existed is still read correctly by
+/// this one — values, not merely the absence of an error.
+///
+/// The corpus one directory up tests today against today. This is the only test
+/// that can fail for the right reason years from now, and it is what the format
+/// number is promising on the project's behalf.
+#[test]
+fn every_format_that_has_existed_still_parses() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden");
+    let mut formats = 0;
+
+    for entry in std::fs::read_dir(&root).expect("corpus").flatten() {
+        let dir = entry.path();
+        let Some(name) = dir.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        if !dir.is_dir() || !name.starts_with("format-") {
+            continue;
+        }
+        formats += 1;
+
+        let p = Project::new();
+        let mut cases = 0;
+        for f in std::fs::read_dir(&dir).expect("format directory").flatten() {
+            let path = f.path();
+            if path.extension().is_some_and(|e| e == "md")
+                && path.file_name().is_some_and(|n| n != "README.md")
+            {
+                let file = path.file_name().unwrap().to_string_lossy().to_string();
+                std::fs::copy(&path, p.path(&format!("cairn/items/{file}"))).unwrap();
+                cases += 1;
+            }
+        }
+        assert!(cases > 0, "{name} has no cases");
+
+        // Read through `export`, which carries every documented key including
+        // the body — `list --json` omits it.
+        let doc: serde_json::Value =
+            serde_json::from_str(&p.expect(&["export"]).stdout).expect("JSON");
+        let items = doc["items"].as_array().expect("an array").clone();
+
+        for f in std::fs::read_dir(&dir).expect("format directory").flatten() {
+            let path = f.path();
+            if path.extension().is_none_or(|e| e != "json") {
+                continue;
+            }
+            let expected: serde_json::Value =
+                serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+            let id = expected["id"].as_u64().expect("an id");
+            let got = items
+                .iter()
+                .find(|i| i["id"] == id)
+                .unwrap_or_else(|| panic!("{name}: item {id} did not parse"));
+
+            // The keys the frozen expectation names, and only those: a later
+            // format may add keys, and an older corpus must not fail for it.
+            for (key, want) in expected.as_object().expect("an object") {
+                assert_eq!(
+                    &got[key], want,
+                    "{name}: item {id} key `{key}` reads differently than it did"
+                );
+            }
+        }
+    }
+
+    assert!(
+        formats > 0,
+        "no per-format corpus found; adding a format means freezing its corpus"
+    );
+}
+
+/// A format's corpus is frozen the day that format stops being current.
+///
+/// A digest, not a file count: the point is that nobody edits a case to make a
+/// later reader agree with it. The old reading is the evidence, and evidence
+/// that can be edited proves nothing.
+#[test]
+fn the_frozen_corpora_have_not_been_edited() {
+    // FNV-1a, written out rather than pulled in: a digest committed in a test
+    // has to mean the same thing in ten years, which rules out DefaultHasher.
+    fn fnv1a(bytes: &[u8], mut h: u64) -> u64 {
+        for b in bytes {
+            h = (h ^ u64::from(*b)).wrapping_mul(0x0000_0100_0000_01b3);
+        }
+        h
+    }
+
+    // Each format, with the digest taken when it stopped being current.
+    let recorded = [("format-1", 0x453d_19cd_d0fa_398a_u64)];
+
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden");
+    let mut corpora: Vec<String> = std::fs::read_dir(&root)
+        .expect("corpus")
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .filter(|n| n.starts_with("format-") && root.join(n).is_dir())
+        .collect();
+    corpora.sort();
+    for name in &corpora {
+        assert!(
+            recorded.iter().any(|(n, _)| n == name),
+            "{name} has a corpus but no digest here, so nothing stops it being \n\
+             edited. Freeze it by recording one."
+        );
+    }
+
+    for (name, expected) in recorded {
+        let dir = root.join(name);
+        let mut files: Vec<_> = std::fs::read_dir(&dir)
+            .unwrap_or_else(|e| panic!("{name}'s corpus is gone: {e}"))
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.is_file())
+            .collect();
+        files.sort();
+
+        let mut h = 0xcbf2_9ce4_8422_2325;
+        for f in &files {
+            h = fnv1a(f.file_name().unwrap().to_string_lossy().as_bytes(), h);
+            h = fnv1a(&std::fs::read(f).unwrap(), h);
+        }
+
+        assert_eq!(
+            h,
+            expected,
+            "{name}'s corpus has changed. It was frozen when format {} arrived, \n\
+             and it is the record of how that format actually read. If a case is \n\
+             wrong, the fix is a new case in the current corpus, not an edit here.",
+            name.trim_start_matches("format-").parse::<u32>().unwrap() + 1
+        );
+    }
+}
+
+/// Migrating an older corpus produces exactly what the current corpus expects.
+///
+/// The parse test proves an old file still reads. This proves the migration
+/// carries it to the present without changing what it means, which is the only
+/// reason a format number is allowed to move at all.
+#[test]
+fn migrating_an_older_corpus_produces_the_current_expectations() {
+    let golden = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden");
+    let p = format_one();
+    // The corpus supplies every item; the seed's would collide on id.
+    for f in std::fs::read_dir(p.path("cairn/items")).unwrap().flatten() {
+        std::fs::remove_file(f.path()).unwrap();
+    }
+
+    let mut cases = Vec::new();
+    for f in std::fs::read_dir(golden.join("format-1"))
+        .expect("format-1")
+        .flatten()
+    {
+        let path = f.path();
+        if path.extension().is_some_and(|e| e == "md")
+            && path.file_name().is_some_and(|n| n != "README.md")
+        {
+            let file = path.file_name().unwrap().to_string_lossy().to_string();
+            std::fs::copy(&path, p.path(&format!("cairn/items/{file}"))).unwrap();
+            cases.push(file);
+        }
+    }
+    assert!(!cases.is_empty());
+
+    p.expect(&["migrate"]);
+
+    let doc: serde_json::Value = serde_json::from_str(&p.expect(&["export"]).stdout).expect("JSON");
+    let items = doc["items"].as_array().expect("an array");
+
+    for case in cases {
+        // The expectation as the *current* corpus states it, not the frozen one.
+        let expected: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(golden.join(case.replace(".md", ".json"))).unwrap(),
+        )
+        .unwrap();
+        let id = expected["id"].as_u64().expect("an id");
+        let got = items
+            .iter()
+            .find(|i| i["id"] == id)
+            .unwrap_or_else(|| panic!("{case}: item {id} did not survive the migration"));
+
+        for (key, want) in expected.as_object().expect("an object") {
+            // `category` and `ref` come from the schema, not the file.
+            if key == "category" || key == "ref" {
+                continue;
+            }
+            assert_eq!(&got[key], want, "{case}: `{key}` changed in the migration");
+        }
+    }
+}
+
+/// A format cannot arrive without its corpus. The count is read from the
+/// source, so the build breaks on the bump rather than on the release.
+#[test]
+fn every_format_below_the_current_one_has_a_frozen_corpus() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let src = std::fs::read_to_string(root.join("src/config.rs")).unwrap();
+    let current: u32 = src
+        .split("pub const CURRENT_FORMAT")
+        .nth(1)
+        .and_then(|s| s.split('=').nth(1))
+        .and_then(|s| s.split(';').next())
+        .and_then(|s| s.trim().parse().ok())
+        .expect("CURRENT_FORMAT is declared in src/config.rs");
+
+    for n in 1..current {
+        let dir = root.join(format!("tests/golden/format-{n}"));
+        assert!(
+            dir.is_dir(),
+            "format {n} has no frozen corpus at tests/golden/format-{n}.\n\
+             A format stops being current the day the next one arrives; freeze \
+             its corpus then, while a cairn that writes it still exists."
+        );
+    }
+}
+
+/// The dry run answers the question somebody actually has before running a
+/// migration over years of work: what is about to change on disk.
+///
+/// Counted against a real project rather than asserted in prose — the two
+/// milestones in the configuration become two items, and not one item file in
+/// the directory is touched.
+#[test]
+fn a_dry_run_says_what_it_will_touch_in_files() {
+    let p = format_one();
+    let before: Vec<_> = std::fs::read_dir(p.path("cairn/items"))
+        .unwrap()
+        .flatten()
+        .map(|e| (e.path(), std::fs::read(e.path()).unwrap()))
+        .collect();
+
+    let out = p.expect(&["migrate", "--dry-run"]).all();
+    assert_contains(&out, "rewritten", "the configuration is named");
+    assert_contains(&out, "cairn.toml", "by name");
+    assert_contains(&out, "created    2 new item(s)", "one item per milestone");
+    assert_contains(
+        &out,
+        "nothing already in the item directory will be changed.",
+        "and the sentence that matters, because here it is true",
+    );
+    assert!(
+        !out.contains("careful:"),
+        "nothing is being rewritten, so nothing to be careful about: {out}"
+    );
+
+    // A dry run that changed something would be the worst defect this command
+    // could have.
+    for (path, contents) in before {
+        assert_eq!(
+            std::fs::read(&path).unwrap(),
+            contents,
+            "{} changed during a dry run",
+            path.display()
+        );
+    }
+
+    // And the count it promised is the count it delivers.
+    p.expect(&["migrate"]);
+    let items: serde_json::Value =
+        serde_json::from_str(&p.expect(&["list", "-A", "--json"]).stdout).unwrap();
+    assert_eq!(
+        items.as_array().unwrap().len(),
+        4,
+        "two items, plus the two milestones it said it would create"
+    );
+}

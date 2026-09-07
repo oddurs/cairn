@@ -36,7 +36,7 @@ pub struct Ctx<'a> {
     contains: HashMap<u32, Vec<u32>>,
     /// The project's milestones, which are items. Here for the same reason
     /// dependency state is: it is a property of the whole set.
-    pub milestones: crate::refs::Milestones<'a>,
+    pub milestones: crate::refs::Milestones,
     /// Everything beneath an item at any depth, and how much of it is finished.
     beneath: HashMap<u32, (usize, usize)>,
     depth: HashMap<u32, usize>,

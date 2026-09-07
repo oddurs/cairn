@@ -415,11 +415,11 @@ pub const MILESTONE_TYPE: &str = "milestone";
 pub const MILESTONE_FIELD: &str = "milestone";
 
 /// The milestones of a project, in the order a reader should meet them.
-pub struct Milestones<'a> {
-    ordered: Vec<&'a Item>,
+pub struct Milestones {
+    ordered: Vec<Item>,
 }
 
-impl<'a> Milestones<'a> {
+impl Milestones {
     /// Gather and order the milestone items.
     ///
     /// A roadmap is a sequence, and milestones can depend on one another, so
@@ -430,18 +430,38 @@ impl<'a> Milestones<'a> {
     /// This replaces a rule that walked the configuration backwards so an
     /// undated milestone could inherit the date of the next dated one. That
     /// existed only because milestones had no natural order. Items have one.
-    pub fn new(cfg: &Config, items: &'a [Item]) -> Milestones<'a> {
+    pub fn new(cfg: &Config, items: &[Item]) -> Milestones {
+        // A project still on format 1 keeps its milestones in the
+        // configuration. Presenting them as the items they are about to become
+        // is not best-effort reading: cairn knows exactly what format 1 means,
+        // and refusing to show somebody their own roadmap because they have not
+        // run a command yet would be the tool being difficult for its own sake.
+        if cfg.format() < crate::config::CURRENT_FORMAT && !cfg.milestones.is_empty() {
+            return Milestones {
+                ordered: cfg
+                    .milestones
+                    .iter()
+                    .enumerate()
+                    .map(|(n, m)| as_item(cfg, n as u32 + 1, m))
+                    .collect(),
+            };
+        }
+
         let Some(def) = cfg.field(MILESTONE_FIELD) else {
             return Milestones {
                 ordered: Vec::new(),
             };
         };
         let target = def.target.as_deref().unwrap_or(MILESTONE_TYPE);
-        let mut found: Vec<&Item> = items.iter().filter(|i| i.kind() == Some(target)).collect();
+        let mut found: Vec<Item> = items
+            .iter()
+            .filter(|i| i.kind() == Some(target))
+            .cloned()
+            .collect();
 
         // Depth in the dependency graph, so a milestone sorts after everything
         // it waits on however the dates read.
-        let by_id: HashMap<u32, &Item> = found.iter().map(|i| (i.id, *i)).collect();
+        let by_id: HashMap<u32, Item> = found.iter().map(|i| (i.id, i.clone())).collect();
         let mut rank: HashMap<u32, usize> = HashMap::new();
         for m in &found {
             let mut seen = HashSet::from([m.id]);
@@ -491,15 +511,19 @@ impl<'a> Milestones<'a> {
         Milestones { ordered: found }
     }
 
+    /// The milestones as items, for resolving references against.
+    pub fn as_items(&self) -> &[Item] {
+        &self.ordered
+    }
+
     /// The milestone a value names, if any.
-    pub fn get(&self, key: &str) -> Option<&'a Item> {
+    pub fn get(&self, key: &str) -> Option<&Item> {
         self.ordered
             .iter()
-            .copied()
             .find(|m| m.key().is_some_and(|k| k.eq_ignore_ascii_case(key.trim())))
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &&'a Item> {
+    pub fn iter(&self) -> impl Iterator<Item = &Item> {
         self.ordered.iter()
     }
 
@@ -528,4 +552,61 @@ pub fn due(item: &Item) -> Option<&str> {
         .and_then(|v| v.as_str())
         .map(str::trim)
         .filter(|s| !s.is_empty())
+}
+
+/// A format 1 `[[milestone]]` block, as the item it is about to become.
+///
+/// Not written anywhere. This exists so that reading an older project shows the
+/// same roadmap the project's own cairn would have shown, rather than an empty
+/// one — which is the difference between understanding an older format and
+/// merely tolerating it.
+fn as_item(cfg: &Config, id: u32, m: &crate::config::Milestone) -> Item {
+    let title = m.title.clone().unwrap_or_else(|| m.name.clone());
+    let mut item = Item {
+        id,
+        meta: Default::default(),
+        body: String::new(),
+        path: cfg.items_dir().join(cfg.filename_for(id, &title)),
+        front: String::new(),
+        eol: Default::default(),
+    };
+    item.meta.title = Some(title);
+    item.meta.key = Some(m.name.clone());
+    item.meta.kind = Some(MILESTONE_TYPE.to_string());
+    item.meta.status = Some(
+        m.status
+            .clone()
+            .unwrap_or_else(|| cfg.initial_status().to_string()),
+    );
+    if let Some(due) = &m.due {
+        item.set_extra("due", Some(Field::Text(due.clone())));
+    }
+    if let Some(d) = &m.description {
+        item.set_body(d);
+    }
+    // Declaration order is the order, which is what the chain the migration
+    // writes will encode permanently.
+    if id > 1 {
+        item.meta.depends_on = vec![id - 1];
+    }
+    item
+}
+
+/// Everything a reference can resolve against.
+///
+/// The items, plus whatever an older format keeps somewhere other than the item
+/// directory. On the current format this is the items and nothing else; on
+/// format 1 it also includes the milestones, which live in the configuration
+/// until `cairn migrate` moves them.
+///
+/// Without this, `cairn check` on a format 1 project reports every `milestone:`
+/// as naming something that does not exist — which is true of the item
+/// directory and false of the project.
+pub fn universe(cfg: &Config, items: &[Item]) -> Vec<Item> {
+    if cfg.format() >= crate::config::CURRENT_FORMAT {
+        return items.to_vec();
+    }
+    let mut out = items.to_vec();
+    out.extend(Milestones::new(cfg, items).as_items().iter().cloned());
+    out
 }

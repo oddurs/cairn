@@ -35,17 +35,57 @@ import reader  # noqa: E402
 PROJECT_LEVEL = {"category", "ref"}
 
 
+def corpora(root):
+    """The current corpus, and one for every format that has ever existed.
+
+    A specification that only describes the newest format is not a
+    specification of the format; it is a specification of the moment. A reader
+    written from it has to read what people actually wrote.
+    """
+    base = os.path.join(root, "tests", "golden")
+    yield ("current", base)
+    for name in sorted(os.listdir(base)):
+        path = os.path.join(base, name)
+        if name.startswith("format-") and os.path.isdir(path):
+            yield (name, path)
+
+
 def main():
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    corpus = os.path.join(root, "tests", "golden")
-    if not os.path.isdir(corpus):
-        print(f"no corpus at {corpus}", file=sys.stderr)
+    base = os.path.join(root, "tests", "golden")
+    if not os.path.isdir(base):
+        print(f"no corpus at {base}", file=sys.stderr)
         return 2
 
+    failures = 0
+    checked = 0
+
+    for label, corpus in corpora(root):
+        print(f"{label}:")
+        failures += run(corpus, frozen=label != "current")
+        checked += len(
+            [f for f in os.listdir(corpus) if f.endswith(".md") and f != "README.md"]
+        )
+
+    print()
+    if failures:
+        print(
+            f"{failures} disagree.\n"
+            "One of the two is wrong. Resolve it by changing the specification "
+            "or the corpus — never by teaching this reader what cairn happens "
+            "to do, which would make it agree without making it correct."
+        )
+        return 1
+
+    print(f"{checked} cases across every format, two independent readers, same answers.")
+    return 0
+
+
+def run(corpus, frozen=False):
     cases = sorted(f for f in os.listdir(corpus) if f.endswith(".md") and f != "README.md")
     if not cases:
-        print("the corpus is empty, so this test asserts nothing", file=sys.stderr)
-        return 2
+        print("  the corpus is empty, so this test asserts nothing", file=sys.stderr)
+        return 1
 
     failures = 0
     for case in cases:
@@ -66,6 +106,11 @@ def main():
             continue
 
         got = {k: v for k, v in got.items() if k not in PROJECT_LEVEL}
+        if frozen:
+            # An expectation frozen at format N names every key that existed at
+            # format N. A later format may add keys; the older reading is still
+            # correct, so compare on what the expectation actually claims.
+            got = {k: v for k, v in got.items() if k in expected}
         if got == expected:
             print(f"  ✓  {case}")
             continue
@@ -78,18 +123,7 @@ def main():
                 print(f"         cairn expects: {expected.get(key)!r}")
                 print(f"         this reader:   {got.get(key)!r}")
 
-    print()
-    if failures:
-        print(
-            f"{failures} of {len(cases)} disagree.\n"
-            "One of the two is wrong. Resolve it by changing the specification "
-            "or the corpus — never by teaching this reader what cairn happens "
-            "to do, which would make it agree without making it correct."
-        )
-        return 1
-
-    print(f"{len(cases)} cases, two independent readers, same answers.")
-    return 0
+    return failures
 
 
 if __name__ == "__main__":

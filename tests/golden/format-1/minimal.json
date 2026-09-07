@@ -1,0 +1,17 @@
+{
+  "assignee": null,
+  "body": "A body.\n",
+  "category": "open",
+  "created": null,
+  "depends_on": [],
+  "fields": {},
+  "id": 1,
+  "labels": [],
+  "milestone": null,
+  "ref": "0001",
+  "source": null,
+  "status": "backlog",
+  "title": "The smallest possible item",
+  "type": null,
+  "updated": null
+}

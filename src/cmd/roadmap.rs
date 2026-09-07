@@ -52,7 +52,7 @@ pub fn run(args: Args) -> Result<i32> {
         .filter(|i| !cfg.is_container(i.kind()))
         .cloned()
         .collect();
-    let mut milestones: Vec<Option<&Item>> = ctx.milestones.iter().map(|m| Some(*m)).collect();
+    let mut milestones: Vec<Option<&Item>> = ctx.milestones.iter().map(Some).collect();
     // A trailing pseudo-milestone for anything not scheduled yet.
     if work.iter().any(|i| i.milestone().is_none()) {
         milestones.push(None);

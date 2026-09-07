@@ -38,17 +38,13 @@ Enough to run a real project's roadmap without reaching for anything else.
 
 ## v0.2 — Comfortable
 
-`#########·` 88% · 37 of 42 done · due 2026-12-01
+`##########` 98% · 41 of 42 done · due 2026-12-01
 
 The rough edges that show up after a few weeks of daily use, and the pieces that make the central claim true rather than merely stated.
 
 ### backlog
 
 - [ ] [`0056`](https://github.com/oddurs/cairn/blob/main/cairn/items/0056-collect-a-contributor-licence-agreement.md) Collect a contributor licence agreement <sup>chore · p0</sup>
-- [ ] [`0085`](https://github.com/oddurs/cairn/blob/main/cairn/items/0085-an-older-project-is-readable-only-writing-needs-the-migration.md) An older project is readable; only writing needs the migration <sup>bug · p0 · s9</sup>
-- [ ] [`0086`](https://github.com/oddurs/cairn/blob/main/cairn/items/0086-a-migration-says-what-it-will-touch-before-it-touches-it.md) A migration says what it will touch before it touches it <sup>feature · p1 · s9</sup>
-- [ ] [`0088`](https://github.com/oddurs/cairn/blob/main/cairn/items/0088-prefer-schema-over-documented-keys.md) Prefer schema over documented keys <sup>docs · p1 · s9</sup>
-- [ ] [`0090`](https://github.com/oddurs/cairn/blob/main/cairn/items/0090-the-body-may-be-interpreted-and-the-specification-should-say-so.md) The body may be interpreted, and the specification should say so <sup>bug · p1 · s9</sup>
 
 ### done
 
@@ -89,10 +85,14 @@ The rough edges that show up after a few weeks of daily use, and the pieces that
 - [x] [`0070`](https://github.com/oddurs/cairn/blob/main/cairn/items/0070-change-the-specification-before-changing-the-format.md) Change the specification before changing the format <sup>chore · p2 · s7</sup>
 - [x] [`0071`](https://github.com/oddurs/cairn/blob/main/cairn/items/0071-say-what-cairn-is-a-record-of-intent-that-happens-to-be-schedulable.md) Say what cairn is: a record of intent that happens to be schedulable <sup>docs · p1 · s8</sup>
 - [x] [`0074`](https://github.com/oddurs/cairn/blob/main/cairn/items/0074-read-the-acceptance-criteria.md) Read the acceptance criteria <sup>feature · p0 · s8</sup>
+- [x] [`0085`](https://github.com/oddurs/cairn/blob/main/cairn/items/0085-an-older-project-is-readable-only-writing-needs-the-migration.md) An older project is readable; only writing needs the migration <sup>bug · p0 · s9</sup>
+- [x] [`0086`](https://github.com/oddurs/cairn/blob/main/cairn/items/0086-a-migration-says-what-it-will-touch-before-it-touches-it.md) A migration says what it will touch before it touches it <sup>feature · p1 · s9</sup>
+- [x] [`0088`](https://github.com/oddurs/cairn/blob/main/cairn/items/0088-prefer-schema-over-documented-keys.md) Prefer schema over documented keys <sup>docs · p1 · s9</sup>
+- [x] [`0090`](https://github.com/oddurs/cairn/blob/main/cairn/items/0090-the-body-may-be-interpreted-and-the-specification-should-say-so.md) The body may be interpreted, and the specification should say so <sup>bug · p1 · s9</sup>
 
 ## v1.0 — Stable
 
-`########··` 77% · 17 of 22 done · due 2027-03-01
+`#########·` 82% · 18 of 22 done · due 2027-03-01
 
 Safe to depend on: every scriptable surface carries a promise, the command surface has been reviewed and pruned rather than accumulated, releases can be verified, and it installs from a package manager people already use.
 
@@ -101,7 +101,9 @@ Safe to depend on: every scriptable surface carries a promise, the command surfa
 - [ ] [`0052`](https://github.com/oddurs/cairn/blob/main/cairn/items/0052-sign-releases-and-ship-a-source-tarball.md) Sign releases and ship a source tarball <sup>chore · p0 · needs-a-key</sup>
 - [ ] [`0053`](https://github.com/oddurs/cairn/blob/main/cairn/items/0053-be-in-a-package-manager-people-already-use.md) Be in a package manager people already use <sup>chore · p0 · blocked-on-a-release</sup>
 - [ ] [`0067`](https://github.com/oddurs/cairn/blob/main/cairn/items/0067-decide-whether-identifiers-should-be-collision-free-by-construction.md) Decide whether identifiers should be collision-free by construction <sup>feature · p1 · s7</sup>
-- [ ] [`0087`](https://github.com/oddurs/cairn/blob/main/cairn/items/0087-the-corpus-keeps-every-format-that-has-ever-existed.md) The corpus keeps every format that has ever existed <sup>chore · p0 · s9</sup>
+
+### in progress
+
 - [ ] [`0089`](https://github.com/oddurs/cairn/blob/main/cairn/items/0089-decide-whether-a-field-name-is-a-promise-or-a-default.md) Decide whether a field name is a promise or a default <sup>docs · p2 · s9</sup>
 
 ### done
@@ -123,6 +125,7 @@ Safe to depend on: every scriptable surface carries a promise, the command surfa
 - [x] [`0078`](https://github.com/oddurs/cairn/blob/main/cairn/items/0078-decide-whether-milestones-should-be-items.md) Decide whether milestones should be items <sup>docs · p0 · s8</sup>
 - [x] [`0079`](https://github.com/oddurs/cairn/blob/main/cairn/items/0079-a-field-can-name-another-item.md) A field can name another item <sup>feature · p0 · s8</sup>
 - [x] [`0080`](https://github.com/oddurs/cairn/blob/main/cairn/items/0080-merge-sequence-fields-by-union.md) Merge sequence fields by union <sup>feature · p1 · s8</sup>
+- [x] [`0087`](https://github.com/oddurs/cairn/blob/main/cairn/items/0087-the-corpus-keeps-every-format-that-has-ever-existed.md) The corpus keeps every format that has ever existed <sup>chore · p0 · s9</sup>
 
 ## later — Someday
 

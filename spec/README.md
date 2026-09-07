@@ -39,7 +39,12 @@ An item is a file whose name ends in `.md`, containing, in order:
 3. A line which, after trailing whitespace is removed, consists of exactly `---`
    or `...`: the **closing delimiter**. The *first* such line ends the
    frontmatter; later ones are body text.
-4. The **body**, which is arbitrary text and is never interpreted.
+4. The **body**, which is arbitrary text. This specification ascribes no
+   meaning to it, and a reader is **not** required to interpret any part of it.
+   A project **may** derive meaning from its content — cairn reads Markdown task
+   list items as acceptance criteria — and any such reading is a convention of
+   the project rather than a property of the format. Two readers that disagree
+   about what a body means are both conforming.
 
 A file that does not begin with an opening delimiter, or that has no closing
 delimiter, is not an item and **must** be rejected.
@@ -248,6 +253,38 @@ people, editors and other tools produce. It is a reasonable conformance suite
 for another implementation.
 
 [golden]: https://github.com/oddurs/cairn/tree/main/tests/golden
+
+Beside it is one directory per format that has ever existed, holding items as
+that format wrote them with the values they parsed to then. An implementation
+that intends to read what people have already written should run against those
+too, not only against the current corpus.
+
+## 10. Conventions (non-normative)
+
+Nothing in this section is required of a conforming reader. It is written down
+because §3 says the body may be given meaning by a project, and a second
+implementer is better served by knowing what the reference implementation
+actually does than by discovering it.
+
+### 10.1 Acceptance criteria
+
+cairn reads Markdown task list items in the body as **acceptance criteria**.
+
+A line is a criterion when, after leading whitespace is removed, it begins with
+a list marker (`-`, `*` or `+`) followed by a space, then `[ ]`, `[x]` or `[X]`,
+and then **something else**. `[x]` and `[X]` are ticked; `[ ]` is not.
+Indentation is allowed, so nested criteria count.
+
+A box with nothing after it is a **placeholder, not a criterion**. The templates
+cairn ships end with a bare `- [ ]` prompting the author to write one, and
+counting it would leave every new item permanently short of its own criteria.
+
+A project may confine the count to one section, named in its configuration; the
+count then covers the lines under a heading with that name, at any level and
+matched without regard to case. With no section named, the whole body counts.
+
+This is a reading of arbitrary text, and §3 means what it says: a reader that
+ignores it entirely conforms.
 
 ---
 
