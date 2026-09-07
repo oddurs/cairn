@@ -100,6 +100,19 @@ pub fn run(args: Args) -> Result<i32> {
     };
     item.meta.title = Some(args.title.clone());
     item.meta.created = Some(now.clone());
+    // Recorded only when an agent is acting. A person filing something is the
+    // ordinary case and needs no annotation — writing two lines into every item
+    // forever would cost the readability that makes this format worth having,
+    // for a signal that is only informative on the other kind.
+    //
+    // So the absence of `created_by` means a person, and the query that matters
+    // as the proportion written by agents rises is the pair: something an agent
+    // made, that no person has taken responsibility for.
+    //
+    //     cairn list --filter 'created_by!=,owner='
+    if let Some(agent) = crate::store::acting_agent() {
+        item.meta.created_by = Some(agent);
+    }
     item.meta.updated = Some(now);
 
     let kind = args.kind.or_else(|| cfg.project.default_type.clone());

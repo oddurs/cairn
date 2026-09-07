@@ -192,6 +192,13 @@ pub struct Status {
     /// Show this status as a column on `cairn board`.
     #[serde(default = "yes")]
     pub board: bool,
+
+    /// What an agent may do about moving an item to this status.
+    ///
+    /// Separate from writing the `status` field, because the interesting case
+    /// is a project that lets an agent start work and not declare it finished.
+    #[serde(default)]
+    pub agent: Agent,
 }
 
 impl Status {
@@ -215,6 +222,25 @@ pub enum FieldKind {
     /// milestone has a due date, a reason for that date, and a history of the
     /// date moving. An enum value is a string.
     Ref,
+}
+
+/// What an agent may do with a field or a status.
+///
+/// A guard rail rather than a boundary, and the manual says so. The Model
+/// Context Protocol server knows who is calling and can refuse; a command line
+/// cannot, because an agent with a shell can run `cairn set`. Claiming more
+/// than that would be worse than offering nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum Agent {
+    /// Anything a person may do.
+    #[default]
+    Write,
+    /// May be read, not set.
+    ReadOnly,
+    /// May be asked for, and a person decides. The agent records what it
+    /// believes in the item's body, where every other reason already lives.
+    Propose,
 }
 
 /// How many items a ref field may name.
@@ -274,6 +300,10 @@ pub struct FieldDef {
     /// What to call the question asked backwards: `contains`, `blocks`.
     #[serde(default)]
     pub inverse: Option<String>,
+
+    /// What an agent may do with this field.
+    #[serde(default)]
+    pub agent: Agent,
     #[serde(default)]
     pub values: Vec<String>,
     #[serde(default)]
@@ -899,6 +929,8 @@ pub const RESERVED_FIELDS: &[&str] = &[
     "milestone",
     "labels",
     "assignee",
+    "owner",
+    "created_by",
     "created",
     "updated",
     "depends_on",

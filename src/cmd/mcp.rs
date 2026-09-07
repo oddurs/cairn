@@ -23,7 +23,7 @@
 // diagnostic goes to stderr), and a tool that fails reports the failure in its
 // result rather than as a transport error, so the model can read what went
 // wrong and try something else.
-use crate::cmd::set::apply;
+use crate::cmd::set::{apply, apply_requested};
 use crate::config::Config;
 use crate::filter::{Ctx, Filter, sort_items};
 use crate::item::{Item, split_list};
@@ -104,6 +104,9 @@ pub fn run(args: Args) -> Result<i32> {
                     .filter(|n| !n.is_empty())
                 {
                     let _ = CLIENT.set(name.to_string());
+                    // Everything downstream — provenance, and what an agent may
+                    // touch — reads this rather than being passed a flag.
+                    unsafe { std::env::set_var("CAIRN_AGENT", name) };
                 }
                 success(id, initialize())
             }
@@ -404,7 +407,7 @@ fn create_item(a: &Value) -> Result<String> {
     item.meta.updated = Some(now);
 
     if let Some(k) = s(a, "type").or_else(|| cfg.project.default_type.clone()) {
-        apply(&mut item, &cfg, "type", Assign::Set(k))?;
+        apply_requested(&mut item, &cfg, "type", Assign::Set(k))?;
     }
     apply(
         &mut item,
@@ -414,7 +417,7 @@ fn create_item(a: &Value) -> Result<String> {
     )?;
     for key in ["milestone", "assignee", "labels", "depends_on"] {
         if let Some(v) = s(a, key) {
-            apply(&mut item, &cfg, key, Assign::Set(v))?;
+            apply_requested(&mut item, &cfg, key, Assign::Set(v))?;
         }
     }
     // Schema defaults first, so explicit fields win.

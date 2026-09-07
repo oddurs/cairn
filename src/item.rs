@@ -106,8 +106,19 @@ pub struct Meta {
     pub status: Option<String>,
     #[serde(default)]
     pub milestone: Option<String>,
+    /// Who is working on it. `claim` sets this.
     #[serde(default)]
     pub assignee: Option<String>,
+    /// Who is answerable for it, which is a different question.
+    ///
+    /// With people the two are usually the same, which is why one field served.
+    /// With an agent working and a person owning they differ, and claiming used
+    /// to overwrite the record of who cared.
+    #[serde(default)]
+    pub owner: Option<String>,
+    /// What created it, as cairn was told: a person's name, or an agent's.
+    #[serde(default)]
+    pub created_by: Option<String>,
     #[serde(default, deserialize_with = "de_string_list")]
     pub labels: Vec<String>,
     #[serde(default, deserialize_with = "de_id_list")]
@@ -193,6 +204,8 @@ impl Item {
             "status" => opt(self.meta.status.as_deref()),
             "milestone" => opt(self.meta.milestone.as_deref()),
             "assignee" => opt(self.meta.assignee.as_deref()),
+            "owner" => opt(self.meta.owner.as_deref()),
+            "created_by" => opt(self.meta.created_by.as_deref()),
             "created" => opt(self.meta.created.as_deref()),
             "updated" => opt(self.meta.updated.as_deref()),
             "source" => opt(self.meta.source.as_deref()),
@@ -442,6 +455,12 @@ impl Item {
         }
         if let Some(v) = &self.meta.assignee {
             put("assignee", Value::String(v.clone()));
+        }
+        if let Some(v) = &self.meta.owner {
+            put("owner", Value::String(v.clone()));
+        }
+        if let Some(v) = &self.meta.created_by {
+            put("created_by", Value::String(v.clone()));
         }
         if !self.meta.labels.is_empty() {
             put(

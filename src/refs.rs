@@ -141,6 +141,7 @@ impl Config {
             default: None,
             description: Some("what this item is waiting on".into()),
             column: false,
+            agent: crate::config::Agent::Write,
         }]
     }
 
@@ -345,4 +346,58 @@ pub fn depth(items: &[Item], cfg: &Config, item: &Item) -> usize {
         frontier = next;
     }
     depth
+}
+
+/// Refuse a write an agent is not permitted to make.
+///
+/// **A guard rail, not a boundary.** The Model Context Protocol server knows who
+/// is calling because the caller says so, and it can refuse. A command line
+/// cannot: an agent with a shell runs `cairn set` and nothing here sees it.
+/// Claiming otherwise would be the first dishonest thing in these documents.
+///
+/// What it buys is worth having anyway. A schema that says *agents may set
+/// status and add notes, and may not change priority or acceptance criteria* is
+/// one somebody will let near a real backlog, and that is a larger thing than
+/// any feature.
+pub fn permitted_for_agent(cfg: &Config, field: &str, value: Option<&str>) -> Result<()> {
+    use crate::config::Agent;
+    let Some(agent) = crate::store::acting_agent() else {
+        return Ok(());
+    };
+
+    if let Some(def) = cfg.field(field) {
+        match def.agent {
+            Agent::Write => {}
+            Agent::ReadOnly => bail!(
+                "`{agent}` may read `{field}` but not set it, by this project's \
+                 cairn.toml. Say what you believe in a note on the item instead, \
+                 and a person can make the change."
+            ),
+            Agent::Propose => bail!(
+                "`{agent}` may propose `{field}` but not set it. Add a note \
+                 saying what it should be and why, and a person will decide."
+            ),
+        }
+    }
+
+    // Moving to a status is a separate permission from writing the field: the
+    // interesting case is a project that lets an agent start work and not
+    // declare it finished.
+    if field == "status"
+        && let Some(name) = value
+        && let Some(status) = cfg.status(name)
+    {
+        match status.agent {
+            Agent::Write => {}
+            Agent::ReadOnly => bail!(
+                "`{agent}` may not move an item to `{name}`, by this project's \
+                 cairn.toml."
+            ),
+            Agent::Propose => bail!(
+                "`{agent}` may not move an item to `{name}` directly. Add a note \
+                 saying why it belongs there, and a person will decide."
+            ),
+        }
+    }
+    Ok(())
 }

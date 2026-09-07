@@ -233,11 +233,18 @@ pub fn select<'a>(
         .filter(|i| !ctx.is_closed(i))
         .filter(|i| args.blocked || !ctx.is_blocked(i))
         .filter(|i| filter.matches(i, ctx))
-        // `--mine` means work nobody else has taken: mine, or unclaimed.
+        // `--mine` means work nobody else has taken: assigned to me, owned by
+        // me, or claimed by nobody. Owning and working are different questions
+        // once an agent is doing the work, and the answer to "what is mine"
+        // should include what I am answerable for.
         .filter(|i| {
             !args.mine
                 || match i.meta.assignee.as_deref() {
-                    None | Some("") => true,
+                    None | Some("") => i
+                        .meta
+                        .owner
+                        .as_deref()
+                        .is_none_or(|o| o.eq_ignore_ascii_case(&me)),
                     Some(a) => a.eq_ignore_ascii_case(&me),
                 }
         })
