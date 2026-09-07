@@ -2,7 +2,7 @@
 id: 80
 title: Merge sequence fields by union
 type: feature
-status: backlog
+status: done
 milestone: v1.0
 depends_on:
 - 72
@@ -59,9 +59,9 @@ only ever touches files it can re-derive from scratch.
 
 ## Acceptance criteria
 
-- [ ] Two branches adding to the same sequence field merge, keeping both
-- [ ] The union is order-stable, so an unchanged item is not a diff
-- [ ] A conflict in any scalar field is still a conflict
-- [ ] `updated` resolves to the later date, and nothing else does
-- [ ] A test performs a real merge for `depends_on` and for a declared ref
-- [ ] The manual says exactly what the driver will and will not resolve
+- [x] Two branches adding to the same sequence field merge, keeping both
+- [x] The union is order-stable, so an unchanged item is not a diff
+- [x] A conflict in any scalar field is still a conflict
+- [x] `updated` resolves to the later date, and nothing else does
+- [x] A test performs a real merge for `depends_on` and for a declared ref
+- [x] The manual says exactly what the driver will and will not resolve

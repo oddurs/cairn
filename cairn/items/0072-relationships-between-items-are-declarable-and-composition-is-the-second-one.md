@@ -146,3 +146,11 @@ finish and a decision the format already made for them.
 
 `0080` is the actual fix: teach the merge driver to union sequence fields, which
 also repairs the same wart in `depends_on`.
+
+## 2026-09-07: and `0080` closed it
+
+The criterion above is true again, by the merge driver rather than by the format
+doing it on its own. Two branches adding to the same sequence now merge by
+union, ancestor-aware so a removal survives, and everything else stays a
+conflict for a person.
+

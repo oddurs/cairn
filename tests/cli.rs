@@ -4223,86 +4223,6 @@ fn a_deep_hierarchy_is_a_warning_rather_than_an_error() {
     );
 }
 
-/// The argument against a `parent` scalar, tested rather than assumed — and it
-/// came out differently from how `0072` predicted.
-///
-/// `0072` claimed two branches linking the same item would merge without a
-/// conflict, on the reasoning that edge sets union. They do not. git merges
-/// *text*, and two branches each appending to the same YAML sequence — beside
-/// an `updated` stamp both of them also touched — is an ordinary textual
-/// conflict. `depends_on` has always had this property; composition inherits it.
-///
-/// What survives is the part that mattered, and it is tested by
-/// `an_item_can_belong_to_two_things_at_once`: a set has a resolution that
-/// keeps both intentions, while a scalar does not — one side simply loses and
-/// nobody can tell which was meant. The conflict is a merge somebody can
-/// finish rather than a decision the format destroyed.
-///
-/// Unioning these automatically in the merge driver is filed as `0080`.
-#[test]
-fn composition_conflicts_in_the_item_rather_than_losing_an_edge() {
-    let p = repository();
-    p.add("OAuth", &[]);
-    p.add("Q3 security", &[]);
-    git(&p, &["add", "-A"]);
-    git(&p, &["commit", "-qm", "two efforts"]);
-
-    git(&p, &["checkout", "-qb", "one"]);
-    p.expect(&["set", "1", "part_of=2"]);
-    git(&p, &["add", "-A"]);
-    git(&p, &["commit", "-qm", "file it under OAuth"]);
-
-    git(&p, &["checkout", "-q", "main"]);
-    git(&p, &["checkout", "-qb", "two"]);
-    p.expect(&["set", "1", "part_of=3"]);
-    git(&p, &["add", "-A"]);
-    git(&p, &["commit", "-qm", "file it under Q3"]);
-
-    git(&p, &["checkout", "-q", "main"]);
-    git(&p, &["merge", "--no-edit", "one"]);
-    let second = Command::new("git")
-        .args(["merge", "--no-edit", "two"])
-        .current_dir(p.root())
-        .env("GIT_AUTHOR_NAME", "test")
-        .env("GIT_AUTHOR_EMAIL", "test@example.invalid")
-        .env("GIT_COMMITTER_NAME", "test")
-        .env("GIT_COMMITTER_EMAIL", "test@example.invalid")
-        .env("PATH", path_with_binary())
-        .output()
-        .expect("git merge");
-
-    assert!(
-        !second.status.success(),
-        "this conflicts today; a test asserting otherwise would assert a wish"
-    );
-
-    // The important part: both intentions are still on disk, in the conflict,
-    // for somebody to resolve. Neither was silently discarded — which is what a
-    // scalar `parent` would have done to one of them.
-    let path = p
-        .root()
-        .join("cairn/items")
-        .read_dir()
-        .expect("items")
-        .flatten()
-        .map(|e| e.path())
-        .find(|path| {
-            path.file_name()
-                .and_then(|n| n.to_str())
-                .is_some_and(|n| n.starts_with("0001"))
-        })
-        .expect("the contested item");
-    let conflicted = std::fs::read_to_string(&path).expect("read");
-    assert!(
-        conflicted.contains("<<<<<<<"),
-        "expected conflict markers:\n{conflicted}"
-    );
-    assert!(
-        conflicted.contains("- 2") && conflicted.contains("- 3"),
-        "both edges must still be present for somebody to keep:\n{conflicted}"
-    );
-}
-
 // --- position, derived from the graph ---------------------------------------
 
 /// A `scale` field would be a claim that goes stale — you tag something an epic
@@ -4559,4 +4479,190 @@ fn an_unrestricted_project_treats_an_agent_as_anybody_else() {
     p.add("A thing", &[]);
     p.expect_as_agent(&["set", "1", "priority=p0"]);
     p.expect_as_agent(&["close", "1"]);
+}
+
+// --- merging items ----------------------------------------------------------
+
+/// Run a merge that is expected to conflict, without asserting it succeeded.
+fn merge(p: &Project, branch: &str) -> Out {
+    let out = Command::new("git")
+        .args(["merge", "--no-edit", branch])
+        .current_dir(p.root())
+        .env("GIT_AUTHOR_NAME", "test")
+        .env("GIT_AUTHOR_EMAIL", "test@example.invalid")
+        .env("GIT_COMMITTER_NAME", "test")
+        .env("GIT_COMMITTER_EMAIL", "test@example.invalid")
+        .env("PATH", path_with_binary())
+        .output()
+        .expect("git merge");
+    Out {
+        code: out.status.code().unwrap_or(-1),
+        stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
+        stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
+    }
+}
+
+fn on_branch(p: &Project, name: &str, from: &str, work: &[&str]) {
+    git(p, &["checkout", "-q", from]);
+    git(p, &["checkout", "-qb", name]);
+    p.expect(work);
+    git(p, &["add", "-A"]);
+    git(p, &["commit", "-qm", name]);
+}
+
+/// Two branches each adding to the same sequence both meant what they added,
+/// and neither meant to remove the other's.
+#[test]
+fn two_branches_adding_to_a_sequence_merge_by_union() {
+    let p = repository();
+    p.add("OAuth", &[]);
+    p.add("Q3 security", &[]);
+    p.add("Work", &[]);
+    git(&p, &["add", "-A"]);
+    git(&p, &["commit", "-qm", "three items"]);
+
+    on_branch(&p, "one", "main", &["set", "4", "part_of=2"]);
+    on_branch(&p, "two", "main", &["set", "4", "part_of=3"]);
+
+    git(&p, &["checkout", "-q", "main"]);
+    git(&p, &["merge", "--no-edit", "one"]);
+    let second = merge(&p, "two");
+    assert!(
+        second.ok(),
+        "the union has an answer, so this should not conflict:\n{}",
+        second.all()
+    );
+
+    let raw = p.expect(&["show", "4", "--raw"]).stdout;
+    assert_contains(&raw, "- 2", "the first branch's edge survived");
+    assert_contains(&raw, "- 3", "and so did the second's");
+    p.expect(&["check"]);
+}
+
+/// The same wart in `depends_on`, which predates composition and had never been
+/// filed.
+#[test]
+fn two_branches_adding_a_dependency_merge_by_union() {
+    let p = repository();
+    p.add("First", &[]);
+    p.add("Second", &[]);
+    p.add("Work", &[]);
+    git(&p, &["add", "-A"]);
+    git(&p, &["commit", "-qm", "three items"]);
+
+    on_branch(&p, "one", "main", &["set", "4", "depends_on+=2"]);
+    on_branch(&p, "two", "main", &["set", "4", "depends_on+=3"]);
+
+    git(&p, &["checkout", "-q", "main"]);
+    git(&p, &["merge", "--no-edit", "one"]);
+    assert!(merge(&p, "two").ok(), "dependencies union too");
+
+    let v: serde_json::Value =
+        serde_json::from_str(&p.expect(&["show", "4", "--json"]).stdout).expect("JSON");
+    let deps: Vec<u64> = v["depends_on"]
+        .as_array()
+        .expect("depends_on")
+        .iter()
+        .filter_map(serde_json::Value::as_u64)
+        .collect();
+    assert_eq!(deps, vec![2, 3], "both, in a stable order");
+}
+
+/// A value one side deliberately removed must not come back because the other
+/// side simply did not touch it.
+#[test]
+fn a_removal_survives_a_merge_with_an_addition() {
+    let p = repository();
+    p.add("Work", &[]);
+    p.expect(&["set", "2", "labels+=keep,drop"]);
+    git(&p, &["add", "-A"]);
+    git(&p, &["commit", "-qm", "two labels"]);
+
+    on_branch(&p, "remover", "main", &["set", "2", "labels-=drop"]);
+    on_branch(&p, "adder", "main", &["set", "2", "labels+=extra"]);
+
+    git(&p, &["checkout", "-q", "main"]);
+    git(&p, &["merge", "--no-edit", "remover"]);
+    assert!(merge(&p, "adder").ok(), "this still has an answer");
+
+    let raw = p.expect(&["show", "2", "--raw"]).stdout;
+    assert_contains(&raw, "keep", "the untouched label");
+    assert_contains(&raw, "extra", "and the added one");
+    assert!(
+        !raw.contains("drop"),
+        "a deliberate removal came back from the dead:\n{raw}"
+    );
+}
+
+/// Two people saying different things about one fact is not a merge cairn
+/// should guess at. The reason to trust this driver is that it only resolves
+/// what has an answer.
+#[test]
+fn a_disagreement_about_one_fact_is_still_a_conflict() {
+    let p = repository();
+    p.add("Work", &[]);
+    git(&p, &["add", "-A"]);
+    git(&p, &["commit", "-qm", "an item"]);
+
+    on_branch(&p, "one", "main", &["set", "2", "priority=p0"]);
+    on_branch(&p, "two", "main", &["set", "2", "priority=p3"]);
+
+    git(&p, &["checkout", "-q", "main"]);
+    git(&p, &["merge", "--no-edit", "one"]);
+    let second = merge(&p, "two");
+    assert!(
+        !second.ok(),
+        "a scalar disagreement has no correct resolution, so it must not be \
+         resolved:\n{}",
+        second.all()
+    );
+
+    let path = p
+        .root()
+        .join("cairn/items")
+        .read_dir()
+        .expect("items")
+        .flatten()
+        .map(|e| e.path())
+        .find(|path| {
+            path.file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| n.starts_with("0002"))
+        })
+        .expect("the contested item");
+    let text = std::fs::read_to_string(&path).expect("read");
+    assert!(
+        text.contains("<<<<<<<"),
+        "the markers must be left for a person:\n{text}"
+    );
+    assert!(
+        text.contains("p0") && text.contains("p3"),
+        "with both claims visible:\n{text}"
+    );
+}
+
+/// An unchanged item must not become a diff, or a merge churns the tree and
+/// `render --check` fails in CI for no reason.
+#[test]
+fn merging_the_same_addition_twice_is_stable() {
+    let p = repository();
+    p.add("First", &[]);
+    p.add("Work", &[]);
+    git(&p, &["add", "-A"]);
+    git(&p, &["commit", "-qm", "two items"]);
+
+    on_branch(&p, "one", "main", &["set", "3", "depends_on+=2"]);
+    on_branch(&p, "two", "main", &["set", "3", "depends_on+=2"]);
+
+    git(&p, &["checkout", "-q", "main"]);
+    git(&p, &["merge", "--no-edit", "one"]);
+    assert!(merge(&p, "two").ok(), "identical additions agree");
+
+    let v: serde_json::Value =
+        serde_json::from_str(&p.expect(&["show", "3", "--json"]).stdout).expect("JSON");
+    assert_eq!(
+        v["depends_on"].as_array().expect("depends_on").len(),
+        1,
+        "the same value must not appear twice"
+    );
 }

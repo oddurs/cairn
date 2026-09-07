@@ -34,6 +34,7 @@
 // keeps our side, which is a valid rendering of *something* — and the real work
 // happens in the post-merge hook, once the items are settled.
 use crate::config::Config;
+use crate::item::Item;
 use crate::style;
 use anyhow::{Context, Result, bail};
 use std::path::{Path, PathBuf};
@@ -79,24 +80,51 @@ pub fn setup(cfg: &Config) -> Result<()> {
 /// `.gitattributes` is tracked, so this part is shared by everyone.
 fn attributes(cfg: &Config, changed: &mut Vec<String>) -> Result<bool> {
     let path = cfg.root.join(".gitattributes");
-    let line = format!("{} merge={DRIVER}", cfg.render.target);
     let existing = std::fs::read_to_string(&path).unwrap_or_default();
-    if existing.lines().any(|l| l.trim() == line) {
+
+    // Two rules, added independently so that a project set up before item
+    // merging existed gains it without the whole block being rewritten — and so
+    // that running setup twice still does nothing.
+    let items = format!("{}/*.md", cfg.project.dir.trim_end_matches('/'));
+    let wanted = [
+        (
+            cfg.render.target.clone(),
+            format!(
+                "# {} is generated from the items. On a merge, re-derive it rather than\n\
+                 # trying to reconcile two renderings of different inputs.\n",
+                cfg.render.target
+            ),
+        ),
+        (
+            items,
+            "# An item is the source rather than a rendering, so it cannot be re-derived.\n\
+             # The driver unions its sequence fields, where two branches both meant what\n\
+             # they added, and leaves everything else to a person.\n"
+                .to_string(),
+        ),
+    ];
+
+    let mut out = existing.clone();
+    let mut added = false;
+    for (pattern, comment) in wanted {
+        let line = format!("{pattern} merge={DRIVER}");
+        if out.lines().any(|l| l.trim() == line) {
+            continue;
+        }
+        if !out.is_empty() && !out.ends_with('\n') {
+            out.push('\n');
+        }
+        if !out.is_empty() {
+            out.push('\n');
+        }
+        out.push_str(&comment);
+        out.push_str(&line);
+        out.push('\n');
+        added = true;
+    }
+    if !added {
         return Ok(false);
     }
-
-    let mut out = existing;
-    if !out.is_empty() && !out.ends_with('\n') {
-        out.push('\n');
-    }
-    if !out.is_empty() {
-        out.push('\n');
-    }
-    out.push_str(&format!(
-        "# {} is generated from the items. On a merge, re-derive it rather than\n\
-         # trying to reconcile two renderings of different inputs.\n{line}\n",
-        cfg.render.target
-    ));
     crate::store::write_atomic(&path, out.as_bytes())?;
     changed.push(".gitattributes".into());
     Ok(true)
@@ -232,16 +260,82 @@ pub struct MergeArgs {
 /// Keeping our side is a valid rendering of a real state, and the post-merge
 /// hook replaces it with the right one as soon as the items are settled.
 pub fn merge_driver(args: MergeArgs) -> Result<i32> {
-    let _ = (&args.base, &args.theirs);
     if !args.ours.exists() {
         bail!("merge driver: {} does not exist", args.ours.display());
     }
+
+    // An item file is the source rather than a rendering, so it cannot be
+    // re-derived. But some of it has an answer: two branches adding to the same
+    // sequence both meant what they added.
+    if args.path.as_deref().is_some_and(is_item_path) {
+        return merge_item(&args);
+    }
+
     eprintln!(
         "{} {} will be re-rendered after the merge",
         style::dim("cairn:"),
         args.path.as_deref().unwrap_or("the roadmap")
     );
     Ok(0)
+}
+
+fn is_item_path(path: &str) -> bool {
+    path.ends_with(".md") && path.contains("items/")
+}
+
+/// Resolve a conflict in an item, where the conflict has an answer.
+///
+/// Deliberately conservative. A sequence merges by union, because two branches
+/// each adding a dependency or filing something under a second heading both
+/// meant what they wrote and neither meant to remove the other's. `updated`
+/// takes the later date. Anything else is two people saying different things
+/// about one fact, and cairn declines to guess: git's markers stay, and a
+/// person decides.
+///
+/// The reason to trust the driver for generated files is that it only ever
+/// touches what it could rebuild from scratch. This extends it to files it
+/// cannot rebuild, so the bar for resolving anything is correspondingly higher.
+fn merge_item(args: &MergeArgs) -> Result<i32> {
+    let read = |path: &std::path::Path| -> Option<Item> {
+        let text = std::fs::read_to_string(path).ok()?;
+        Item::parse(path, &text).ok()
+    };
+    // Without all three sides there is no three-way merge to do, and guessing
+    // from two is how a deletion comes back from the dead.
+    let (Some(ours), Some(base), Some(theirs)) =
+        (read(&args.ours), read(&args.base), read(&args.theirs))
+    else {
+        return Ok(1);
+    };
+
+    match crate::item::merge_three_way(&ours, &base, &theirs) {
+        Some(merged) => {
+            crate::store::write_atomic(&args.ours, merged.to_markdown()?.as_bytes())?;
+            eprintln!(
+                "{} {}: merged by union",
+                style::dim("cairn:"),
+                args.path.as_deref().unwrap_or("an item")
+            );
+            Ok(0)
+        }
+        // Declining means leaving a conflict a person can see. git writes no
+        // markers of its own when a custom driver runs — whatever the driver
+        // leaves in `%A` is what the working tree gets — so returning without
+        // doing this hands somebody `ours` and no sign the other side ever
+        // said anything.
+        None => {
+            let status = std::process::Command::new("git")
+                .arg("merge-file")
+                .args(["-L", "ours", "-L", "base", "-L", "theirs"])
+                .arg(&args.ours)
+                .arg(&args.base)
+                .arg(&args.theirs)
+                .status()
+                .context("running git merge-file")?;
+            let _ = status;
+            Ok(1)
+        }
+    }
 }
 
 /// Whether this project already has the integration, for `cairn config`.

@@ -1018,3 +1018,162 @@ mod criteria_tests {
         assert!(!item(body).criteria(Some("Acceptance criteria")).any());
     }
 }
+
+/// Merge two versions of an item against their common ancestor, or decline.
+///
+/// Returns `None` when the two sides disagree about something that has no
+/// answer, in which case git's conflict markers stay and a person decides.
+///
+/// The rules, and no others:
+///
+/// - one side changed a key and the other did not: take the change
+/// - both changed a **sequence**: union, ancestor-aware, so a value one side
+///   deliberately removed does not come back from the dead
+/// - both changed `updated`: the later date, because it is a stamp rather than
+///   a statement
+///
+/// Everything else that differs on both sides is two people saying different
+/// things about one fact. Guessing there would lose an edit somebody meant, and
+/// the reason this driver is trustworthy for generated files is that it only
+/// touches what it could rebuild. An item cannot be rebuilt, so the bar is
+/// higher rather than lower.
+pub fn merge_three_way(ours: &Item, base: &Item, theirs: &Item) -> Option<Item> {
+    if ours.id != theirs.id {
+        return None;
+    }
+    // The body is prose; there is no union of two paragraphs.
+    let body = pick(&ours.body, &base.body, &theirs.body)?;
+
+    let mut merged = ours.clone();
+    merged.set_body(&body);
+
+    let keys: Vec<Value> = ours
+        .meta
+        .extra
+        .keys()
+        .chain(base.meta.extra.keys())
+        .chain(theirs.meta.extra.keys())
+        .cloned()
+        .collect();
+    let mut seen = std::collections::HashSet::new();
+    let mut extra = Mapping::new();
+    for key in keys {
+        let name = key.as_str().unwrap_or_default().to_string();
+        if !seen.insert(name.clone()) {
+            continue;
+        }
+        let get = |m: &Mapping| m.get(&key).cloned();
+        let (o, b, x) = (
+            get(&ours.meta.extra),
+            get(&base.meta.extra),
+            get(&theirs.meta.extra),
+        );
+        match merge_value(o, b, x) {
+            Some(Some(v)) => {
+                extra.insert(key, v);
+            }
+            // Both sides removed it, or one removed and the other left it.
+            Some(None) => {}
+            None => return None,
+        }
+    }
+    merged.meta.extra = extra;
+
+    // The documented keys, each by the same rules.
+    merged.meta.title = pick(&ours.meta.title, &base.meta.title, &theirs.meta.title)?;
+    merged.meta.key = pick(&ours.meta.key, &base.meta.key, &theirs.meta.key)?;
+    merged.meta.kind = pick(&ours.meta.kind, &base.meta.kind, &theirs.meta.kind)?;
+    merged.meta.status = pick(&ours.meta.status, &base.meta.status, &theirs.meta.status)?;
+    merged.meta.milestone = pick(
+        &ours.meta.milestone,
+        &base.meta.milestone,
+        &theirs.meta.milestone,
+    )?;
+    merged.meta.assignee = pick(
+        &ours.meta.assignee,
+        &base.meta.assignee,
+        &theirs.meta.assignee,
+    )?;
+    merged.meta.owner = pick(&ours.meta.owner, &base.meta.owner, &theirs.meta.owner)?;
+    merged.meta.created_by = pick(
+        &ours.meta.created_by,
+        &base.meta.created_by,
+        &theirs.meta.created_by,
+    )?;
+    merged.meta.source = pick(&ours.meta.source, &base.meta.source, &theirs.meta.source)?;
+    merged.meta.created = pick(&ours.meta.created, &base.meta.created, &theirs.meta.created)?;
+
+    merged.meta.labels = union(&ours.meta.labels, &base.meta.labels, &theirs.meta.labels);
+    merged.meta.depends_on = union(
+        &ours.meta.depends_on,
+        &base.meta.depends_on,
+        &theirs.meta.depends_on,
+    );
+
+    // A stamp rather than a statement, so the later one is simply right.
+    merged.meta.updated = match (&ours.meta.updated, &theirs.meta.updated) {
+        (Some(a), Some(b)) => Some(if a >= b { a.clone() } else { b.clone() }),
+        (a, b) => a.clone().or_else(|| b.clone()),
+    };
+    Some(merged)
+}
+
+/// Take whichever side changed, or `None` if both did and they disagree.
+fn pick<T: Clone + PartialEq>(ours: &T, base: &T, theirs: &T) -> Option<T> {
+    if ours == theirs {
+        Some(ours.clone())
+    } else if base == ours {
+        Some(theirs.clone())
+    } else if base == theirs {
+        Some(ours.clone())
+    } else {
+        None
+    }
+}
+
+/// The union of two sequences against their ancestor.
+///
+/// Ancestor-aware so that removal survives: a value in the base that one side
+/// dropped stays dropped, rather than being restored by the other side simply
+/// not having touched it.
+fn union<T: Clone + PartialEq>(ours: &[T], base: &[T], theirs: &[T]) -> Vec<T> {
+    let removed = |side: &[T]| -> Vec<&T> { base.iter().filter(|v| !side.contains(v)).collect() };
+    let gone: Vec<&T> = removed(ours).into_iter().chain(removed(theirs)).collect();
+
+    let mut out: Vec<T> = Vec::new();
+    for v in ours.iter().chain(theirs.iter()) {
+        if gone.contains(&v) || out.contains(v) {
+            continue;
+        }
+        out.push(v.clone());
+    }
+    out
+}
+
+/// One extra field, three ways. `Some(None)` means "resolved to absent".
+fn merge_value(
+    ours: Option<Value>,
+    base: Option<Value>,
+    theirs: Option<Value>,
+) -> Option<Option<Value>> {
+    if ours == theirs {
+        return Some(ours);
+    }
+    if base == ours {
+        return Some(theirs);
+    }
+    if base == theirs {
+        return Some(ours);
+    }
+    // Both changed. A sequence has an answer; a scalar does not.
+    match (&ours, &theirs) {
+        (Some(Value::Sequence(o)), Some(Value::Sequence(t))) => {
+            let b = match &base {
+                Some(Value::Sequence(b)) => b.clone(),
+                _ => Vec::new(),
+            };
+            Some(Some(Value::Sequence(union(o, &b, t))))
+        }
+        _ => None,
+    }
+}
