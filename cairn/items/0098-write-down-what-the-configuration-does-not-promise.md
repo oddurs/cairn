@@ -2,7 +2,7 @@
 id: 98
 title: Write down what the configuration does not promise
 type: docs
-status: backlog
+status: done
 milestone: v1.0
 depends_on:
 - 96
@@ -63,8 +63,12 @@ reasoning instead of rediscovering the behaviour.
 
 ## Acceptance criteria
 
-- [ ] The manual says the order of statuses and enum values is behaviour
-- [ ] It says the configuration is deliberately outside the merge driver, and why
-- [ ] The specification says which configuration keys a conforming reader must honour
-- [ ] `kind = "list"` versus `cardinality = "many"` is recorded as a known wart, with the reason it stays
-- [ ] The shipped `cairn.toml` mentions ordering where the statuses are
+- [x] The manual says the order of statuses and enum values is behaviour
+- [x] It says the configuration is deliberately outside the merge driver, and why
+- [x] The specification says which configuration keys a conforming reader must honour
+- [x] `kind = "list"` versus `cardinality = "many"` is recorded as a known wart, with the reason it stays
+- [x] The shipped `cairn.toml` mentions ordering where the statuses are
+
+## 2026-09-07
+
+Done. A manual section, 'What the configuration does not promise', with the four: order is behaviour, the configuration is deliberately outside the merge driver, some keys are semantic and some decorative, and multiplicity is spelled twice. Spec §7 now says the category is the only configuration property a reader must honour, and that an ordered sequence must not be reordered. The minimal template says so where the statuses are.

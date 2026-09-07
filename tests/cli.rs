@@ -5368,3 +5368,32 @@ fn an_obsolete_milestone_block_does_not_send_you_to_migrate() {
         out.all()
     );
 }
+
+/// A typo and a key from a newer cairn arrive looking identical, and want
+/// different things said to them.
+#[test]
+fn an_unknown_configuration_key_says_which_kind_it_is() {
+    let p = Project::new();
+
+    let typo = p.read("cairn.toml").replace(
+        "[project]",
+        "[project]\ncriteria_sektion = \"Acceptance criteria\"",
+    );
+    p.write("cairn.toml", &typo);
+    let out = p.run(&["list"]).all();
+    assert!(!p.run(&["list"]).ok());
+    assert_contains(&out, "did you mean `criteria_section`?", "the near miss");
+    assert_contains(&out, "refused rather than ignored", "and why it is fatal");
+
+    let future = p.read("cairn.toml").replace(
+        "criteria_sektion = \"Acceptance criteria\"",
+        "workflow_engine = true",
+    );
+    p.write("cairn.toml", &future);
+    let out = p.run(&["list"]).all();
+    assert!(
+        !out.contains("did you mean"),
+        "nothing is near `workflow_engine`, so guessing would be noise: {out}"
+    );
+    assert_contains(&out, "which reads format", "but it still says what it is");
+}

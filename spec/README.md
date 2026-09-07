@@ -221,17 +221,37 @@ are fixed, and are therefore what a consumer reasons about — whether an item i
 finished, whether it is in progress, whether it was abandoned. Anything moving
 items between projects **should** map by category.
 
+That category is the only thing in a project's configuration a reader **must**
+honour. A configuration will describe much else — how a status is coloured, what
+it is called in a listing, which columns a table shows, how a roadmap is laid
+out. None of it changes what an item *is*, and a reader that ignores all of it
+conforms, in the same way as §4.3.
+
+Where a configuration expresses something as an ordered sequence — the statuses,
+the permitted values of a field — that order is **significant**, and a reader
+that presents them **should** present them in it. A tool rewriting a
+configuration **must not** reorder such a sequence.
+
 ## 8. Versioning and compatibility
 
-A project records the format version it uses. Version 1 is described by this
-document.
+A project records the format version it uses. Versions 1 and 2 are both
+described by this document: no key in it changed meaning between them.
 
 The version covers the on-disk shape of a **project**, not only of an item. A
 project is its configuration and its items (§7), so a change to the shape of the
-configuration alone **may** require a new version and a migration even when no
-key in this document changes meaning. A reader of items alone is unaffected by
-such a change, and **should** say so rather than refusing a project it can in
-fact read.
+configuration alone requires a new version and a migration even when no key in
+this document changes meaning.
+
+The reason is §4.1, and its absence. An item reader **must** preserve keys it
+does not recognise, so an item may gain an optional key without a new version.
+No such rule is stated for the configuration, and none is to be assumed: a
+configuration format is free to refuse what it does not know, and one that does
+cannot gain a key without every existing reader refusing the project. So a
+project **must** take a new version number when its configuration gains a key,
+unless the configuration format it uses states that unknown keys are ignored.
+
+A reader of items alone is unaffected by such a change, and **should** say so
+rather than refusing a project it can in fact read.
 
 1. A minor revision **may** add optional keys, and **must not** do anything else.
 2. Removing a key, changing what a key means, or making an optional key required
