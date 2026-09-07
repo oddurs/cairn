@@ -2,7 +2,7 @@
 id: 64
 title: Start numbering somewhere other than one
 type: feature
-status: backlog
+status: done
 milestone: v0.2
 created: 2026-09-06
 updated: 2026-09-06

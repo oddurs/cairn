@@ -17,7 +17,7 @@
 // becomes a second source of truth. What is on disk is still the backlog; this
 // only says how it got that way.
 use crate::config::Config;
-use crate::item::{Item, parse_id};
+use crate::item::Item;
 use crate::store::Store;
 use crate::style;
 use anyhow::{Context, Result};
@@ -90,7 +90,7 @@ impl Change {
 pub fn run(args: Args) -> Result<i32> {
     let cfg = Config::discover()?;
     let store = Store::new(&cfg);
-    let item = store.find(parse_id(&args.id)?)?;
+    let item = store.find(cfg.parse_id(&args.id)?)?;
 
     let relative = item
         .path

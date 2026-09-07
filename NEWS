@@ -27,6 +27,29 @@ There is deliberately no library target, because linking cairn makes the caller
 a derivative work and reading its files does not.  A test fails if a [lib]
 appears in Cargo.toml.
 
+** Identifiers can be written the way your team says them
+
+  [project]
+  id_format = "MP-{n}"    # MP-1002, A24, CAIRN-TOOLS-24
+  id_start  = 1000        # where an empty project starts counting
+
+`{n}` is the number and `{n:04}` pads it; the default is unchanged.  Files are
+named to match, and both the rendered form and the bare number are accepted
+wherever an identifier is taken, case-insensitively.
+
+The key is a rendering rather than the identifier.  `id` in the frontmatter
+remains an unsigned integer, which is what the specification commits to, so
+adopting a key is a display change and not a format change — no version bump, no
+migration, and nothing that refers to an item by number breaks.  In JSON, `id`
+is the number and `ref` is the rendered form.
+
+`cairn renumber` now also brings filenames into line with the configured format,
+which is what `cairn check` has been reporting.  A malformed template is refused
+when the project is opened, naming the problem.
+
+Specification §4.2 records all of this: it is a clarification, the format stays
+at 1, and nothing already written changes meaning.
+
 ** What may be scripted against
 
 A new "Stability" chapter in the manual says which surfaces are promises and

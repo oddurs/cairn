@@ -61,8 +61,21 @@ pub fn run(args: Args) -> Result<i32> {
 
     let duplicates = duplicate_ids(&items);
     if duplicates.is_empty() {
+        // No identifier is wrong, but a filename can still disagree with one —
+        // which is what happens the moment a project adopts `id_format`. Both
+        // are the same job: making the identifiers on disk say what they mean.
+        let renamed = rename_to_match(&cfg, &store, &mut items, args.dry_run)?;
         if !args.quiet {
-            println!("{} no duplicate ids", style::green("ok:"));
+            if renamed == 0 {
+                println!("{} no duplicate ids", style::green("ok:"));
+            } else if args.dry_run {
+                println!(
+                    "\n{} {renamed} file(s) would be renamed",
+                    style::dim("dry run:")
+                );
+            } else {
+                println!("{} {renamed} file(s)", style::green("renamed:"));
+            }
         }
         return Ok(0);
     }
@@ -108,6 +121,45 @@ pub fn run(args: Args) -> Result<i32> {
         style::yellow("note:")
     );
     Ok(0)
+}
+
+/// Bring filenames into line with the project's identifier rendering and each
+/// item's title.
+///
+/// Adopting `id_format = "MP-{n}"` should not mean touching every item by hand,
+/// and `cairn check` reports the mismatch already — this is the thing that
+/// fixes what it reports.
+fn rename_to_match(
+    cfg: &Config,
+    store: &Store,
+    items: &mut [Item],
+    dry_run: bool,
+) -> Result<usize> {
+    // The caller already holds the lock; taking it again would deadlock this
+    // process against itself, which is exactly what happened the first time.
+    let mut renamed = 0usize;
+    for item in items.iter_mut() {
+        let want = cfg.filename_for(item.id, item.title());
+        let have = item
+            .path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_default();
+        if have == want {
+            continue;
+        }
+        println!(
+            "  {} {} {}",
+            style::dim(&have),
+            style::dim("->"),
+            style::bold(&want)
+        );
+        if !dry_run {
+            store.sync_path(item)?;
+        }
+        renamed += 1;
+    }
+    Ok(renamed)
 }
 
 /// Sort key for creation date: undated items sort after dated ones.

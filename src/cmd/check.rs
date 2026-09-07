@@ -251,7 +251,9 @@ fn collect_inner(
         if actual != expected {
             r.warn(
                 &at,
-                format!("filename does not match title (expected {expected})"),
+                // Not necessarily the title: the identifier's rendering is in
+                // the filename too, so adopting `id_format` lands here.
+                format!("filename does not match the item (expected {expected})"),
             );
         }
     }

@@ -50,10 +50,12 @@ impl<'a> Store<'a> {
         let mut paths = Vec::new();
         collect(&dir, &mut paths)?;
         paths.sort();
+        // Recovering an id from a filename needs the project's rendering.
+        let format = self.cfg.id_format();
         let mut items = Vec::with_capacity(paths.len());
         let mut problems = Vec::new();
         for p in paths {
-            match Item::load(&p) {
+            match Item::load_with(&p, Some(&format)) {
                 Ok(item) => items.push(item),
                 Err(e) => problems.push(e),
             }
@@ -123,8 +125,17 @@ impl<'a> Store<'a> {
             .ok_or_else(|| anyhow::anyhow!("no item with id {}", self.cfg.format_id(id)))
     }
 
+    /// One more than the highest in use, or the project's starting point if
+    /// nothing is in use.
+    ///
+    /// `id_start` only ever applies to an empty project. Lowering it later does
+    /// nothing, because the maximum still wins — which is the right behaviour
+    /// and is said here rather than left to be discovered.
     pub fn next_id(&self, items: &[Item]) -> u32 {
-        items.iter().map(|i| i.id).max().unwrap_or(0) + 1
+        match items.iter().map(|i| i.id).max() {
+            Some(highest) => highest + 1,
+            None => self.cfg.project.id_start.max(1),
+        }
     }
 
     pub fn path_for(&self, id: u32, title: &str) -> PathBuf {

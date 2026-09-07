@@ -77,7 +77,7 @@ The frontmatter is a YAML mapping. All keys are optional except where noted.
 
 | Key | Type | Notes |
 | --- | --- | --- |
-| `id` | unsigned integer | Unique within a project. Required, except that a reader **may** take it from a leading run of digits in the filename when absent. |
+| `id` | unsigned integer | Unique within a project. Required, except that a reader **may** take it from the filename when absent — see §4.1. |
 | `title` | string | Required in practice; an item without one is invalid. |
 | `type` | string | Names a type the project declares. |
 | `status` | string | Names a status the project declares. Required. |
@@ -100,6 +100,30 @@ a warning and **must not** be an error.
 This is the rule that makes version skew survivable. Without it, opening a
 project with an older reader silently deletes whatever a newer one wrote. It is
 not a nicety; it is the reason the format can change at all.
+
+### 4.2 Identifiers, and how they are displayed
+
+`id` is an unsigned integer. That is the whole of what it is, and it does not
+change.
+
+A project **may** display identifiers with a prefix, a suffix, or padding —
+`MP-1002`, `A24`, `0001`. Such a rendering is a property of the **project**, not
+of the item: it lives in the project's configuration, every item in the project
+is displayed the same way, and the value stored under `id` is the integer
+regardless. A reader that ignores the rendering entirely is a conforming reader.
+
+Two consequences follow for a reader.
+
+An identifier printed by a tool, or written in a filename, **may** therefore not
+be a bare number. A reader that accepts identifiers as input **should** accept
+both the rendered form and the bare integer.
+
+The fallback of taking `id` from the filename applies to **a leading run of
+digits**, and therefore only to projects whose rendering begins with the number.
+A reader **may** additionally recover the identifier by applying the project's
+configured rendering to the filename. A reader that cannot determine the
+identifier **must** report the file as invalid rather than guess: an item whose
+identity is unknown is worse than an item that fails to load.
 
 ## 5. Ordering and layout
 

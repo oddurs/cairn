@@ -310,6 +310,28 @@ embedded interpreter. Replacing cairn's *own* behaviour — a different renderer
 a custom validator, new subcommands — needs more than that; it's on the roadmap
 as `0008`, with the tradeoffs written down.
 
+## Naming your identifiers
+
+`0001` is the default, not the only option:
+
+```toml
+[project]
+id_format = "MP-{n}"    # MP-1002
+id_start  = 1000        # where an empty project starts counting
+```
+
+`{n}` is the number, `{n:04}` pads it. Files are named to match, and both forms
+are accepted wherever an identifier is: `cairn show MP-1002`, `cairn show 1002`.
+
+The key is a **rendering**, not the identifier. `id` in the frontmatter stays an
+unsigned integer, which is what the specification commits to — so adopting a key
+is a display change rather than a format change, and nothing that refers to an
+item by number breaks. In JSON, `id` is the number and `ref` is the rendered
+form.
+
+Adopting one in an existing project: `cairn check` reports the filenames that no
+longer match and `cairn renumber` fixes them.
+
 ## Identifiers, and the one sharp edge
 
 Ids are small integers because people have to type them. That has a cost worth
