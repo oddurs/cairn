@@ -27,6 +27,35 @@ There is deliberately no library target, because linking cairn makes the caller
 a derivative work and reading its files does not.  A test fails if a [lib]
 appears in Cargo.toml.
 
+** What may be scripted against
+
+A new "Stability" chapter in the manual says which surfaces are promises and
+which are deliberately free to change.  Promised: the JSON fields, --ids,
+--plain and --count, the filter grammar, the MCP tool names and schemas, the
+interchange document, and the exit codes (0 did it, 1 failed or found problems,
+2 the command line was wrong).  Not promised: the wording of anything written
+for a person, colour, table layout, and the order of anything not documented as
+ordered.
+
+tests/stability.rs asserts every documented field, so removing one fails the
+build rather than somebody's script.
+
+** The command surface, reviewed before 1.0
+
+`cairn renumber --compact` has been removed.  It renumbered a whole project into
+a gapless sequence, moving every identifier — which silently invalidates every
+commit message, pull request and human memory that referred to one, and cairn
+cannot rewrite any of those.  A large irreversible cost for a cosmetic benefit,
+and nothing outside its own test ever wanted it.  Gaps are now permanent by
+design.
+
+`cairn next` and `cairn search` gained --plain and --count, which they lacked
+for no reason anybody could name.  Output shapes belong on every listing
+command; query controls like --sort and --columns stay on `list`, because next
+and search have opinions about order that are the reason they exist.
+
+The reasoning for every remaining command is written down in the manual.
+
 ** import no longer drops dependencies
 
 `cairn import` silently discarded every dependency in the document it was

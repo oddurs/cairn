@@ -837,8 +837,15 @@ fn renumber_repairs_a_merge_collision() {
     );
 }
 
+/// Gaps in the identifier sequence are permanent, and that is the design.
+///
+/// `renumber --compact` used to close them. It was removed in the surface
+/// review before 1.0: it moved every id in the project, which silently breaks
+/// every commit message, pull request and human memory that referred to one,
+/// and cairn has no way to rewrite any of those. That is a large, irreversible
+/// cost for a cosmetic benefit, and nothing outside its own test ever wanted it.
 #[test]
-fn compact_refuses_while_duplicates_exist_then_closes_the_gaps() {
+fn renumber_repairs_duplicates_and_leaves_gaps_alone() {
     let p = Project::new();
     for n in 1..=4 {
         p.add(&format!("Item {n}"), &[]);
@@ -848,12 +855,29 @@ fn compact_refuses_while_duplicates_exist_then_closes_the_gaps() {
         "cairn/items/0001-collision.md",
         "---\nid: 1\ntitle: Collision\nstatus: backlog\n---\nbody\n",
     );
-    p.fails(&["renumber", "--compact"]);
+
     p.expect(&["renumber"]);
-    p.expect(&["renumber", "--compact"]);
     p.expect(&["check"]);
-    let ids = p.expect(&["list", "-A", "--ids"]).lines();
-    assert_eq!(ids.last().unwrap(), &format!("{:04}", ids.len()), "no gaps");
+
+    // The gap left by removing item 2 is still there, and the duplicate has
+    // been given an id of its own.
+    let ids: Vec<u32> = p
+        .expect(&["list", "-A", "--ids"])
+        .lines()
+        .iter()
+        .filter_map(|l| l.trim().parse().ok())
+        .collect();
+    assert!(!ids.contains(&2), "the gap was closed: {ids:?}");
+    let unique: std::collections::HashSet<_> = ids.iter().collect();
+    assert_eq!(unique.len(), ids.len(), "duplicates survived: {ids:?}");
+
+    // And the flag is gone rather than quietly accepted.
+    let out = p.fails(&["renumber", "--compact"]);
+    assert_contains(
+        &out.all(),
+        "unexpected argument",
+        "--compact should no longer exist",
+    );
 }
 
 // --- hooks ------------------------------------------------------------------

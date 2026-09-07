@@ -213,8 +213,10 @@ cairn list --sort '-priority,updated'
 Operators: `=` `!=` `~` `!~` `>` `>=` `<` `<=`. Alongside your own fields,
 `category` resolves through the status table.
 
-For scripting, `--json`, `--ids`, `--count` and `--plain` (tab-separated, no
-colour) are all available:
+For scripting, `--json`, `--ids`, `--count` and `--plain` (tab-separated
+machine values, no header, no colour) are available on `list`, `next` and
+`search` alike. What each of them promises, and what is deliberately left free
+to change, is written down under "Stability" in the manual:
 
 ```sh
 cairn list --ids --filter 'priority=p0' | xargs -n1 cairn show
@@ -329,10 +331,12 @@ renumbered: 1 item(s)
 The older item keeps the contested id and the one that arrived later moves, so
 the repair matches what happened. Because nothing can unambiguously *refer* to
 a duplicated id, existing `depends_on` references are left pointing at the
-retained item and cairn says so rather than guessing. `--compact` renumbers
-everything into a gapless sequence and rewrites references as it goes; it
-refuses to run while duplicates exist, since the references would then be a
-guess.
+retained item and cairn says so rather than guessing.
+
+Gaps left by `remove` are permanent, and that is the design: closing them would
+move every later identifier, silently invalidating every commit message, pull
+request and human memory that referred to one — and cairn has no way to rewrite
+any of those.
 
 Renumbering is never automatic. It rewrites files, and that should happen
 because you asked.

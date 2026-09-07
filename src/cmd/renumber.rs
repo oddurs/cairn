@@ -27,17 +27,13 @@ use crate::item::Item;
 use crate::lock::Lock;
 use crate::store::{Store, today};
 use crate::style;
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use clap::ArgAction;
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 
 #[derive(clap::Args)]
 pub struct Args {
-    /// Renumber every item to a gapless 1..n sequence
-    #[arg(long, action = ArgAction::SetTrue)]
-    pub compact: bool,
-
     /// Show what would change without touching anything
     #[arg(short = 'n', long, action = ArgAction::SetTrue)]
     pub dry_run: bool,
@@ -64,23 +60,13 @@ pub fn run(args: Args) -> Result<i32> {
     });
 
     let duplicates = duplicate_ids(&items);
-    let plan = if args.compact {
-        if !duplicates.is_empty() {
-            bail!(
-                "cannot compact while {} id(s) are duplicated — run `cairn renumber` first",
-                duplicates.len()
-            );
+    if duplicates.is_empty() {
+        if !args.quiet {
+            println!("{} no duplicate ids", style::green("ok:"));
         }
-        compact_plan(&items)
-    } else {
-        if duplicates.is_empty() {
-            if !args.quiet {
-                println!("{} no duplicate ids", style::green("ok:"));
-            }
-            return Ok(0);
-        }
-        duplicate_plan(&items, &duplicates)
-    };
+        return Ok(0);
+    }
+    let plan = duplicate_plan(&items, &duplicates);
 
     if plan.is_empty() {
         if !args.quiet {
@@ -109,25 +95,18 @@ pub fn run(args: Args) -> Result<i32> {
         return Ok(0);
     }
 
-    // Under --compact every id moves, so references must move with them. When
-    // repairing duplicates the retained item keeps its id, and nothing can
-    // unambiguously refer to the copy, so references are left alone.
-    let id_map: HashMap<u32, u32> = if args.compact {
-        plan.iter().map(|(i, new)| (items[*i].id, *new)).collect()
-    } else {
-        HashMap::new()
-    };
+    // The retained item keeps its id, and nothing can unambiguously refer to
+    // the copy, so references are left alone rather than guessed at.
+    let id_map: HashMap<u32, u32> = HashMap::new();
 
     apply(&cfg, &store, &mut items, &plan, &id_map)?;
 
     println!("{} {} item(s)", style::green("renumbered:"), plan.len());
-    if !args.compact {
-        eprintln!(
-            "{} existing `depends_on` references still point at the retained items; \
-             check whether any should point at the renumbered ones",
-            style::yellow("note:")
-        );
-    }
+    eprintln!(
+        "{} existing `depends_on` references still point at the retained items; \
+         check whether any should point at the renumbered ones",
+        style::yellow("note:")
+    );
     Ok(0)
 }
 
@@ -160,15 +139,6 @@ fn duplicate_plan(items: &[Item], duplicates: &BTreeMap<u32, Vec<usize>>) -> Vec
         }
     }
     plan
-}
-
-fn compact_plan(items: &[Item]) -> Vec<(usize, u32)> {
-    items
-        .iter()
-        .enumerate()
-        .map(|(i, _)| (i, i as u32 + 1))
-        .filter(|(i, new)| items[*i].id != *new)
-        .collect()
 }
 
 /// Two phases, so a rename can never land on a file that has not moved yet.

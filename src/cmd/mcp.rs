@@ -328,6 +328,8 @@ fn next_items(a: &Value) -> Result<String> {
             blocked: b(a, "include_blocked"),
             json: false,
             ids: false,
+            plain: false,
+            count: false,
         },
     )?;
     let arr: Vec<Value> = picked
@@ -509,6 +511,8 @@ fn claim_item(a: &Value) -> Result<String> {
                     blocked: false,
                     json: false,
                     ids: false,
+                    plain: false,
+                    count: false,
                 },
             )?;
             match picked.first() {

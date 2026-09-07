@@ -53,6 +53,14 @@ pub struct Args {
     /// Output ids only
     #[arg(long, action = ArgAction::SetTrue)]
     pub ids: bool,
+
+    /// Tab-separated, no header or colour
+    #[arg(long, action = ArgAction::SetTrue)]
+    pub plain: bool,
+
+    /// Print the number of matches only
+    #[arg(long, action = ArgAction::SetTrue)]
+    pub count: bool,
 }
 
 pub fn run(args: Args) -> Result<i32> {
@@ -79,6 +87,16 @@ pub fn run(args: Args) -> Result<i32> {
         hits.truncate(n);
     }
 
+    if args.count {
+        println!("{}", hits.len());
+        return Ok(0);
+    }
+    if args.plain {
+        for i in &hits {
+            println!("{}\t{}\t{}", cfg.format_id(i.id), i.status(), i.title());
+        }
+        return Ok(0);
+    }
     if args.ids {
         for i in &hits {
             println!("{}", cfg.format_id(i.id));

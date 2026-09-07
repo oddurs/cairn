@@ -120,7 +120,6 @@ const FLAGS: &[&str] = &[
     "--set",
     "--next",
     "--blocked",
-    "--compact",
     "--bug-report",
     "--version",
     "--help",
