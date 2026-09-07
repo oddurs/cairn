@@ -88,7 +88,7 @@ The rough edges that show up after a few weeks of daily use, and the pieces that
 
 ## v1.0 — Stable
 
-`#####·····` 50% · 9 of 18 done · due 2027-03-01
+`#####·····` 47% · 9 of 19 done · due 2027-03-01
 
 Safe to depend on: every scriptable surface carries a promise, the command surface has been reviewed and pruned rather than accumulated, releases can be verified, and it installs from a package manager people already use.
 
@@ -103,6 +103,7 @@ Safe to depend on: every scriptable surface carries a promise, the command surfa
 - [ ] [`0076`](https://github.com/oddurs/cairn/blob/main/cairn/items/0076-separate-who-is-working-from-who-owns-and-record-what-created-an-item.md) Separate who is working from who owns, and record what created an item <sup>feature · p1 · s8</sup>
 - [ ] [`0077`](https://github.com/oddurs/cairn/blob/main/cairn/items/0077-ship-no-level-names.md) Ship no level names <sup>docs · p1 · s8</sup>
 - [ ] [`0078`](https://github.com/oddurs/cairn/blob/main/cairn/items/0078-decide-whether-milestones-should-be-items.md) Decide whether milestones should be items <sup>docs · p0 · s8</sup>
+- [ ] [`0079`](https://github.com/oddurs/cairn/blob/main/cairn/items/0079-a-field-can-name-another-item.md) A field can name another item <sup>feature · p0 · s8</sup>
 
 ### done
 
