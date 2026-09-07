@@ -57,6 +57,17 @@ Containers — any type a reference names specifically — are absent from `cair
 next`, the board, the roadmap's item lists and an ordinary `cairn list`.  They
 appear when you ask for them by type, or with `--all`, which now means all.
 
+** Removing an item repairs every reference to it
+
+`cairn remove` dropped `depends_on` references to what it deleted, and nothing
+else — which was right while `depends_on` was the only relationship there was,
+and left a milestone named by twenty items dangling the moment milestones became
+items.  It now repairs every declared reference, and the rule it restores is
+that a destructive command always leaves a valid project and says what else it
+touched.
+
+Found by the soak, on a seed CI drew and I had not.
+
 ** Merges resolve what has an answer
 
 The merge driver now handles item files as well as the generated roadmap.  Two

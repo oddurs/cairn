@@ -205,11 +205,26 @@ pub fn remove(args: RemoveArgs) -> Result<i32> {
     // valid project and says what else it touched; there is no option to leave
     // the wreckage, because no one wants it.
     let doomed: Vec<u32> = targets.iter().map(|t| t.id).collect();
-    let mut dependents: Vec<Item> = store
-        .load_all()?
-        .into_iter()
+    let all = store.load_all()?;
+    // Everything that names one of these, through `depends_on` or through any
+    // declared reference. Only `depends_on` was repaired before, which was
+    // right when it was the only relationship there was — and left a milestone
+    // named by twenty items dangling the moment milestones became items.
+    let refs: Vec<&crate::config::FieldDef> = cfg.ref_fields().collect();
+    let names_doomed = |i: &Item| {
+        i.meta.depends_on.iter().any(|d| doomed.contains(d))
+            || refs.iter().any(|def| {
+                crate::refs::values(i, def)
+                    .iter()
+                    .filter_map(|v| crate::refs::resolve(&all, def, v))
+                    .any(|found| doomed.contains(&found.id))
+            })
+    };
+    let mut dependents: Vec<Item> = all
+        .iter()
         .filter(|i| !doomed.contains(&i.id))
-        .filter(|i| i.meta.depends_on.iter().any(|d| doomed.contains(d)))
+        .filter(|i| names_doomed(i))
+        .cloned()
         .collect();
 
     if !args.force {
@@ -250,6 +265,36 @@ pub fn remove(args: RemoveArgs) -> Result<i32> {
     }
     for dep in dependents.iter_mut() {
         dep.meta.depends_on.retain(|d| !doomed.contains(d));
+        for def in &refs {
+            let kept: Vec<String> = crate::refs::values(dep, def)
+                .into_iter()
+                .filter(|v| {
+                    crate::refs::resolve(&all, def, v)
+                        .is_none_or(|found| !doomed.contains(&found.id))
+                })
+                .collect();
+            if kept.len() != crate::refs::values(dep, def).len() {
+                dep.set_extra(
+                    &def.name,
+                    match (kept.is_empty(), crate::refs::is_many(def)) {
+                        (true, _) => None,
+                        (false, true) => Some(crate::item::Field::List(kept)),
+                        (false, false) => {
+                            Some(crate::item::Field::Text(kept.into_iter().next().unwrap()))
+                        }
+                    },
+                );
+            }
+        }
+        // `milestone` is typed on the item rather than kept among the custom
+        // fields, so clearing it is separate — the same arrangement
+        // `depends_on` has.
+        if let Some(m) = dep.meta.milestone.clone()
+            && let Some(def) = cfg.field(crate::refs::MILESTONE_FIELD)
+            && crate::refs::resolve(&all, def, &m).is_some_and(|f| doomed.contains(&f.id))
+        {
+            dep.meta.milestone = None;
+        }
         dep.touch(&today());
         dep.save()?;
         println!(

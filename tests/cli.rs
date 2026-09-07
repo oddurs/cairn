@@ -556,24 +556,47 @@ fn a_milestone_is_an_item_like_any_other() {
     );
 }
 
-/// Removing a milestone something points at leaves a reference naming nothing,
-/// which `check` reports in the same words as any other dangling reference.
-/// There is no special protection any more, because there is no special thing.
+/// Removing an item repairs everything that named it, through any reference and
+/// not only `depends_on`.
+///
+/// Only `depends_on` was repaired before, which was right while it was the only
+/// relationship there was — and left a milestone named by twenty items dangling
+/// the moment milestones became items. The soak found it, on a seed CI drew and
+/// I had not.
+///
+/// The rule it restores: a destructive command always leaves a valid project
+/// and says what else it touched.
 #[test]
-fn removing_a_milestone_in_use_is_reported_like_any_dangling_reference() {
+fn removing_an_item_repairs_every_reference_to_it() {
     let p = Project::new();
     let id = milestone(&p, "v0.9", None);
     p.add("Work", &[]);
-    p.expect(&["set", "2", "milestone=v0.9"]);
+    p.add("More work", &[]);
+    p.expect(&["set", "2", "3", "milestone=v0.9"]);
+    p.expect(&["set", "3", "part_of=2"]);
 
-    p.expect(&["remove", &id, "--force"]);
-    let out = p.fails(&["check"]);
+    let out = p.expect(&["remove", &id, "--force"]);
     assert_contains(
         &out.all(),
-        "`milestone` names `v0.9`",
-        "the reference is dangling",
+        "dropped reference",
+        "it says what else it touched",
     );
-    assert_contains(&out.all(), "does not exist", "and says so plainly");
+
+    // Valid afterwards, with no option to leave the wreckage.
+    p.expect(&["check", "--strict"]);
+    for n in ["2", "3"] {
+        assert!(
+            !p.expect(&["show", n, "--raw"]).stdout.contains("v0.9"),
+            "item {n} still names a milestone that is gone"
+        );
+    }
+
+    // And a reference to something still present is left alone.
+    assert_contains(
+        &p.expect(&["show", "3", "--raw"]).stdout,
+        "part_of",
+        "an unrelated reference survived",
+    );
 }
 
 #[test]

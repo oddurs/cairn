@@ -166,11 +166,13 @@ fn a_long_sequence_of_ordinary_use_leaves_the_backlog_intact() {
     for step in 0..ops {
         let live = s.ids();
         let target = s.rng.pick(&live).copied();
-        // 0..=99 are the weighted operations below; 100 and 101 are the
-        // export/import round trip. Widening this range without moving the
-        // catch-all is how that round trip became unreachable once, which is
-        // the kind of thing a coverage count at the end exists to catch.
-        let choice = s.rng.below(102);
+        // The weights below are not arbitrary. The coverage assertion at the
+        // end requires every named operation to have run, so an operation it
+        // names must be likely enough that its absence over `ops` steps means
+        // something. At one slot in a hundred, `renumber` is missing from about
+        // one run in fifty — which is a flaky test rather than a finding, and
+        // was one until CI produced it.
+        let choice = s.rng.below(106);
 
         let op = match (choice, target) {
             (0..=24, _) | (_, None) => {
@@ -241,26 +243,26 @@ fn a_long_sequence_of_ordinary_use_leaves_the_backlog_intact() {
                 s.expect(&["set", &id.to_string(), &format!("title={title}"), "-q"]);
                 "rename"
             }
-            (92..=93, _) => {
+            (92..=94, _) => {
                 s.expect(&["render", "-q"]);
                 s.expect(&["render", "--check", "-q"]);
                 "render"
             }
-            (94, _) => {
+            (95..=97, _) => {
                 s.expect(&["renumber"]);
                 // Identifiers may have moved; the model is keyed by them, so it
                 // is rebuilt from what cairn now reports.
                 s.expected = current_state(&s);
                 "renumber"
             }
-            (95, _) => {
+            (98, _) => {
                 // A dry run must never write, whatever state the backlog is in.
                 let before = current_state(&s);
                 s.expect(&["renumber", "--dry-run"]);
                 assert_eq!(current_state(&s), before, "a dry run changed the backlog");
                 "renumber --dry-run"
             }
-            (96, Some(id)) => {
+            (99, Some(id)) => {
                 s.expect(&[
                     "note",
                     &id.to_string(),
@@ -271,7 +273,7 @@ fn a_long_sequence_of_ordinary_use_leaves_the_backlog_intact() {
                 ]);
                 "note"
             }
-            (97, Some(id)) => {
+            (100, Some(id)) => {
                 // A milestone is an item in format 2, so this exercises the
                 // container path: creating one, giving it a key, and scheduling
                 // work against it by that key.
@@ -288,7 +290,7 @@ fn a_long_sequence_of_ordinary_use_leaves_the_backlog_intact() {
                 s.expect(&["set", &id.to_string(), &format!("milestone={name}"), "-q"]);
                 "milestone"
             }
-            (98, _) => {
+            (101, _) => {
                 // Every read, run for its exit status: a view that panics on a
                 // backlog reached by an odd route is still a bug.
                 for args in [
@@ -317,7 +319,7 @@ fn a_long_sequence_of_ordinary_use_leaves_the_backlog_intact() {
                 }
                 "reads"
             }
-            (99, _) => {
+            (102, _) => {
                 // The MCP server is how agents reach the backlog, and until now
                 // nothing here had ever spoken to it.
                 let request = concat!(
@@ -345,7 +347,7 @@ fn a_long_sequence_of_ordinary_use_leaves_the_backlog_intact() {
                 }
                 "mcp"
             }
-            (100..=101, _) | (_, _) => {
+            (103..=105, _) | (_, _) => {
                 let doc = s.expect(&["export"]).stdout;
                 let round = tempfile::tempdir().unwrap();
                 let mirror = Soak {
@@ -384,7 +386,10 @@ fn a_long_sequence_of_ordinary_use_leaves_the_backlog_intact() {
     }
 
     // An operation that never ran tested nothing, and a table that quietly
-    // stops reaching one is invisible without this.
+    // stops reaching one is invisible without this. Only operations weighted
+    // heavily enough for absence to be meaningful are named: asserting on a
+    // one-in-a-hundred draw over a few hundred steps is a coin toss, not a
+    // check.
     for op in [
         "new",
         "set status",
