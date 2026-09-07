@@ -38,13 +38,15 @@ Enough to run a real project's roadmap without reaching for anything else.
 
 ## v0.2 — Comfortable
 
-`##########` 97% · 35 of 36 done · due 2026-12-01
+`##########` 92% · 35 of 38 done · due 2026-12-01
 
 The rough edges that show up after a few weeks of daily use, and the pieces that make the central claim true rather than merely stated.
 
 ### backlog
 
 - [ ] [`0056`](https://github.com/oddurs/cairn/blob/main/cairn/items/0056-collect-a-contributor-licence-agreement.md) Collect a contributor licence agreement <sup>chore · p0</sup>
+- [ ] [`0071`](https://github.com/oddurs/cairn/blob/main/cairn/items/0071-say-what-cairn-is-a-record-of-intent-that-happens-to-be-schedulable.md) Say what cairn is: a record of intent that happens to be schedulable <sup>docs · p1 · s8</sup>
+- [ ] [`0074`](https://github.com/oddurs/cairn/blob/main/cairn/items/0074-read-the-acceptance-criteria.md) Read the acceptance criteria <sup>feature · p0 · s8</sup>
 
 ### done
 
@@ -86,7 +88,7 @@ The rough edges that show up after a few weeks of daily use, and the pieces that
 
 ## v1.0 — Stable
 
-`########··` 75% · 9 of 12 done · due 2027-03-01
+`#####·····` 50% · 9 of 18 done · due 2027-03-01
 
 Safe to depend on: every scriptable surface carries a promise, the command surface has been reviewed and pruned rather than accumulated, releases can be verified, and it installs from a package manager people already use.
 
@@ -95,6 +97,12 @@ Safe to depend on: every scriptable surface carries a promise, the command surfa
 - [ ] [`0052`](https://github.com/oddurs/cairn/blob/main/cairn/items/0052-sign-releases-and-ship-a-source-tarball.md) Sign releases and ship a source tarball <sup>chore · p0 · needs-a-key</sup>
 - [ ] [`0053`](https://github.com/oddurs/cairn/blob/main/cairn/items/0053-be-in-a-package-manager-people-already-use.md) Be in a package manager people already use <sup>chore · p0 · blocked-on-a-release</sup>
 - [ ] [`0067`](https://github.com/oddurs/cairn/blob/main/cairn/items/0067-decide-whether-identifiers-should-be-collision-free-by-construction.md) Decide whether identifiers should be collision-free by construction <sup>feature · p1 · s7</sup>
+- [ ] [`0072`](https://github.com/oddurs/cairn/blob/main/cairn/items/0072-relationships-between-items-are-declarable-and-composition-is-the-second-one.md) Relationships between items are declarable, and composition is the second one <sup>feature · p0 · s8</sup>
+- [ ] [`0073`](https://github.com/oddurs/cairn/blob/main/cairn/items/0073-the-hierarchy-is-a-query-not-a-schema.md) The hierarchy is a query, not a schema <sup>feature · p1 · s8</sup>
+- [ ] [`0075`](https://github.com/oddurs/cairn/blob/main/cairn/items/0075-say-what-an-agent-may-touch.md) Say what an agent may touch <sup>feature · p0 · s8</sup>
+- [ ] [`0076`](https://github.com/oddurs/cairn/blob/main/cairn/items/0076-separate-who-is-working-from-who-owns-and-record-what-created-an-item.md) Separate who is working from who owns, and record what created an item <sup>feature · p1 · s8</sup>
+- [ ] [`0077`](https://github.com/oddurs/cairn/blob/main/cairn/items/0077-ship-no-level-names.md) Ship no level names <sup>docs · p1 · s8</sup>
+- [ ] [`0078`](https://github.com/oddurs/cairn/blob/main/cairn/items/0078-decide-whether-milestones-should-be-items.md) Decide whether milestones should be items <sup>docs · p0 · s8</sup>
 
 ### done
 
