@@ -248,6 +248,28 @@ impl Clause {
 }
 
 /// Field lookup with the config-aware pseudo-fields layered on top.
+/// Every key `resolve` answers without looking at the frontmatter.
+///
+/// Here rather than in `check` so that adding a derived key adds it to both at
+/// once. A list kept somewhere else would drift, and the first symptom would be
+/// `cairn check` calling a working saved view a typo.
+pub const DERIVED_KEYS: &[&str] = &[
+    "category",
+    "closed",
+    "done",
+    "blocked",
+    "ready",
+    "blockers",
+    "contains",
+    "descendants",
+    "depth",
+    "leaf",
+    "progress",
+    "criteria",
+    "criteria_done",
+    "criteria_met",
+];
+
 pub fn resolve(item: &Item, ctx: &Ctx, key: &str) -> Field {
     match key {
         "category" => Field::Text(ctx.cfg.category(item.status()).as_str().to_string()),

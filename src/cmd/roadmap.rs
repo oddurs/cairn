@@ -74,6 +74,26 @@ pub fn run(args: Args) -> Result<i32> {
     }
     println!();
 
+    // A heading over silence is the worst available answer. Nothing to draw is
+    // either a schema that has no milestones in it or a project that has not
+    // written one yet, and those want different sentences.
+    if milestones.is_empty() {
+        match cfg.field(crate::refs::MILESTONE_FIELD) {
+            None => println!(
+                "{}",
+                style::dim(
+                    "no [[field]] named `milestone`, so there is nothing to group a roadmap by.\n\
+                     cairn looks that name up literally — see \"Milestones\" in the manual."
+                )
+            ),
+            Some(_) => println!(
+                "{}",
+                style::dim("no milestones yet — `cairn new \"v0.1\" -t milestone` writes one.")
+            ),
+        }
+        return Ok(0);
+    }
+
     for m in milestones {
         let members: Vec<&Item> = work
             .iter()

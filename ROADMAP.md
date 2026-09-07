@@ -6,18 +6,13 @@ A markdown-native roadmap and issue manager that lives in your repository.
 
 ## v0.1 — Usable in anger
 
-`#######···` 65% · 15 of 23 done · due 2026-10-15
+`#########·` 87% · 20 of 23 done · due 2026-10-15
 
 Enough to run a real project's roadmap without reaching for anything else.
 
 ### backlog
 
 - [ ] [`0066`](https://github.com/oddurs/cairn/blob/main/cairn/items/0066-find-three-people-who-are-not-the-author.md) Find three people who are not the author <sup>chore · p0 · s7</sup>
-- [ ] [`0091`](https://github.com/oddurs/cairn/blob/main/cairn/items/0091-the-identifier-parser-panics-on-a-non-ascii-argument.md) The identifier parser panics on a non-ASCII argument <sup>bug · p0 · s9</sup>
-- [ ] [`0092`](https://github.com/oddurs/cairn/blob/main/cairn/items/0092-a-status-without-a-category-is-a-guess-the-tool-makes-silently.md) A status without a category is a guess the tool makes silently <sup>bug · p0 · s9</sup>
-- [ ] [`0093`](https://github.com/oddurs/cairn/blob/main/cairn/items/0093-cairn-check-never-checks-the-schema-itself.md) cairn check never checks the schema itself <sup>feature · p1 · s9</sup>
-- [ ] [`0094`](https://github.com/oddurs/cairn/blob/main/cairn/items/0094-a-renamed-milestone-field-empties-the-roadmap-without-a-word.md) A renamed milestone field empties the roadmap without a word <sup>bug · p1 · s9</sup>
-- [ ] [`0095`](https://github.com/oddurs/cairn/blob/main/cairn/items/0095-the-obsolete-milestone-block-names-a-command-with-nothing-to-do.md) The obsolete milestone block names a command with nothing to do <sup>bug · p1 · s9</sup>
 - [ ] [`0096`](https://github.com/oddurs/cairn/blob/main/cairn/items/0096-configuration-keys-are-strict-and-the-promise-says-they-are-not.md) Configuration keys are strict, and the promise says they are not <sup>docs · p1 · s9</sup>
 
 ### in progress
@@ -41,6 +36,11 @@ Enough to run a real project's roadmap without reaching for anything else.
 - [x] [`0033`](https://github.com/oddurs/cairn/blob/main/cairn/items/0033-order-milestones-the-way-their-author-declared-them.md) Order milestones the way their author declared them <sup>bug · p1</sup>
 - [x] [`0034`](https://github.com/oddurs/cairn/blob/main/cairn/items/0034-render-the-roadmap-by-default-rather-than-by-discipline.md) Render the roadmap by default rather than by discipline <sup>bug · p1</sup>
 - [x] [`0037`](https://github.com/oddurs/cairn/blob/main/cairn/items/0037-point-a-real-agent-at-the-mcp-server-and-watch-it-work.md) Point a real agent at the MCP server and watch it work <sup>chore · p0</sup>
+- [x] [`0091`](https://github.com/oddurs/cairn/blob/main/cairn/items/0091-the-identifier-parser-panics-on-a-non-ascii-argument.md) The identifier parser panics on a non-ASCII argument <sup>bug · p0 · s9</sup>
+- [x] [`0092`](https://github.com/oddurs/cairn/blob/main/cairn/items/0092-a-status-without-a-category-is-a-guess-the-tool-makes-silently.md) A status without a category is a guess the tool makes silently <sup>bug · p0 · s9</sup>
+- [x] [`0093`](https://github.com/oddurs/cairn/blob/main/cairn/items/0093-cairn-check-never-checks-the-schema-itself.md) cairn check never checks the schema itself <sup>feature · p1 · s9</sup>
+- [x] [`0094`](https://github.com/oddurs/cairn/blob/main/cairn/items/0094-a-renamed-milestone-field-empties-the-roadmap-without-a-word.md) A renamed milestone field empties the roadmap without a word <sup>bug · p1 · s9</sup>
+- [x] [`0095`](https://github.com/oddurs/cairn/blob/main/cairn/items/0095-the-obsolete-milestone-block-names-a-command-with-nothing-to-do.md) The obsolete milestone block names a command with nothing to do <sup>bug · p1 · s9</sup>
 
 ## v0.2 — Comfortable
 

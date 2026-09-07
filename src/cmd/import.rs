@@ -508,7 +508,7 @@ fn resolve_status(
             _ => Category::Open,
         },
     };
-    match cfg.statuses.iter().find(|s| s.category == wanted) {
+    match cfg.statuses.iter().find(|s| s.category() == wanted) {
         Some(s) => s.name.clone(),
         None => {
             warnings.push(format!(

@@ -661,6 +661,15 @@ If it is ever taken, the shape to take is the cheap one: the names stay
 assignee role without saying so, and only a project that wants a different word
 declares one. Grep keeps working for everybody who never touches it.
 
+@cindex milestone
+This is not only a hypothetical about some future project. cairn looks up
+@code{milestone} by that literal name --- in the reference machinery, in
+@command{list}, @command{show}, @command{import} and @command{init}, and as the
+default @code{render.group_by}. Rename the field and the roadmap has nothing to
+group by; @command{cairn roadmap} and @command{cairn check} both say so rather
+than quietly drawing nothing, but the name is load-bearing and pretending
+otherwise would be the dishonest version of this decision.
+
 @quotation
 @strong{The condition that would reverse this.} A real project whose word for
 one of these is wrong enough that its people keep having to translate --- not a
@@ -1278,6 +1287,36 @@ the inheritance rule.
 @command{cairn new -t milestone}, listing them is
 @command{cairn list -t milestone}, and by the bar in the command review neither
 made a real task harder to do without the command.
+
+@section The one key that should not have a default
+
+@cindex category
+@cindex status
+Every key in @file{cairn.toml} that defaults is presentational --- a missing
+@code{color} is a colour nobody chose --- with one exception.
+
+@code{category} is a claim about what a status @emph{means}, and its default is
+@code{open}. So this:
+
+@example
+[[status]]
+name = "shipped"
+@end example
+
+@noindent
+produces a status that cairn treats as outstanding work. @command{cairn close}
+will not target it, progress bars will not count it, and the roadmap will show
+finished work as unfinished. Nothing about it is visibly wrong.
+
+@command{cairn check} reports a status that does not declare one, and
+@command{cairn config} marks the category it assumed as assumed, so the resolved
+schema never presents a guess as a decision.
+
+Requiring it would be better, and it is not free: making an optional key
+required needs a format number and a migration (@pxref{Compatibility}). Format 3
+is not worth spending on one key, so the requirement waits for a number that is
+being spent anyway. The rule survives its first inconvenient instance, which is
+the only test a rule like that ever gets.
 
 @node Filters
 @chapter Filters
@@ -2634,12 +2673,24 @@ the file on disk differs from what would be generated.
 Move a backlog in or out. @xref{Interchange}.
 
 @section cairn check
-Validates every item: unknown statuses, types and milestones; missing required
-fields; malformed enum, date, number and boolean values; undeclared fields;
-dangling and circular dependencies; duplicate ids; filenames that no longer
-match their titles. Diagnostics are printed as
+Validates the schema, then every item against it.
+
+The schema first, because a configuration that misdescribes itself makes every
+finding after it suspect: a status that does not declare a @code{category}, a
+@code{render.group_by} or a saved view naming a field nothing declares, a view
+whose filter does not parse, a @code{header} or @code{footer} that is not there,
+@code{link_items} with no @code{project.url}.
+
+Then the items: unknown statuses, types and milestones; missing required fields;
+malformed enum, date, number and boolean values; undeclared fields; dangling and
+circular dependencies; duplicate ids; filenames that no longer match their
+titles. Diagnostics are printed as
 @samp{cairn: @var{file}:@var{line}: @var{message}}. @option{--strict} makes
 warnings fatal; @option{--render} additionally verifies the roadmap file.
+
+Almost everything about the schema is a warning rather than an error, because a
+saved view nobody uses must not stop @command{cairn show} from working. The
+exception is a filter that does not parse, which cannot be what anybody meant.
 
 @section cairn renumber
 Repairs duplicate ids. @xref{Identifiers}.

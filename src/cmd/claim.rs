@@ -157,7 +157,11 @@ pub fn claim(args: ClaimArgs) -> Result<i32> {
 
     let status = match &args.status {
         Some(s) => s.clone(),
-        None => match cfg.statuses.iter().find(|s| s.category == Category::Active) {
+        None => match cfg
+            .statuses
+            .iter()
+            .find(|s| s.category() == Category::Active)
+        {
             Some(s) => s.name.clone(),
             None => bail!(
                 "no status with category = \"active\" is defined in cairn.toml; \

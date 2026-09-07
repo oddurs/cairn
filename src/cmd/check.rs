@@ -122,6 +122,10 @@ fn collect_inner(
         warnings: Vec::new(),
     };
 
+    // The schema first: a configuration that misdescribes itself makes every
+    // finding below suspect, and it is the cheapest thing here to check.
+    schema(cfg, &mut r);
+
     // What a reference may resolve against: the items, plus whatever an older
     // format keeps somewhere other than the item directory.
     let universe = crate::refs::universe(cfg, items);
@@ -389,4 +393,221 @@ fn find_cycles(items: &[Item]) -> Vec<Vec<u32>> {
         }
     }
     cycles
+}
+
+// --- the schema, checked against itself -------------------------------------
+
+/// Validate the configuration before a single item is looked at.
+///
+/// `Config::validate` refuses a schema cairn cannot operate at all — a status
+/// list that is empty, an enum with no values, a `target` naming no type. This
+/// is the other half: a schema cairn operates perfectly and that does not mean
+/// what its author thinks.
+///
+/// The asymmetry it closes: an item with a status the schema does not define is
+/// reported at once, while a schema naming a field that does not exist was
+/// nobody's problem until it quietly produced the wrong output.
+///
+/// Warnings rather than errors throughout, with one exception. A project must
+/// not stop working because a saved view it never uses has a typo in it —
+/// load-time validation is for a schema that cannot be operated, and this is
+/// for one that operates and misleads. The exception is a filter that does not
+/// parse, which cannot be what anybody meant.
+fn schema(cfg: &Config, r: &mut Report) {
+    let text =
+        std::fs::read_to_string(cfg.root.join(crate::config::CONFIG_FILE)).unwrap_or_default();
+    let file = crate::config::CONFIG_FILE;
+    let at = |line: Option<usize>| match line {
+        Some(n) => format!("{file}:{n}"),
+        None => file.to_string(),
+    };
+
+    // A status that does not say what it means. Every other defaulted key in
+    // the file is presentational; this one is a claim, and `open` for a status
+    // somebody called `shipped` is the tool getting it exactly backwards.
+    for s in &cfg.statuses {
+        if s.declared_category.is_none() {
+            r.warn(
+                &at(block_line(&text, "status", &s.name)),
+                format!(
+                    "status `{}` does not declare a `category`, so it is being treated as \
+                     `open` — add `category = \"open\" | \"active\" | \"done\" | \"dropped\"`",
+                    s.name
+                ),
+            );
+        }
+    }
+
+    // Anything a filter, a sort or a column may legitimately name.
+    let mut known: HashSet<String> = crate::config::RESERVED_FIELDS
+        .iter()
+        .chain(crate::filter::DERIVED_KEYS.iter())
+        .map(|s| (*s).to_string())
+        .collect();
+    known.extend(cfg.fields.iter().map(|f| f.name.clone()));
+    known.extend(
+        cfg.ref_fields()
+            .filter_map(|f| f.inverse.clone())
+            .collect::<Vec<_>>(),
+    );
+
+    let check_keys = |r: &mut Report, where_: &str, what: &str, keys: &[String]| {
+        for key in keys {
+            let key = key.trim().trim_start_matches('-');
+            if key.is_empty() || known.contains(key) {
+                continue;
+            }
+            r.warn(
+                where_,
+                format!(
+                    "{what} names `{key}`, which is not a declared field — items may \
+                     still carry it, but nothing in this schema says they do"
+                ),
+            );
+        }
+    };
+
+    // `render.group_by` defaults to `milestone`, so a project that renamed the
+    // field silently groups by nothing: this is the roadmap emptying itself.
+    let render_at = at(key_line(&text, "render", "group_by"));
+    check_keys(
+        r,
+        &render_at,
+        "render.group_by",
+        std::slice::from_ref(&cfg.render.group_by),
+    );
+
+    // `milestone` is a reserved key, so the check above accepts the name on its
+    // own. The name only means something if the field is declared, and
+    // `render.group_by` defaults to it — which is how renaming the field
+    // silently empties the roadmap.
+    if cfg.render.group_by == crate::refs::MILESTONE_FIELD
+        && cfg.field(crate::refs::MILESTONE_FIELD).is_none()
+    {
+        r.warn(
+            &render_at,
+            "render.group_by is `milestone`, but no [[field]] named `milestone` is \
+             declared, so the roadmap has nothing to group by"
+                .to_string(),
+        );
+    }
+
+    if let Some(expr) = &cfg.render.include {
+        let where_ = at(key_line(&text, "render", "include"));
+        match crate::filter::Filter::parse(expr) {
+            Err(e) => r.error(&where_, format!("render.include does not parse: {e}")),
+            Ok(f) => check_keys(
+                r,
+                &where_,
+                "render.include",
+                &f.clauses.iter().map(|c| c.key.clone()).collect::<Vec<_>>(),
+            ),
+        }
+    }
+
+    for (key, path) in [
+        ("header", cfg.render.header.as_ref()),
+        ("footer", cfg.render.footer.as_ref()),
+    ] {
+        if let Some(path) = path
+            && !cfg.root.join(path).is_file()
+        {
+            r.warn(
+                &at(key_line(&text, "render", key)),
+                format!("render.{key} names `{path}`, which is not there"),
+            );
+        }
+    }
+
+    if cfg.render.link_items && cfg.project.url.is_none() {
+        r.warn(
+            &at(key_line(&text, "render", "link_items")),
+            "render.link_items is on but project.url is not set, so nothing will be linked"
+                .to_string(),
+        );
+    }
+
+    for v in &cfg.views {
+        let where_ = at(block_line(&text, "view", &v.name));
+        if let Some(expr) = &v.filter {
+            match crate::filter::Filter::parse(expr) {
+                // The one error. "No items match" is true and useless: it sends
+                // somebody to look at their backlog instead of at the typo.
+                Err(e) => r.error(
+                    &where_,
+                    format!("view `{}`: filter does not parse: {e}", v.name),
+                ),
+                Ok(f) => check_keys(
+                    r,
+                    &where_,
+                    &format!("view `{}` filter", v.name),
+                    &f.clauses.iter().map(|c| c.key.clone()).collect::<Vec<_>>(),
+                ),
+            }
+        }
+        if let Some(sort) = &v.sort {
+            let keys: Vec<String> = sort.split(',').map(str::to_string).collect();
+            check_keys(r, &where_, &format!("view `{}` sort", v.name), &keys);
+        }
+        check_keys(
+            r,
+            &where_,
+            &format!("view `{}` columns", v.name),
+            &v.columns,
+        );
+        if let Some(g) = &v.group_by {
+            check_keys(
+                r,
+                &where_,
+                &format!("view `{}` group_by", v.name),
+                std::slice::from_ref(g),
+            );
+        }
+    }
+}
+
+/// The line a `[[kind]]` block naming `name` is written on.
+///
+/// A best-effort locator over the raw text: cairn parses the configuration with
+/// serde, which does not carry spans, and a diagnostic without a line number is
+/// worse than one with a slightly wrong one only in theory. When it cannot tell,
+/// it says nothing and the diagnostic names the file alone.
+fn block_line(text: &str, kind: &str, name: &str) -> Option<usize> {
+    let header = format!("[[{kind}]]");
+    let mut inside = false;
+    for (i, line) in text.lines().enumerate() {
+        let t = line.trim();
+        if t.starts_with('[') {
+            inside = t == header;
+            continue;
+        }
+        if inside
+            && let Some(rest) = t.strip_prefix("name")
+            && let Some(v) = rest.trim().strip_prefix('=')
+            && v.trim().trim_matches('"') == name
+        {
+            return Some(i + 1);
+        }
+    }
+    None
+}
+
+/// The line `key` is set on inside `[table]`.
+fn key_line(text: &str, table: &str, key: &str) -> Option<usize> {
+    let header = format!("[{table}]");
+    let mut inside = false;
+    for (i, line) in text.lines().enumerate() {
+        let t = line.trim();
+        if t.starts_with('[') {
+            inside = t == header;
+            continue;
+        }
+        if inside
+            && let Some(rest) = t.strip_prefix(key)
+            && rest.trim_start().starts_with('=')
+        {
+            return Some(i + 1);
+        }
+    }
+    None
 }

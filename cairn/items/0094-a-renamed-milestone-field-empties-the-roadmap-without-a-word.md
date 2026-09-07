@@ -2,7 +2,7 @@
 id: 94
 title: A renamed milestone field empties the roadmap without a word
 type: bug
-status: backlog
+status: done
 milestone: v0.1
 created: 2026-09-07
 updated: 2026-09-07
@@ -78,8 +78,12 @@ rather than an oversight.
 
 ## Acceptance criteria
 
-- [ ] `cairn roadmap` with no container type says so, rather than printing a bare heading
-- [ ] `cairn board` with no visible status says so
-- [ ] Neither is an error: an empty project is not a broken one
-- [ ] The manual states that `milestone` is looked up by name, next to the roles decision
-- [ ] A test renames the field and asserts the tool explains itself
+- [x] `cairn roadmap` with no container type says so, rather than printing a bare heading
+- [x] `cairn board` with no visible status says so
+- [x] Neither is an error: an empty project is not a broken one
+- [x] The manual states that `milestone` is looked up by name, next to the roles decision
+- [x] A test renames the field and asserts the tool explains itself
+
+## 2026-09-07
+
+Done, both halves. `cairn roadmap` and `cairn board` say why they have nothing to draw, and `cairn check` reports `render.group_by = milestone` with no field of that name. The manual now states plainly, next to the roles decision in 0089, that cairn looks the name up literally — the honest version of that decision rather than the quiet one.
