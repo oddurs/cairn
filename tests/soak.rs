@@ -19,121 +19,48 @@
 //     CAIRN_SOAK_OPS=2000 CAIRN_SOAK_SEED=7 cargo test --test soak -- --ignored --nocapture
 //
 // Every run prints its seed. A failure is reproduced by passing that seed back.
+mod support;
+use support::*;
+
 use std::collections::BTreeMap;
 use std::process::{Command, Stdio};
 
-/// splitmix64. A dependency-free generator whose only requirement is that the
-/// same seed replays the same run, so a failure can be reproduced exactly.
-struct Rng(u64);
-
-impl Rng {
-    fn next(&mut self) -> u64 {
-        self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
-        let mut z = self.0;
-        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-        z ^ (z >> 31)
-    }
-    fn below(&mut self, n: usize) -> usize {
-        (self.next() % n as u64) as usize
-    }
-    fn pick<'a, T>(&mut self, items: &'a [T]) -> Option<&'a T> {
-        if items.is_empty() {
-            None
-        } else {
-            let i = self.below(items.len());
-            items.get(i)
-        }
-    }
-}
-
-/// The default hooks invoke `cairn` by name, as an installed one would be.
-fn path_with_binary() -> std::ffi::OsString {
-    let dir = std::path::Path::new(env!("CARGO_BIN_EXE_cairn"))
-        .parent()
-        .expect("binary directory");
-    let existing = std::env::var_os("PATH").unwrap_or_default();
-    let mut paths = vec![dir.to_path_buf()];
-    paths.extend(std::env::split_paths(&existing));
-    std::env::join_paths(paths).expect("PATH")
-}
-
 struct Soak {
-    dir: tempfile::TempDir,
+    project: Project,
     rng: Rng,
     /// What the sequence of operations says should be true, kept alongside what
     /// cairn believes so the two can be compared.
     expected: BTreeMap<u32, String>,
 }
 
-struct Out {
-    code: i32,
-    stdout: String,
-    stderr: String,
-}
-
 impl Soak {
     fn run(&self, args: &[&str]) -> Out {
-        let out = Command::new(env!("CARGO_BIN_EXE_cairn"))
-            .args(args)
-            .current_dir(self.dir.path())
-            .env("NO_COLOR", "1")
-            .env("CAIRN_USER", "soak")
-            .env("PATH", path_with_binary())
-            .stdin(Stdio::null())
-            .output()
-            .expect("running cairn");
-        Out {
-            code: out.status.code().unwrap_or(-1),
-            stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
-            stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
-        }
+        self.project.run_env(args, &[("CAIRN_USER", Some("soak"))])
     }
 
     /// Run with something on standard input, for the operations that speak a
     /// protocol rather than take arguments.
     fn run_stdin(&self, args: &[&str], input: &str) -> Out {
-        use std::io::Write;
-        let mut child = Command::new(env!("CARGO_BIN_EXE_cairn"))
-            .args(args)
-            .current_dir(self.dir.path())
-            .env("NO_COLOR", "1")
-            .env("CAIRN_USER", "soak")
-            .env("PATH", path_with_binary())
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .expect("spawning cairn");
-        child
-            .stdin
-            .take()
-            .expect("stdin")
-            .write_all(input.as_bytes())
-            .expect("writing to cairn");
-        let out = child.wait_with_output().expect("waiting for cairn");
-        Out {
-            code: out.status.code().unwrap_or(-1),
-            stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
-            stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
-        }
+        self.project.run_stdin(args, input)
     }
 
+    #[track_caller]
     fn expect(&self, args: &[&str]) -> Out {
         let out = self.run(args);
         assert_eq!(
-            out.code, 0,
-            "cairn {args:?} failed\nstdout: {}\nstderr: {}",
-            out.stdout, out.stderr
+            out.code,
+            0,
+            "cairn {args:?} failed\n{}",
+            excerpt(&out.all())
         );
         out
     }
 
     fn ids(&self) -> Vec<u32> {
         self.expect(&["list", "-A", "--ids"])
-            .stdout
             .lines()
-            .filter_map(|l| l.trim().parse().ok())
+            .iter()
+            .filter_map(|l| l.trim().trim_start_matches('0').parse().ok())
             .collect()
     }
 }
@@ -156,8 +83,8 @@ fn a_long_sequence_of_ordinary_use_leaves_the_backlog_intact() {
     println!("      reproduce with CAIRN_SOAK_SEED={seed} CAIRN_SOAK_OPS={ops}");
 
     let mut s = Soak {
-        dir: tempfile::tempdir().expect("temp dir"),
-        rng: Rng(seed),
+        project: Project::empty(),
+        rng: Rng::new(seed),
         expected: BTreeMap::new(),
     };
     s.expect(&["init", "--bare", "--name", "Soak"]);
@@ -278,10 +205,8 @@ fn a_long_sequence_of_ordinary_use_leaves_the_backlog_intact() {
                 // container path: creating one, giving it a key, and scheduling
                 // work against it by that key.
                 let name = format!("v0.{}", s.rng.below(3));
-                let existing = s
-                    .expect(&["list", "-A", "-t", "milestone", "--json"])
-                    .stdout;
-                if !existing.contains(&format!("\"{name}\"")) {
+                let existing = s.expect(&["list", "-A", "-t", "milestone", "--json"]);
+                if !existing.stdout.contains(&format!("\"{name}\"")) {
                     let out = s.expect(&["new", &name, "-t", "milestone", "-q"]);
                     let m: u32 = out.stdout.trim().parse().expect("an id");
                     s.expect(&["set", &m.to_string(), &format!("key={name}"), "-q"]);
@@ -349,14 +274,13 @@ fn a_long_sequence_of_ordinary_use_leaves_the_backlog_intact() {
             }
             (103..=105, _) | (_, _) => {
                 let doc = s.expect(&["export"]).stdout;
-                let round = tempfile::tempdir().unwrap();
                 let mirror = Soak {
-                    dir: round,
-                    rng: Rng(0),
+                    project: Project::empty(),
+                    rng: Rng::new(0),
                     expected: BTreeMap::new(),
                 };
                 mirror.expect(&["init", "--bare", "--name", "Mirror"]);
-                std::fs::write(mirror.dir.path().join("in.json"), &doc).unwrap();
+                mirror.project.write("in.json", &doc);
                 mirror.expect(&["import", "--from", "json", "in.json", "-q"]);
                 assert_eq!(
                     mirror.ids().len(),
@@ -429,13 +353,13 @@ fn concurrent_writers_leave_one_consistent_backlog() {
     println!("soak: {writers} concurrent writers, {each} operations each");
 
     let s = Soak {
-        dir: tempfile::tempdir().expect("temp dir"),
-        rng: Rng(0),
+        project: Project::empty(),
+        rng: Rng::new(0),
         expected: BTreeMap::new(),
     };
     s.expect(&["init", "--bare", "--name", "Concurrent"]);
 
-    let root = s.dir.path().to_path_buf();
+    let root = s.project.root().to_path_buf();
     let mut threads = Vec::new();
     for writer in 0..writers {
         let root = root.clone();
@@ -547,7 +471,7 @@ fn check_invariants(s: &Soak, step: usize, op: &str) {
     let unique: std::collections::HashSet<_> = ids.iter().collect();
     assert_eq!(unique.len(), ids.len(), "{at}: duplicate identifiers");
 
-    let items = s.dir.path().join("cairn/items");
+    let items = s.project.root().join("cairn/items");
     for entry in std::fs::read_dir(&items).expect("item directory").flatten() {
         let name = entry.file_name().to_string_lossy().to_string();
         assert!(

@@ -11,302 +11,11 @@
 // stderr the way a user meets them. They deliberately avoid a shell: the suite
 // they replaced was POSIX sh and therefore did not run on Windows at all, which
 // left a third of the supported platforms covered by unit tests only.
+mod support;
+use support::*;
+
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-
-fn bin() -> &'static str {
-    env!("CARGO_BIN_EXE_cairn")
-}
-
-/// The default hooks run `cairn render -q`, which finds cairn on PATH. That
-/// holds for an installed binary and not for one under `target/`, so tests put
-/// the built binary's directory on PATH and behave like an installed tool.
-fn path_with_binary() -> std::ffi::OsString {
-    let dir = Path::new(bin()).parent().expect("binary directory");
-    let existing = std::env::var_os("PATH").unwrap_or_default();
-    let mut paths = vec![dir.to_path_buf()];
-    paths.extend(std::env::split_paths(&existing));
-    std::env::join_paths(paths).expect("PATH")
-}
-
-// --- harness ----------------------------------------------------------------
-
-struct Out {
-    code: i32,
-    stdout: String,
-    stderr: String,
-}
-
-impl Out {
-    fn ok(&self) -> bool {
-        self.code == 0
-    }
-    /// Everything the command printed, for assertions that do not care which
-    /// stream carried it.
-    fn all(&self) -> String {
-        format!("{}{}", self.stdout, self.stderr)
-    }
-    fn trimmed(&self) -> String {
-        self.stdout.trim().to_string()
-    }
-    fn lines(&self) -> Vec<String> {
-        self.stdout.lines().map(str::to_string).collect()
-    }
-}
-
-struct Project {
-    dir: tempfile::TempDir,
-}
-
-impl Project {
-    /// A directory with no configuration in it or above it.
-    fn empty() -> Project {
-        Project {
-            dir: tempfile::tempdir().expect("temp dir"),
-        }
-    }
-
-    fn new() -> Project {
-        Project::with_init(&["init", "--bare", "--name", "Testbed"])
-    }
-
-    fn with_init(args: &[&str]) -> Project {
-        let p = Project::empty();
-        p.expect(args);
-        p
-    }
-
-    fn root(&self) -> &Path {
-        self.dir.path()
-    }
-
-    fn path(&self, rel: &str) -> PathBuf {
-        self.root().join(rel)
-    }
-
-    fn run(&self, args: &[&str]) -> Out {
-        self.run_in(self.root(), args)
-    }
-
-    fn run_in(&self, cwd: &Path, args: &[&str]) -> Out {
-        let out = Command::new(bin())
-            .args(args)
-            .current_dir(cwd)
-            // Deterministic output: no colour, a known identity, and hooks left
-            // enabled so the hook tests can exercise them.
-            .env("NO_COLOR", "1")
-            .env("CAIRN_USER", "tester")
-            .env("PATH", path_with_binary())
-            .env_remove("CAIRN_NO_HOOKS")
-            .stdin(Stdio::null())
-            .output()
-            .unwrap_or_else(|e| panic!("running cairn {args:?}: {e}"));
-        Out {
-            code: out.status.code().unwrap_or(-1),
-            stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
-            stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
-        }
-    }
-
-    /// Run with extra environment. Used by the editor tests, which are about
-    /// what cairn does with VISUAL and EDITOR.
-    fn run_env(&self, args: &[&str], env: &[(&str, Option<&str>)]) -> Out {
-        let mut c = Command::new(bin());
-        c.args(args)
-            .current_dir(self.root())
-            .env("NO_COLOR", "1")
-            .env("CAIRN_USER", "tester")
-            .env("PATH", path_with_binary())
-            .stdin(Stdio::null());
-        for (k, v) in env {
-            match v {
-                Some(v) => c.env(k, v),
-                None => c.env_remove(k),
-            };
-        }
-        let out = c
-            .output()
-            .unwrap_or_else(|e| panic!("running cairn {args:?}: {e}"));
-        Out {
-            code: out.status.code().unwrap_or(-1),
-            stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
-            stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
-        }
-    }
-
-    /// Run as an agent, the way the MCP server does.
-    fn run_as_agent(&self, args: &[&str]) -> Out {
-        self.run_env(args, &[("CAIRN_AGENT", Some("claude"))])
-    }
-
-    fn expect_as_agent(&self, args: &[&str]) -> Out {
-        let out = self.run_as_agent(args);
-        assert!(out.ok(), "cairn {args:?} failed:\n{}", out.all());
-        out
-    }
-
-    fn fails_as_agent(&self, args: &[&str]) -> Out {
-        let out = self.run_as_agent(args);
-        assert!(
-            !out.ok(),
-            "cairn {args:?} should have failed:\n{}",
-            out.all()
-        );
-        out
-    }
-
-    /// Run with something on standard input. Used by the MCP tests, which
-    /// speak a request/response protocol over the child's stdio.
-    fn run_stdin(&self, args: &[&str], input: &str) -> Out {
-        use std::io::Write;
-        let mut child = Command::new(bin())
-            .args(args)
-            .current_dir(self.root())
-            .env("NO_COLOR", "1")
-            .env("CAIRN_USER", "tester")
-            .env("PATH", path_with_binary())
-            .env_remove("CAIRN_NO_HOOKS")
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .unwrap_or_else(|e| panic!("spawning cairn {args:?}: {e}"));
-        child
-            .stdin
-            .take()
-            .expect("stdin")
-            .write_all(input.as_bytes())
-            .expect("writing to cairn");
-        let out = child.wait_with_output().expect("waiting for cairn");
-        Out {
-            code: out.status.code().unwrap_or(-1),
-            stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
-            stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
-        }
-    }
-
-    /// Run and require success, reporting the command's own diagnostics on
-    /// failure rather than a bare assertion.
-    fn expect(&self, args: &[&str]) -> Out {
-        let out = self.run(args);
-        assert!(
-            out.ok(),
-            "cairn {args:?} failed with {}:\n{}",
-            out.code,
-            out.all()
-        );
-        out
-    }
-
-    fn fails(&self, args: &[&str]) -> Out {
-        let out = self.run(args);
-        assert!(
-            !out.ok(),
-            "cairn {args:?} unexpectedly succeeded:\n{}",
-            out.all()
-        );
-        out
-    }
-
-    /// Create an item and return its id.
-    fn add(&self, title: &str, extra: &[&str]) -> String {
-        let mut args = vec!["new", title];
-        args.extend_from_slice(extra);
-        args.push("-q");
-        self.expect(&args).trimmed()
-    }
-
-    fn count(&self) -> usize {
-        self.expect(&["list", "--count"]).trimmed().parse().unwrap()
-    }
-
-    fn count_all(&self) -> usize {
-        self.expect(&["list", "-A", "--count"])
-            .trimmed()
-            .parse()
-            .unwrap()
-    }
-
-    fn count_of(&self, filter: &str) -> usize {
-        self.expect(&["list", "--filter", filter, "--count"])
-            .trimmed()
-            .parse()
-            .unwrap()
-    }
-
-    fn write(&self, rel: &str, contents: &str) {
-        let path = self.path(rel);
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).unwrap();
-        }
-        std::fs::write(path, contents).unwrap();
-    }
-
-    /// Replace the whole `[hooks]` table. The standard preset ships with render
-    /// hooks enabled, so a test that wants its own must displace them rather
-    /// than add to them — two `after-create` keys is a duplicate-key error.
-    fn set_hooks(&self, body: &str) {
-        let toml = self.read("cairn.toml");
-        let filled = match toml.find("[hooks]") {
-            Some(at) => {
-                let after = &toml[at + "[hooks]".len()..];
-                // The section runs to the next table header, or to end of file.
-                let end = after
-                    .match_indices('[')
-                    .find(|(i, _)| after[..*i].ends_with('\n'))
-                    .map(|(i, _)| at + "[hooks]".len() + i)
-                    .unwrap_or(toml.len());
-                format!("{}[hooks]\n{body}\n{}", &toml[..at], &toml[end..])
-            }
-            None => format!("{toml}\n[hooks]\n{body}"),
-        };
-        self.write("cairn.toml", &filled);
-    }
-
-    /// Filenames in a directory, sorted — for asserting that a command moved
-    /// nothing.
-    fn files(&self, rel: &str) -> Vec<String> {
-        let mut names: Vec<String> = std::fs::read_dir(self.path(rel))
-            .map(|d| {
-                d.flatten()
-                    .map(|e| e.file_name().to_string_lossy().to_string())
-                    .collect()
-            })
-            .unwrap_or_default();
-        names.sort();
-        names
-    }
-
-    fn append(&self, rel: &str, extra: &str) {
-        let existing = self.read(rel);
-        self.write(rel, &(existing + extra));
-    }
-
-    fn read(&self, rel: &str) -> String {
-        std::fs::read_to_string(self.path(rel)).unwrap_or_default()
-    }
-
-    fn remove(&self, rel: &str) {
-        let _ = std::fs::remove_file(self.path(rel));
-    }
-
-    fn exists(&self, rel: &str) -> bool {
-        self.path(rel).exists()
-    }
-
-    fn json(&self, args: &[&str]) -> serde_json::Value {
-        let out = self.expect(args);
-        serde_json::from_str(&out.stdout)
-            .unwrap_or_else(|e| panic!("cairn {args:?} did not print JSON: {e}\n{}", out.stdout))
-    }
-}
-
-fn assert_contains(haystack: &str, needle: &str, what: &str) {
-    assert!(
-        haystack.contains(needle),
-        "{what}: expected to find {needle:?} in:\n{haystack}"
-    );
-}
 
 // --- init -------------------------------------------------------------------
 
@@ -362,15 +71,22 @@ fn init_minimal_is_a_working_schema() {
 
 fn seeded() -> Project {
     let p = Project::new();
+    seed(&p);
+    p
+}
+
+/// The three items and one milestone every test below names by identifier.
+/// Split from `seeded` so a project built from a `Schema` can have the same
+/// contents without also having the shipped template.
+fn seed(p: &Project) {
     p.add("First item", &["--type", "feature", "--set", "priority=p0"]);
     p.add("Second item", &["-t", "bug"]);
     p.add("Third item", &["-t", "chore"]);
     // The milestone comes last so the three items keep the identifiers every
     // test below names. A milestone is an item in format 2, so it has to exist
     // before anything can point at it — the same as a dependency.
-    milestone(&p, "v0.1", Some("2026-12-01"));
+    p.milestone("v0.1", Some("2026-12-01"));
     p.expect(&["set", "1", "milestone=v0.1", "-q"]);
-    p
 }
 
 #[test]
@@ -5297,13 +5013,9 @@ fn a_view_whose_filter_does_not_parse_is_an_error() {
 
 #[test]
 fn render_settings_that_cannot_work_are_reported() {
-    let p = Project::new();
-    let cfg = p
-        .read("cairn.toml")
-        .replace("[render]", "[render]\nheader = \"docs/missing.md\"")
-        .replace("link_items = false", "link_items = true")
-        .replace("group_by = \"milestone\"", "group_by = \"epic\"");
-    p.write("cairn.toml", &cfg);
+    let p = Project::with(
+        Schema::standard().render(|r| r.header("docs/missing.md").group_by("epic").link_items()),
+    );
 
     let out = p.expect(&["check"]).all();
     assert_contains(&out, "render.group_by names `epic`", "an unknown field");
@@ -5499,19 +5211,12 @@ fn a_saved_view_using_an_alias_is_not_called_a_typo() {
 /// A project that restricts what an agent may touch, in both of the ways the
 /// schema allows: a field it may only read, and a status it may only propose.
 fn restricted_for_agents() -> Project {
-    let p = seeded();
-    let cfg = p
-        .read("cairn.toml")
-        .replace(
-            "[[field]]\nname = \"priority\"",
-            "[[field]]\nname = \"risk\"\nkind = \"text\"\nagent = \"read-only\"\n\n\
-             [[field]]\nname = \"priority\"",
-        )
-        .replace(
-            "name = \"done\"\ncategory = \"done\"",
-            "name = \"done\"\nagent = \"propose\"\ncategory = \"done\"",
-        );
-    p.write("cairn.toml", &cfg);
+    let p = Project::with(
+        Schema::standard()
+            .field(Field::text("risk").agent(Agent::ReadOnly))
+            .amend_status("done", |s| s.agent(Agent::Propose)),
+    );
+    seed(&p);
     p
 }
 

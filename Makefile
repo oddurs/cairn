@@ -9,7 +9,7 @@ CARGO       ?= cargo
 MAKEINFO    ?= makeinfo
 CAIRN       := target/release/cairn
 
-.PHONY: all build check test soak fuzz durability conformance audit dist doc info html pdf record demo install install-bin \
+.PHONY: all build check test soak fuzz durability coverage conformance audit dist doc info html pdf record demo install install-bin \
         install-man install-info clean roadmap
 
 all: build doc
@@ -49,6 +49,22 @@ soak:
 # of `make check`; this is the long one.
 fuzz:
 	CAIRN_FUZZ_ROUNDS=20000 $(CARGO) test --release --test fuzz_args -- --nocapture
+
+# Line and region coverage, with a floor. Needs `cargo install cargo-llvm-cov`.
+#
+# The floor is not a target to creep towards; it is a ratchet. A change that
+# drops below it has removed a test or added a surface nobody drove, and either
+# is worth stopping for.
+COVERAGE_FLOOR ?= 90
+coverage:
+	$(CARGO) llvm-cov --bins --tests --summary-only | tee /tmp/cairn-coverage.txt
+	@awk '/^TOTAL/ { regions = $$4; lines = $$10; gsub("%","",regions); \
+	  if (regions+0 < $(COVERAGE_FLOOR)) { \
+	    printf("\ncoverage: %s of regions, %s of lines — below the floor of $(COVERAGE_FLOOR)%%\n", $$4, lines); \
+	    printf("run `cargo llvm-cov --bins --tests --html` and look at what is red.\n"); \
+	    exit 1 } \
+	  printf("\ncoverage: %s of regions, %s of lines, floor $(COVERAGE_FLOOR)%%\n", $$4, lines) }' \
+	  /tmp/cairn-coverage.txt
 
 # Everything the project has. Run it before tagging, and after touching the
 # lock, the write path, identifier allocation, or the merge driver.
