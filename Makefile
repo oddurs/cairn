@@ -9,7 +9,7 @@ CARGO       ?= cargo
 MAKEINFO    ?= makeinfo
 CAIRN       := target/release/cairn
 
-.PHONY: all build check test soak fuzz conformance audit dist doc info html pdf record demo install install-bin \
+.PHONY: all build check test soak fuzz durability conformance audit dist doc info html pdf record demo install install-bin \
         install-man install-info clean roadmap
 
 all: build doc
@@ -49,6 +49,19 @@ soak:
 # of `make check`; this is the long one.
 fuzz:
 	CAIRN_FUZZ_ROUNDS=20000 $(CARGO) test --release --test fuzz_args -- --nocapture
+
+# Everything the project has. Run it before tagging, and after touching the
+# lock, the write path, identifier allocation, or the merge driver.
+#
+# `make check` deliberately does not include these: both soak tests are
+# `#[ignore]` and the fuzz pass is short, because a suite nobody will wait for
+# is a suite nobody runs. The cost of that is that "check passes" proves less
+# than it sounds like, so the difference has a name and a target rather than
+# being folklore. Every stage prints the seed it used.
+durability: check soak fuzz conformance
+	@echo
+	@echo "durability: suite, contention, 20000 fuzzed argument vectors,"
+	@echo "            a second reader over every format that has existed."
 
 demo: build
 	python3 doc/demo.py --cairn $(CAIRN)

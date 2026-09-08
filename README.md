@@ -821,8 +821,14 @@ Laid out the way a GNU project is, so the files are where you expect:
 ```sh
 cargo test          # unit and end-to-end tests, on any platform
 make check          # the above plus fmt, clippy, and cairn's own roadmap
+make durability     # everything: contention, the long fuzz, every format
 make doc            # build the Info manual (needs texinfo)
 ```
+
+`make check` is what a pull request must pass. It does not exercise concurrency
+— the soak tests are `#[ignore]` and the fuzz pass is short — so
+`make durability` is the one to run before a release, and after touching the
+lock, the write path, identifier allocation or the merge driver.
 
 cairn tracks its own roadmap in `cairn/items/`, so `cairn next` is the
 contribution guide: it shows what is ready to work on, and each item carries the

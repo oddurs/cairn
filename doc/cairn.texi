@@ -2230,6 +2230,40 @@ does not.
 Every release carries, for each platform, an archive and its SHA-256 checksum,
 plus @file{SHA256SUMS} listing all of them, and a source tarball.
 
+@section What the tests prove, and what they do not
+
+@cindex make check
+@cindex make durability
+Before any of that, there is the question of whether the program itself was
+checked. Two levels, and the difference between them is worth stating rather
+than leaving to be discovered.
+
+@table @code
+@item make check
+The suite, formatting, lints, and cairn's own backlog validated against its own
+schema. Every change must pass it. It does @strong{not} exercise concurrency:
+both soak tests are marked ignored, so the lock, the atomic write and identifier
+allocation get no contention, and the fuzz pass it runs is 600 argument vectors
+rather than 20,000.
+
+@item make durability
+Everything. @code{check}, then the soak under contention, then the long fuzz,
+then the second reader over every format that has ever existed. Every stage
+prints the seed it used, so a failure is reproducible by passing it back.
+@end table
+
+@noindent
+The short level is deliberate --- a suite nobody will wait for is a suite nobody
+runs --- and the cost is that "the tests pass" means less than it sounds like.
+Hence the second name.
+
+Run @command{make durability} before tagging, and after touching any of four
+things: the lock, the write path, identifier allocation, or the merge driver.
+Those are where a defect costs somebody their work rather than their afternoon.
+
+Continuous integration still runs the pieces as separate jobs, so a failure says
+which one rather than that something, somewhere, went wrong.
+
 @section What a checksum proves
 
 @example

@@ -29,7 +29,22 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import reader  # noqa: E402
+try:
+    import reader  # noqa: E402
+except ModuleNotFoundError as missing:
+    # The reader needs a YAML parser, because §6 says an unquoted scalar is
+    # resolved by YAML rules and writing a second YAML implementation to check
+    # the first one would prove nothing. Say what to install rather than
+    # printing a traceback at somebody running `make durability`.
+    # The module is `yaml`; the thing to install is `pyyaml`.
+    package = {"yaml": "pyyaml"}.get(missing.name, missing.name or "it")
+    print(
+        f"the reference reader needs the `{missing.name}` module:\n"
+        f"    python3 -m pip install {package}\n"
+        "or run it inside a virtual environment that has it.",
+        file=sys.stderr,
+    )
+    sys.exit(2)
 
 # Derived from the project, not from the item. See the module docstring.
 PROJECT_LEVEL = {"category", "ref"}

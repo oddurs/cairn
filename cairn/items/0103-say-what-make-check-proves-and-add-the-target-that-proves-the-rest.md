@@ -2,7 +2,7 @@
 id: 103
 title: Say what make check proves, and add the target that proves the rest
 type: chore
-status: backlog
+status: done
 milestone: v1.0
 depends_on:
 - 99
@@ -65,9 +65,13 @@ something to run.
 
 ## Acceptance criteria
 
-- [ ] `make durability` runs the suite, soak, long fuzz, conformance across every format, and the project's own check
-- [ ] It prints the seeds it used, so any failure is reproducible
-- [ ] `CONTRIBUTING.md` says what `make check` proves and what it does not
-- [ ] It names the four things whose change requires `make durability`: the lock, the write path, identifier allocation, the merge driver
-- [ ] The manual's release section says the same
-- [ ] CI still runs the pieces separately, so a failure names which one
+- [x] `make durability` runs the suite, soak, long fuzz, conformance across every format, and the project's own check
+- [x] It prints the seeds it used, so any failure is reproducible
+- [x] `CONTRIBUTING.md` says what `make check` proves and what it does not
+- [x] It names the four things whose change requires `make durability`: the lock, the write path, identifier allocation, the merge driver
+- [x] The manual's release section says the same
+- [x] CI still runs the pieces separately, so a failure names which one
+
+## 2026-09-07
+
+Done. `make durability` is check, soak, the long fuzz and conformance across every format; it ran end to end and prints both seeds. The levels are written down in three places somebody actually looks: CONTRIBUTING under 'What each level proves', the manual's release chapter before the checksums, and the README's contributing block. One thing came out of running it: `make conformance` printed a Python traceback on a machine without pyyaml, which is a poor first impression for the target that is meant to be the thorough one — it now names the module and the package to install. CI still runs the pieces as separate jobs, so a failure says which one.
