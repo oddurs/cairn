@@ -5419,7 +5419,7 @@ fn every_tool_accepts_what_its_schema_advertises() {
     let tools = replies[0]["result"]["tools"].as_array().expect("tools");
     assert_eq!(
         tools.len(),
-        11,
+        12,
         "a tool was added or removed without a test"
     );
 
@@ -7406,4 +7406,245 @@ fn who_is_answerable_survives_a_round_trip() {
         "the owner was lost in transit: {json}"
     );
     assert_eq!(json["created_by"], "an-agent", "{json}");
+}
+
+// --- a claim is a promise somebody might not keep ---------------------------
+
+/// A project that says how long a claim may go untouched.
+fn with_stale_after(days: u32) -> Project {
+    let p = Project::with(Schema::standard().claim_stale_after(days));
+    seed(&p);
+    p
+}
+
+#[test]
+fn a_claim_records_when_it_was_taken() {
+    let p = seeded();
+    p.expect(&["claim", "2", "--as", "agent-one"]);
+
+    let file = p.item_file("2");
+    assert_contains(&file, "assignee: agent-one", "");
+    assert_contains(&file, "claimed:", "a claim records when, not only who");
+
+    // `updated` means something else and every other edit moves it, so it is a
+    // key of its own.
+    p.expect(&["set", "2", "priority=p0"]);
+    assert_contains(
+        &p.item_file("2"),
+        "claimed:",
+        "an unrelated edit cleared it",
+    );
+
+    // Handing it back or finishing it clears the claim.
+    p.expect(&["release", "2"]);
+    assert_missing(
+        &p.item_file("2"),
+        "claimed:",
+        "release left the claim behind",
+    );
+
+    p.expect(&["claim", "3"]);
+    p.expect(&["close", "3"]);
+    assert_missing(&p.item_file("3"), "claimed:", "close left the claim behind");
+}
+
+/// A claim nobody is honouring is invisible twice over: `next` will not offer
+/// it because it is held, and nothing lists it because nothing knows.
+#[test]
+fn a_stale_claim_is_visible_and_never_revoked() {
+    let p = with_stale_after(3);
+    p.write_item(
+        "0050-abandoned.md",
+        "id: 50\ntitle: Abandoned\nstatus: doing\nassignee: ghost\nclaimed: 2020-01-01",
+        "body\n",
+    );
+
+    assert_eq!(p.count_of_all("stale=true"), 1, "nothing was called stale");
+    assert!(
+        p.count_of_all("held_days>100") >= 1,
+        "how long it has been held is not derivable"
+    );
+
+    // Offered, with who has it and for how long.
+    let out = p.expect(&["next"]).all();
+    assert_contains(&out, "stale:", "");
+    assert_contains(&out, "ghost", "it names who holds it");
+    assert_contains(&out, "day(s)", "and for how long");
+
+    // Offered, never taken. The item is still theirs until somebody says
+    // otherwise.
+    assert_contains(&p.item_file("50"), "assignee: ghost", "it was revoked");
+}
+
+#[test]
+fn a_stale_claim_can_be_taken_over_without_force() {
+    let p = with_stale_after(3);
+    p.write_item(
+        "0050-abandoned.md",
+        "id: 50\ntitle: Abandoned\nstatus: doing\nassignee: ghost\nclaimed: 2020-01-01",
+        "body\n",
+    );
+
+    let out = p.expect(&["claim", "50", "--as", "somebody"]).all();
+    assert_contains(&out, "taken over from ghost", "it says whose it was");
+    assert_contains(&out, "day(s)", "and how long they held it");
+    assert_contains(&p.item_file("50"), "assignee: somebody", "");
+
+    // A claim that is not stale still needs --force.
+    p.expect(&["claim", "1", "--as", "holder"]);
+    let out = p.fails(&["claim", "1", "--as", "interloper"]);
+    assert_contains(&out.all(), "--force", "");
+}
+
+/// No threshold, no staleness. A project that has not said what a claim means
+/// should see nothing new.
+#[test]
+fn without_a_threshold_nothing_is_ever_stale() {
+    let p = seeded();
+    p.write_item(
+        "0050-ancient.md",
+        "id: 50\ntitle: Ancient\nstatus: doing\nassignee: ghost\nclaimed: 2020-01-01",
+        "body\n",
+    );
+    assert_eq!(p.count_of_all("stale=true"), 0);
+    assert!(!p.expect(&["next"]).all().contains("stale:"));
+    let out = p.fails(&["claim", "50", "--as", "somebody"]);
+    assert_contains(&out.all(), "--force", "an old claim is still a claim");
+}
+
+// --- handing work back ------------------------------------------------------
+
+/// The most valuable thing somebody handing work back knows is why, and it
+/// used to evaporate: the next taker walked the same dead end.
+#[test]
+fn releasing_with_a_reason_reaches_the_next_taker() {
+    let p = seeded();
+    p.expect(&["claim", "2"]);
+    p.expect(&[
+        "release",
+        "2",
+        "--reason",
+        "The parser rewrite needs the format decision first.",
+    ]);
+
+    let file = p.item_file("2");
+    assert_contains(
+        &file,
+        "## Released by",
+        "a dated note in the releaser's name",
+    );
+    assert_contains(&file, "format decision", "carrying what they knew");
+
+    let out = p.expect(&["claim", "2"]).all();
+    assert_contains(
+        &out,
+        "last released because:",
+        "the next taker is told before they start",
+    );
+    assert_contains(&out, "format decision", "");
+
+    // Three attempts on a hard item is a history, so nothing is overwritten.
+    p.expect(&["release", "2", "--reason", "Second attempt, same wall."]);
+    let file = p.item_file("2");
+    assert_contains(&file, "format decision", "the first reason survived");
+    assert_contains(&file, "Second attempt", "and the second is there too");
+
+    // Nothing goes into frontmatter.
+    let front = file.split("---").nth(1).unwrap_or_default();
+    assert_missing(front, "released", "a reason is a history, not a field");
+}
+
+#[test]
+fn releasing_without_a_reason_still_works_and_says_nothing_extra() {
+    let p = seeded();
+    p.expect(&["claim", "2"]);
+    let out = p.expect(&["release", "2"]).all();
+    assert_missing(&out, "Released by", "");
+    assert!(p.run(&["check"]).ok());
+}
+
+// --- filing the same thing twice --------------------------------------------
+
+/// An agent starts every session cold, so filing a duplicate is not an unlucky
+/// mistake but the characteristic failure of an agent using this tool.
+#[test]
+fn a_near_duplicate_title_is_reported_and_created_anyway() {
+    let p = Project::new();
+    p.add("Rate-limit the public API", &[]);
+
+    let out = p.expect(&["new", "Rate limit the API"]).all();
+    assert_contains(&out, "look", "it says something looks similar");
+    assert_contains(&out, "Rate-limit the public API", "and names it");
+    assert_eq!(p.count_all(), 2, "reported, not refused");
+
+    // Word order and punctuation do not hide a duplicate.
+    let out = p.expect(&["new", "the API, rate limited"]).all();
+    assert_contains(&out, "look", "word order should not hide it");
+
+    // Something genuinely different says nothing.
+    let out = p.expect(&["new", "Document the export format"]).all();
+    assert_missing(&out, "look", "an unrelated title was called similar");
+
+    // A finished item counts: re-filing something already done is the same
+    // mistake.
+    p.expect(&["close", "1"]);
+    let out = p.expect(&["new", "Rate-limit the public API again"]).all();
+    assert_contains(&out, "look", "a closed duplicate was not considered");
+
+    assert!(p.run(&["check"]).ok());
+}
+
+#[test]
+fn a_quiet_creation_says_nothing_about_duplicates() {
+    let p = Project::new();
+    p.add("Rate-limit the public API", &[]);
+    let out = p.expect(&["new", "Rate limit the API", "-q"]).all();
+    assert_missing(&out, "look", "--quiet should be quiet");
+}
+
+/// Over the protocol the warning has to be in the result: a tool result is what
+/// the model reads, and standard error is not.
+#[test]
+fn an_agent_is_told_in_band_that_it_may_be_filing_a_duplicate() {
+    let p = Project::new();
+    p.add("Rate-limit the public API", &[]);
+
+    let r = p.mcp_call(
+        "create_item",
+        serde_json::json!({"title": "Rate limit the API"}),
+        Some("claude"),
+    );
+    assert!(!refused(&r), "{}", tool_text(&r));
+    let doc: serde_json::Value = serde_json::from_str(&tool_text(&r)).expect("JSON");
+    assert!(
+        doc["similar"].is_array(),
+        "no similar items reported: {doc}"
+    );
+    assert_json(
+        &doc,
+        "similar.0.title",
+        serde_json::json!("Rate-limit the public API"),
+    );
+    assert_contains(doc["note"].as_str().unwrap_or_default(), "look", "");
+}
+
+/// An agent that cannot finish should hand the item back with what it learned,
+/// rather than leaving it claimed for ever.
+#[test]
+fn an_agent_can_hand_work_back_with_a_reason() {
+    let p = seeded();
+    p.mcp_call_anonymous("claim_item", serde_json::json!({"id": 2}), "claude");
+
+    let r = p.mcp_call_anonymous(
+        "release_item",
+        serde_json::json!({"id": 2, "reason": "Needs a decision only a person can make."}),
+        "claude",
+    );
+    assert!(!refused(&r), "{}", tool_text(&r));
+
+    let file = p.item_file("2");
+    assert_contains(&file, "## Released by claude", "in the agent's own name");
+    assert_contains(&file, "only a person can make", "");
+    assert_missing(&file, "claimed:", "the claim was not cleared");
+    assert!(p.run(&["check"]).ok());
 }

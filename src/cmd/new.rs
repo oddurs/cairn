@@ -185,6 +185,17 @@ pub fn run(args: Args) -> Result<i32> {
     // The same rule `set` obeys: a command must not be able to leave the
     // project in a state `check` rejects. This checked only for a cycle, so
     // `cairn new -d 999` created an item depending on nothing.
+    // Said before the item exists, so the caller can stop; reported rather than
+    // refused, because two items genuinely called the same thing is real.
+    let similar = crate::item::near_duplicates(item.title(), &existing);
+    if !similar.is_empty() && !args.quiet {
+        eprintln!(
+            "{} {}",
+            style::yellow("note:"),
+            crate::cmd::similar_line(&cfg, &similar)
+        );
+    }
+
     crate::refs::validate_on_write(&cfg, &store, &item)?;
     if !item.meta.depends_on.is_empty() {
         crate::cmd::set::check_no_cycle(&store, &item)?;

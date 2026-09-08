@@ -6,16 +6,13 @@ A markdown-native roadmap and issue manager that lives in your repository.
 
 ## v0.1 — Usable in anger
 
-`#########·` 83% · 25 of 30 done · due 2026-10-15
+`##########` 93% · 28 of 30 done · due 2026-10-15
 
 Enough to run a real project's roadmap without reaching for anything else.
 
 ### backlog
 
 - [ ] [`0066`](https://github.com/oddurs/cairn/blob/main/cairn/items/0066-find-three-people-who-are-not-the-author.md) Find three people who are not the author <sup>chore · p0 · s7</sup>
-- [ ] [`0106`](https://github.com/oddurs/cairn/blob/main/cairn/items/0106-a-claim-is-a-promise-somebody-might-not-keep.md) A claim is a promise somebody might not keep <sup>feature · p0 · s11</sup>
-- [ ] [`0107`](https://github.com/oddurs/cairn/blob/main/cairn/items/0107-an-agent-cannot-tell-it-is-about-to-file-the-same-thing-twice.md) An agent cannot tell it is about to file the same thing twice <sup>feature · p1 · s11</sup>
-- [ ] [`0108`](https://github.com/oddurs/cairn/blob/main/cairn/items/0108-handing-work-back-loses-the-reason-for-handing-it-back.md) Handing work back loses the reason for handing it back <sup>feature · p1 · s11</sup>
 
 ### in progress
 
@@ -48,6 +45,9 @@ Enough to run a real project's roadmap without reaching for anything else.
 - [x] [`0100`](https://github.com/oddurs/cairn/blob/main/cairn/items/0100-test-the-two-things-that-can-lose-work.md) Test the two things that can lose work <sup>chore · p0 · s10</sup>
 - [x] [`0104`](https://github.com/oddurs/cairn/blob/main/cairn/items/0104-a-measured-test-coverage-sprint.md) A measured test coverage sprint <sup>chore · p1 · s10</sup>
 - [x] [`0105`](https://github.com/oddurs/cairn/blob/main/cairn/items/0105-a-test-harness-worth-having.md) A test harness worth having <sup>chore · p1 · s10</sup>
+- [x] [`0106`](https://github.com/oddurs/cairn/blob/main/cairn/items/0106-a-claim-is-a-promise-somebody-might-not-keep.md) A claim is a promise somebody might not keep <sup>feature · p0 · s11</sup>
+- [x] [`0107`](https://github.com/oddurs/cairn/blob/main/cairn/items/0107-an-agent-cannot-tell-it-is-about-to-file-the-same-thing-twice.md) An agent cannot tell it is about to file the same thing twice <sup>feature · p1 · s11</sup>
+- [x] [`0108`](https://github.com/oddurs/cairn/blob/main/cairn/items/0108-handing-work-back-loses-the-reason-for-handing-it-back.md) Handing work back loses the reason for handing it back <sup>feature · p1 · s11</sup>
 
 ## v0.2 — Comfortable
 

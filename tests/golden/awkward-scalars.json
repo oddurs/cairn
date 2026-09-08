@@ -2,6 +2,7 @@
   "assignee": "no",
   "body": "A body whose first line looks like a key: value.\n",
   "category": "open",
+  "claimed": null,
   "created": null,
   "created_by": null,
   "depends_on": [],

@@ -262,6 +262,11 @@ fn transition(cfg: &Config, ids: &[String], status: &str, quiet: bool, verb: &st
     for raw in ids {
         let mut item = store.find_ref(raw)?;
         apply_requested(&mut item, cfg, "status", Assign::Set(status.to_string()))?;
+        // Finishing ends the claim as surely as handing it back does. Left
+        // behind, `claimed` would age until a closed item read as abandoned.
+        if cfg.category(status).is_closed() {
+            apply(&mut item, cfg, "claimed", Assign::Set(String::new()))?;
+        }
         item.touch(&today());
         item.save()?;
         if !quiet {
@@ -366,6 +371,11 @@ pub fn apply(item: &mut Item, cfg: &Config, key: &str, assign: Assign) -> Result
                 item.meta.key = Some(v);
             }
             _ => bail!("`key` is not a list field; use key=..."),
+        },
+        "claimed" => match assign {
+            Assign::Set(v) if v.trim().is_empty() => item.meta.claimed = None,
+            Assign::Set(v) => item.meta.claimed = Some(v),
+            _ => bail!("`claimed` is not a list field; use claimed=..."),
         },
         "owner" => match assign {
             Assign::Set(v) if v.trim().is_empty() => item.meta.owner = None,

@@ -2,6 +2,7 @@
   "assignee": "no",
   "body": "Unquoted values that look like numbers, booleans or times are resolved by YAML\nitself. cairn quotes anything it writes, so this only affects hand-written\nfiles; quote such values to keep them verbatim.\n",
   "category": "open",
+  "claimed": null,
   "created": null,
   "created_by": null,
   "depends_on": [],

@@ -126,6 +126,22 @@ impl<'a> Ctx<'a> {
         self.cfg.category(item.status()).is_closed()
     }
 
+    /// Whether a claim has gone untouched longer than the project allows.
+    ///
+    /// False for every project that has not said what it allows: a claim
+    /// meaning an afternoon and one meaning a quarter are both real, and
+    /// neither is cairn's to guess. A finished item is never stale, whoever
+    /// still holds it.
+    pub fn is_stale(&self, item: &Item) -> bool {
+        let Some(after) = self.cfg.project.claim_stale_after else {
+            return false;
+        };
+        if self.is_closed(item) {
+            return false;
+        }
+        held_days(item).is_some_and(|d| d >= i64::from(after))
+    }
+
     /// Work that could be started right now: not finished, nothing in the way.
     pub fn is_ready(&self, item: &Item) -> bool {
         !self.is_closed(item) && !self.is_blocked(item)
@@ -268,13 +284,30 @@ pub const DERIVED_KEYS: &[&str] = &[
     "criteria",
     "criteria_done",
     "criteria_met",
+    "stale",
+    "held_days",
 ];
+
+/// How many days ago the current claim was taken, if there is one.
+pub fn held_days(item: &Item) -> Option<i64> {
+    let claimed = item.meta.claimed.as_deref()?;
+    let from = chrono::NaiveDate::parse_from_str(claimed, "%Y-%m-%d").ok()?;
+    let now = chrono::NaiveDate::parse_from_str(&crate::store::today(), "%Y-%m-%d").ok()?;
+    Some((now - from).num_days())
+}
 
 pub fn resolve(item: &Item, ctx: &Ctx, key: &str) -> Field {
     match key {
         "category" => Field::Text(ctx.cfg.category(item.status()).as_str().to_string()),
         "closed" | "done" => Field::Text(ctx.is_closed(item).to_string()),
         "blocked" => Field::Text(ctx.is_blocked(item).to_string()),
+        // A claim nobody is honouring. Derived rather than stored, so it cannot
+        // go stale itself and there is nothing to keep in step.
+        "stale" => Field::Text(ctx.is_stale(item).to_string()),
+        "held_days" => match held_days(item) {
+            Some(n) => Field::Text(n.to_string()),
+            None => Field::Missing,
+        },
         "ready" => Field::Text(ctx.is_ready(item).to_string()),
         "blockers" => Field::List(ctx.blockers(item).iter().map(u32::to_string).collect()),
         // Position in the hierarchy, derived rather than declared. A `scale`

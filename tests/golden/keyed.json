@@ -2,6 +2,7 @@
   "assignee": null,
   "body": "A key is unique among items of one type, and is what a reference addressed\n`by = \"key\"` names. It is not an identifier: `id` is still 12.\n",
   "category": "active",
+  "claimed": null,
   "created": null,
   "created_by": null,
   "depends_on": [],

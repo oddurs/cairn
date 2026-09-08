@@ -445,6 +445,7 @@ fn apply_fields(
     }
     for (key, value) in [
         ("assignee", &inc.assignee),
+        ("claimed", &inc.claimed),
         ("owner", &inc.owner),
         ("created_by", &inc.created_by),
     ] {

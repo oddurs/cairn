@@ -216,6 +216,7 @@ fn dispatch(name: &str, a: &Value) -> Result<String> {
         "create_item" => create_item(a),
         "update_item" => update_item(a),
         "claim_item" => claim_item(a),
+        "release_item" => release_item(a),
         "close_item" => close_item(a),
         "add_note" => add_note(a),
         "check" => check(),
@@ -408,6 +409,7 @@ fn create_item(a: &Value) -> Result<String> {
         bail!("`title` is required");
     };
 
+    let similar = crate::item::near_duplicates(&title, &existing);
     let id = store.next_id(&existing);
     let now = today();
     let mut item = Item {
@@ -479,11 +481,24 @@ fn create_item(a: &Value) -> Result<String> {
     drop(lock);
     hooks::item(&cfg, &store, hooks::Event::AfterCreate, &item);
 
-    pretty(&json!({
+    let mut out = json!({
         "created": cfg.format_id(item.id),
         "id": item.id,
         "path": store.rel(&item.path),
-    }))
+    });
+    // In the result rather than on standard error: a tool result is what the
+    // model reads, and this warning exists for the caller who cannot remember
+    // filing the last one.
+    if !similar.is_empty() {
+        out["similar"] = json!(
+            similar
+                .iter()
+                .map(|i| json!({ "id": i.id, "ref": cfg.format_id(i.id), "title": i.title() }))
+                .collect::<Vec<_>>()
+        );
+        out["note"] = json!(crate::cmd::similar_line(&cfg, &similar));
+    }
+    pretty(&out)
 }
 
 fn update_item(a: &Value) -> Result<String> {
@@ -620,23 +635,46 @@ fn add_note(a: &Value) -> Result<String> {
     let Some(text) = s(a, "text") else {
         bail!("`text` is required");
     };
-    let addition = match s(a, "heading") {
-        Some(h) => format!("## {h}\n\n{text}"),
-        None => format!("## {}\n\n{text}", today()),
-    };
-    let body = item.body.trim_end();
-    let combined = if body.is_empty() {
-        addition
-    } else {
-        format!("{body}\n\n{addition}")
-    };
-    item.set_body(&combined);
+    item.append_note(&s(a, "heading").unwrap_or_else(today), &text);
     item.touch(&today());
     item.save()?;
     drop(lock);
     hooks::item(&cfg, &store, hooks::Event::AfterChange, &item);
 
     pretty(&json!({ "noted": cfg.format_id(item.id), "body": item.body }))
+}
+
+/// Hand an item back, with the reason the next taker needs.
+fn release_item(a: &Value) -> Result<String> {
+    let cfg = Config::discover()?;
+    let store = Store::new(&cfg);
+    let lock = Lock::acquire(&cfg)?;
+    let mut item = store.find(require_id(&cfg, a)?)?;
+
+    apply(&mut item, &cfg, "assignee", Assign::Set(String::new()))?;
+    apply(&mut item, &cfg, "claimed", Assign::Set(String::new()))?;
+    if let Some(status) = s(a, "status") {
+        apply_requested(&mut item, &cfg, "status", Assign::Set(status))?;
+    } else {
+        apply(
+            &mut item,
+            &cfg,
+            "status",
+            Assign::Set(cfg.initial_status().to_string()),
+        )?;
+    }
+    if let Some(reason) = s(a, "reason") {
+        item.append_note(&format!("Released by {}", caller()), &reason);
+    }
+    item.touch(&today());
+    item.save()?;
+    drop(lock);
+    hooks::item(&cfg, &store, hooks::Event::AfterChange, &item);
+
+    pretty(&json!({
+        "released": cfg.format_id(item.id),
+        "status": item.status(),
+    }))
 }
 
 fn close_item(a: &Value) -> Result<String> {
@@ -853,6 +891,17 @@ fn tools() -> Vec<Value> {
         An empty string clears a field.",
                 }),
                 "body": str_prop("Replace the Markdown body"),
+            }), vec!["id"]),
+        }),
+        json!({
+            "name": "release_item",
+            "description": "Hand an item back without finishing it. Give a reason: the next \
+        caller reads it first, and it is the only way what you learned survives you. Use this \
+        rather than leaving an item claimed when you cannot finish it.",
+            "inputSchema": obj(json!({
+                "id": id_prop("Item id"),
+                "reason": str_prop("Why you are handing it back — what you tried, what stopped you"),
+                "status": str_prop("Status to move back to (default: the project's default)"),
             }), vec!["id"]),
         }),
         json!({

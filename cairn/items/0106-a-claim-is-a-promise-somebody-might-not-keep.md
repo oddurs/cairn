@@ -2,7 +2,7 @@
 id: 106
 title: A claim is a promise somebody might not keep
 type: feature
-status: backlog
+status: done
 milestone: v0.1
 created: 2026-09-08
 updated: 2026-09-08
@@ -69,10 +69,14 @@ person or an agent decides.
 
 ## Acceptance criteria
 
-- [ ] `cairn claim` records `claimed` as a date, distinct from `updated`
-- [ ] `cairn release` and `cairn close` clear it
-- [ ] `project.claim_stale_after` in days, absent by default and inert when absent
-- [ ] `stale` is a derived field, so it works in any filter and as a column
-- [ ] `cairn next` offers a stale claim back, saying how long it has been held and by whom
-- [ ] Nothing is ever released automatically
-- [ ] `claimed` is documented in the specification, since cairn writes it
+- [x] `cairn claim` records `claimed` as a date, distinct from `updated`
+- [x] `cairn release` and `cairn close` clear it
+- [x] `project.claim_stale_after` in days, absent by default and inert when absent
+- [x] `stale` is a derived field, so it works in any filter and as a column
+- [x] `cairn next` offers a stale claim back, saying how long it has been held and by whom
+- [x] Nothing is ever released automatically
+- [x] `claimed` is documented in the specification, since cairn writes it
+
+## 2026-09-08
+
+Done. `claimed` is a date beside `assignee`, cleared by release and by close — close was clearing nothing until a test said so, which would have aged a finished item into looking abandoned. `project.claim_stale_after` in days, absent and inert by default. `stale` and `held_days` are derived, so they work in any filter and as columns. `next` offers a stale claim back with who holds it and for how long; `claim` takes one over without --force and says whose it was. Nothing is ever released automatically. `claimed` is documented in spec §4 and read by the second reader, since cairn writes it.

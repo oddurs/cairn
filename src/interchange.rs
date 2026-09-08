@@ -100,6 +100,8 @@ pub struct Incoming {
     /// item. Written by cairn since they existed and read back only now: an
     /// export carried neither, so a round trip lost both without a word.
     #[serde(default)]
+    pub claimed: Option<String>,
+    #[serde(default)]
     pub owner: Option<String>,
     #[serde(default)]
     pub created_by: Option<String>,
