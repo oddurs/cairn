@@ -6396,3 +6396,502 @@ fn renaming_a_key_moves_references_by_key_and_not_by_id() {
     );
     assert!(p.run(&["check"]).ok(), "{}", p.run(&["check"]).all());
 }
+
+// --- coverage: surfaces the suite had never driven ---------------------------
+
+/// A board grouped by something other than status, which is most of the command.
+#[test]
+fn a_board_groups_by_any_field() {
+    let p = seeded();
+    p.expect(&["set", "1", "priority=p0"]);
+    p.expect(&["set", "2", "priority=p2"]);
+
+    let by_priority = p.expect(&["board", "--group-by", "priority"]).stdout;
+    assert_contains(&by_priority, "p0", "the enum's own values are the columns");
+    assert_contains(&by_priority, "p3", "including ones nothing is filed under");
+
+    // Item 1 carries v0.1; the rest carry nothing, so both a named column and
+    // the unscheduled one appear.
+    //
+    // The context used to be built *after* containers were dropped, so
+    // `--group-by milestone` found no milestones, drew no column for them, and
+    // every item that had one disappeared from the board while the unscheduled
+    // ones stayed. A board that quietly omits scheduled work is worse than one
+    // that shows nothing.
+    let by_milestone = p.expect(&["board", "--group-by", "milestone"]).stdout;
+    assert_contains(&by_milestone, "v0.1", "the milestone column");
+    assert_contains(&by_milestone, "(none)", "and one for what is unscheduled");
+    assert_contains(
+        &by_milestone,
+        "First item",
+        "the scheduled item is on the board",
+    );
+
+    // A field with no declared values takes its columns from what items carry.
+    p.expect(&["set", "1", "area=parser"]);
+    let by_area = p.expect(&["board", "--group-by", "area"]).stdout;
+    assert_contains(&by_area, "parser", "");
+}
+
+#[test]
+fn a_board_honours_a_view_a_filter_and_a_milestone() {
+    let p = seeded();
+    p.append(
+        "cairn.toml",
+        "\n[[view]]\nname = \"hot\"\nfilter = \"priority=p0\"\ngroup_by = \"milestone\"\n",
+    );
+    p.expect(&["set", "1", "priority=p0"]);
+
+    // The view names a group_by, which is the branch worth reaching.
+    let out = p.expect(&["board", "--view", "hot"]).stdout;
+    assert_contains(&out, "v0.1", "the view's own group_by was used");
+
+    p.expect(&["board", "--filter", "category!=done"]);
+    p.expect(&["board", "--milestone", "v0.1"]);
+    p.expect(&["board", "--all"]);
+    p.expect(&["board", "--width", "20"]);
+
+    let out = p.fails(&["board", "--view", "nonesuch"]).all();
+    assert_contains(&out, "unknown view", "");
+}
+
+/// `cairn roadmap --items` lists the work under each milestone.
+#[test]
+fn a_roadmap_can_list_its_items() {
+    let p = seeded();
+    let out = p.expect(&["roadmap", "--items"]).stdout;
+    assert_contains(&out, "v0.1", "the milestone");
+    assert!(
+        out.lines().count() > p.expect(&["roadmap"]).stdout.lines().count(),
+        "--items showed no more than the summary did"
+    );
+
+    p.expect(&["close", "1"]);
+    let closed_hidden = p.expect(&["roadmap", "--items"]).stdout;
+    let closed_shown = p.expect(&["roadmap", "--items", "--all"]).stdout;
+    assert!(
+        closed_shown.len() > closed_hidden.len(),
+        "--all did not bring back what was finished"
+    );
+}
+
+/// A dependency that no longer exists is called out where somebody will see it,
+/// rather than left as a number that resolves to nothing.
+#[test]
+fn show_marks_a_dependency_that_is_missing() {
+    let p = seeded();
+    p.write(
+        "cairn/items/0050-hangs-on-nothing.md",
+        "---\nid: 50\ntitle: Hangs on nothing\nstatus: backlog\ndepends_on:\n  - 999\n---\nbody\n",
+    );
+    let out = p.expect(&["show", "50"]).stdout;
+    assert_contains(&out, "missing", "it says the dependency is not there");
+
+    // And a dependency that exists is shown ticked once it is finished.
+    p.expect(&["close", "1"]);
+    p.expect(&["set", "50", "depends_on=1"]);
+    assert_contains(&p.expect(&["show", "50"]).stdout, "[x]", "");
+}
+
+/// The rendered roadmap's optional parts, none of which the suite had produced.
+#[test]
+fn a_rendered_roadmap_carries_its_furniture() {
+    let p = seeded();
+    p.write("docs/intro.md", "Read this first.\n");
+    p.write("docs/outro.md", "That is all.\n");
+    let cfg = p
+        .read("cairn.toml")
+        .replace(
+            "[render]",
+            "[render]\nheader = \"docs/intro.md\"\nfooter = \"docs/outro.md\"",
+        )
+        .replace("title = \"Roadmap\"", "title = \"The plan\"");
+    p.write("cairn.toml", &cfg);
+
+    p.expect(&["render"]);
+    let out = p.read("ROADMAP.md");
+    assert_contains(&out, "# The plan", "the configured title");
+    assert_contains(&out, "Read this first.", "the header fragment");
+    assert_contains(&out, "That is all.", "the footer fragment");
+
+    // A header naming a file that is not there is reported, not ignored.
+    let cfg = p
+        .read("cairn.toml")
+        .replace("docs/intro.md", "docs/gone.md");
+    p.write("cairn.toml", &cfg);
+    let out = p.run(&["render"]);
+    assert!(!out.ok(), "a missing fragment should not render silently");
+}
+
+#[test]
+fn a_rendered_roadmap_can_link_to_its_items() {
+    let p = seeded();
+    let cfg = p
+        .read("cairn.toml")
+        .replace("link_items = false", "link_items = true")
+        .replace(
+            "[project]",
+            "[project]\nurl = \"https://example.invalid/blob/main\"",
+        );
+    p.write("cairn.toml", &cfg);
+    p.expect(&["render"]);
+    assert_contains(
+        &p.read("ROADMAP.md"),
+        "https://example.invalid/blob/main/cairn/items/",
+        "items are linked",
+    );
+}
+
+/// `render --output` and `--check`, which is what continuous integration runs.
+#[test]
+fn render_can_write_elsewhere_and_check_itself() {
+    let p = seeded();
+    p.expect(&["render"]);
+    assert!(p.run(&["render", "--check"]).ok(), "it was just rendered");
+
+    // `--no-hooks`, or the after-create hook renders it again and it is never
+    // stale.
+    p.expect(&["new", "Something new", "-q", "--no-hooks"]);
+    let out = p.run(&["render", "--check"]);
+    assert!(!out.ok(), "the roadmap is stale and --check should say so");
+    assert_contains(&out.all(), "render", "and name the remedy");
+
+    p.expect(&["render", "--output", "elsewhere.md"]);
+    assert!(!p.read("elsewhere.md").is_empty());
+}
+
+/// A title longer than its column is clipped with an ellipsis rather than
+/// wrapped or truncated mid-character.
+#[test]
+fn a_long_title_is_clipped_to_its_column() {
+    let p = Project::new();
+    let long = "A title that goes on and on and on and will not fit into any \
+                reasonable column width at all";
+    p.add(long, &[]);
+    p.add(
+        "Ünïcödé — a title with wide characters ☂☂☂☂☂☂☂☂☂☂☂☂☂☂☂☂☂☂☂☂",
+        &[],
+    );
+
+    let out = p.expect(&["board", "--width", "24"]).stdout;
+    assert_contains(&out, "…", "something was clipped");
+    assert!(
+        out.lines().all(|l| l.chars().count() < 400),
+        "a line ran away"
+    );
+    assert!(p.run(&["check"]).ok());
+}
+
+/// Re-importing over a backlog that already has the items: the update path,
+/// which had never run.
+#[test]
+fn a_second_import_updates_rather_than_duplicates() {
+    let p = Project::new();
+    let doc = |title: &str, status: &str| {
+        serde_json::json!({
+            "items": [{
+                "id": 1, "title": title, "status": status,
+                "source": "elsewhere#1", "body": "from outside"
+            }]
+        })
+        .to_string()
+    };
+
+    let out = p.run_stdin(&["import"], &doc("First name", "backlog"));
+    assert!(out.ok(), "{}", out.all());
+    let count = p.expect(&["list", "-A", "--count"]).trimmed();
+
+    // The same record again, changed, with --update.
+    let out = p.run_stdin(&["import", "--update"], &doc("Second name", "backlog"));
+    assert!(out.ok(), "{}", out.all());
+    assert_eq!(
+        p.expect(&["list", "-A", "--count"]).trimmed(),
+        count,
+        "the second import duplicated instead of updating"
+    );
+    assert_contains(
+        &p.expect(&["list", "-A", "--plain"]).stdout,
+        "Second name",
+        "and the update took",
+    );
+
+    // Without --update, an item already present is left alone.
+    let out = p.run_stdin(&["import"], &doc("Third name", "backlog"));
+    assert!(out.ok(), "{}", out.all());
+    assert_contains(&out.all(), "already present", "");
+}
+
+#[test]
+fn an_import_can_create_the_milestones_it_names() {
+    let p = Project::new();
+    let doc = serde_json::json!({
+        "items": [
+            {"id": 1, "title": "Scheduled", "status": "backlog", "milestone": "v9.9"},
+            {"id": 2, "title": "Also", "status": "backlog", "milestone": "v9.9"}
+        ]
+    });
+    let out = p.run_stdin(&["import", "--create-milestones"], &doc.to_string());
+    assert!(out.ok(), "{}", out.all());
+    assert!(p.run(&["check"]).ok(), "{}", p.run(&["check"]).all());
+    assert_contains(
+        &p.expect(&["list", "-A", "--plain", "--columns", "id,key,type"])
+            .stdout,
+        "v9.9",
+        "the milestone was created once",
+    );
+    assert_eq!(
+        p.expect(&["list", "-A", "--ids", "--filter", "key=v9.9"])
+            .lines()
+            .len(),
+        1,
+        "a milestone was created twice"
+    );
+}
+
+/// `import --close` comments on and closes the source issues.
+#[cfg(unix)]
+#[test]
+fn an_import_can_close_what_it_took() {
+    let p = Project::new();
+    let issues = serde_json::json!([
+        { "number": 7, "title": "Taken over", "body": "b", "state": "OPEN",
+          "labels": [], "assignees": [], "milestone": null }
+    ]);
+    let script = format!(
+        "if [ \"$2\" = list ]; then cat <<'JSON'\n{issues}\nJSON\nelse echo \"closed $3\"; fi"
+    );
+    let out = import_github(&p, &script, &["--close"]);
+    assert!(out.ok(), "{}", out.all());
+    assert_contains(&out.all(), "closed", "it reported closing the source");
+    assert!(p.run(&["check"]).ok());
+}
+
+/// The schema an agent reads first, which nothing had ever called.
+#[test]
+fn the_agent_can_ask_for_the_schema() {
+    let p = seeded();
+    let r = tool(&p, "get_schema", serde_json::json!({}), Some("claude"));
+    let text = r["content"][0]["text"].as_str().expect("text");
+    let schema: serde_json::Value = serde_json::from_str(text).expect("JSON");
+
+    assert!(schema["statuses"].is_array(), "{schema}");
+    assert!(schema["fields"].is_array(), "{schema}");
+    assert!(schema["counts"]["total"].is_number(), "{schema}");
+    assert!(
+        schema["filter_syntax"]["operators"].is_array(),
+        "an agent has to be told the filter grammar: {schema}"
+    );
+    assert!(
+        schema["milestones"].is_array(),
+        "milestones are items now and still belong in the schema: {schema}"
+    );
+}
+
+/// An identifier format with a suffix as well as a prefix. Reading one back
+/// exercises the other end of the parser.
+#[test]
+fn an_identifier_can_have_a_suffix() {
+    let p = keyed("[{n:03}]", None);
+    p.expect(&["new", "First", "-q"]);
+    assert_eq!(p.expect(&["list", "--ids"]).trimmed(), "[001]");
+
+    // Accepted back in every spelling: rendered, bare, and case-folded.
+    for spelling in ["[001]", "001", "1", "#1", "[1]"] {
+        assert!(
+            p.run(&["show", spelling]).ok(),
+            "`{spelling}` should name the same item"
+        );
+    }
+    assert!(!p.run(&["show", "[abc]"]).ok());
+}
+
+/// Colours are named in `cairn.toml`, and every name it accepts should reach
+/// the terminal rather than falling through to plain text.
+#[test]
+fn every_named_colour_is_understood() {
+    let p = Project::new();
+    let mut cfg = p.read("cairn.toml");
+    for (n, colour) in ["black", "magenta", "purple", "white", "bold", "grey"]
+        .into_iter()
+        .enumerate()
+    {
+        cfg.push_str(&format!(
+            "\n[[status]]\nname = \"s{n}\"\ncategory = \"open\"\ncolor = \"{colour}\"\n"
+        ));
+    }
+    cfg.push_str(
+        "\n[[status]]\nname = \"nonsense\"\ncategory = \"open\"\ncolor = \"chartreuse\"\n",
+    );
+    p.write("cairn.toml", &cfg);
+
+    for n in 0..6 {
+        p.expect(&["new", &format!("Item {n}"), "-s", &format!("s{n}"), "-q"]);
+    }
+    p.expect(&["new", "Unknown colour", "-s", "nonsense", "-q"]);
+
+    let out = p.run_env(&["list", "-A", "--color", "always"], &[("NO_COLOR", None)]);
+    assert!(out.ok(), "{}", out.all());
+    assert!(out.stdout.contains('\u{1b}'), "nothing was painted");
+    // A colour name nothing recognises is left alone rather than refused.
+    assert!(p.run(&["check"]).ok(), "{}", p.run(&["check"]).all());
+}
+
+/// A configuration with no `[project]` block at all, which is the smallest
+/// thing that is still a project.
+#[test]
+fn a_configuration_with_no_project_block_works() {
+    let p = Project::empty();
+    p.write(
+        "cairn.toml",
+        "format = 2\n[[status]]\nname = \"todo\"\ncategory = \"open\"\n",
+    );
+    std::fs::create_dir_all(p.path("cairn/items")).unwrap();
+
+    p.expect(&["new", "Minimal", "-q"]);
+    assert_eq!(p.expect(&["list", "--ids"]).trimmed(), "0001");
+    assert!(p.run(&["check"]).ok(), "{}", p.run(&["check"]).all());
+    assert_contains(
+        &p.expect(&["config"]).stdout,
+        "cairn/items",
+        "the default directory",
+    );
+}
+
+/// A ref field addressed by id stores a number, not a string, so the file says
+/// what it means and a reader does not have to guess.
+#[test]
+fn an_id_addressed_ref_stores_numbers() {
+    let p = Project::new();
+    p.append(
+        "cairn.toml",
+        "\n[[field]]\nname = \"blocks\"\nkind = \"ref\"\ntarget = \"*\"\n\
+         by = \"id\"\ncardinality = \"many\"\n\
+         \n[[field]]\nname = \"parent_item\"\nkind = \"ref\"\ntarget = \"*\"\nby = \"id\"\n",
+    );
+    p.add("One", &[]);
+    p.add("Two", &[]);
+    p.add("Three", &[]);
+
+    p.expect(&["set", "3", "blocks=1,2"]);
+    p.expect(&["set", "3", "parent_item=1"]);
+
+    let file = p.read(&p.expect(&["show", "3", "--path"]).trimmed());
+    assert!(
+        file.contains("- 1") && file.contains("- 2"),
+        "a many-valued id ref should be a sequence of numbers:\n{file}"
+    );
+    assert!(
+        file.contains("parent_item: 1"),
+        "a single id ref should be a number:\n{file}"
+    );
+    assert!(p.run(&["check"]).ok(), "{}", p.run(&["check"]).all());
+
+    // Cleared, the keys go rather than being left empty.
+    p.expect(&["set", "3", "blocks="]);
+    p.expect(&["set", "3", "parent_item="]);
+    let file = p.read(&p.expect(&["show", "3", "--path"]).trimmed());
+    assert!(
+        !file.contains("parent_item"),
+        "a cleared ref was left behind:\n{file}"
+    );
+}
+
+/// Setting several items at once, where one of them fails: the ones already
+/// written are named, so nobody has to guess how far it got.
+#[test]
+fn a_partial_multi_item_write_says_how_far_it_got() {
+    let p = seeded();
+    let out = p.fails(&["set", "1", "2", "3", "status=nonsense"]);
+    assert_contains(&out.all(), "nonsense", "it names the bad value");
+
+    // The first item takes a good change, the second a bad one.
+    let out = p.fails(&["set", "2", "3", "priority=p0", "effort=enormous"]);
+    assert_contains(&out.all(), "enormous", "");
+    assert!(p.run(&["check"]).ok(), "{}", p.run(&["check"]).all());
+}
+
+/// `next` has a flag for every way of asking "what should I do?", and most had
+/// never been driven.
+#[test]
+fn next_answers_every_way_of_asking() {
+    let p = seeded();
+    p.expect(&["set", "1", "assignee=tester"]);
+    p.expect(&["set", "2", "depends_on=1"]);
+
+    assert!(!p.expect(&["next", "--mine"]).stdout.is_empty());
+    assert!(!p.expect(&["next", "--unassigned"]).stdout.is_empty());
+    assert!(
+        !p.expect(&["next", "--assignee", "tester"])
+            .stdout
+            .is_empty()
+    );
+    p.expect(&["next", "--type", "feature"]);
+    p.expect(&["next", "--milestone", "v0.1"]);
+    p.expect(&["next", "--filter", "priority=p0"]);
+    p.expect(&["next", "--limit", "1"]);
+
+    // Blocked work is excluded, and `--blocked` brings it back with its reason.
+    let plain = p.expect(&["next", "--ids"]).lines();
+    assert!(
+        !plain.contains(&"0002".to_string()),
+        "blocked work was offered"
+    );
+    let with_blocked = p.expect(&["next", "--blocked", "--ids"]).lines();
+    assert!(with_blocked.contains(&"0002".to_string()));
+
+    let count: usize = p
+        .expect(&["next", "--count"])
+        .trimmed()
+        .parse()
+        .expect("a number");
+    assert!(count > 0);
+    let json: serde_json::Value =
+        serde_json::from_str(&p.expect(&["next", "--json"]).stdout).expect("JSON");
+    assert!(json.as_array().is_some(), "{json}");
+}
+
+/// Search over titles alone, and every output shape.
+#[test]
+fn search_has_the_same_output_shapes_as_everything_else() {
+    let p = seeded();
+    p.expect(&["note", "1", "the word cassowary appears only in a body"]);
+
+    assert!(!p.expect(&["search", "cassowary"]).stdout.is_empty());
+    // `--titles` looks at titles alone, so a word that lives only in a body
+    // finds nothing — and finding nothing is an error, not a silent success.
+    let out = p.fails(&["search", "cassowary", "--titles"]);
+    assert_contains(&out.all(), "no items match", "");
+    assert!(!p.expect(&["search", "item", "--titles"]).stdout.is_empty());
+
+    p.expect(&["search", "item", "--json"]);
+    p.expect(&["search", "item", "--ids"]);
+    p.expect(&["search", "item", "--plain"]);
+    p.expect(&["search", "item", "--count"]);
+    p.expect(&["search", "item", "--limit", "1"]);
+    p.expect(&["search", "item", "--filter", "category!=done"]);
+    p.expect(&["close", "2"]);
+    p.expect(&["search", "item", "--all"]);
+}
+
+/// Export's shapes and filters.
+#[test]
+fn export_can_be_narrowed_and_redirected() {
+    let p = seeded();
+    p.expect(&["close", "2"]);
+
+    let all: serde_json::Value = serde_json::from_str(&p.expect(&["export"]).stdout).expect("JSON");
+    let open: serde_json::Value =
+        serde_json::from_str(&p.expect(&["export", "--open-only"]).stdout).expect("JSON");
+    assert!(
+        open["items"].as_array().unwrap().len() < all["items"].as_array().unwrap().len(),
+        "--open-only kept everything"
+    );
+
+    let filtered: serde_json::Value =
+        serde_json::from_str(&p.expect(&["export", "--filter", "priority=p0"]).stdout)
+            .expect("JSON");
+    assert!(!filtered["items"].as_array().unwrap().is_empty());
+
+    p.expect(&["export", "--output", "out.json"]);
+    assert!(!p.read("out.json").is_empty());
+}
