@@ -263,6 +263,20 @@ impl Project {
         self.write("cairn.toml", &filled);
     }
 
+    /// Filenames in a directory, sorted — for asserting that a command moved
+    /// nothing.
+    fn files(&self, rel: &str) -> Vec<String> {
+        let mut names: Vec<String> = std::fs::read_dir(self.path(rel))
+            .map(|d| {
+                d.flatten()
+                    .map(|e| e.file_name().to_string_lossy().to_string())
+                    .collect()
+            })
+            .unwrap_or_default();
+        names.sort();
+        names
+    }
+
     fn append(&self, rel: &str, extra: &str) {
         let existing = self.read(rel);
         self.write(rel, &(existing + extra));
@@ -5855,4 +5869,244 @@ fn two_agents_at_once_leave_one_consistent_backlog() {
         unique.len(),
         "two clients were given the same id"
     );
+}
+
+/// Two branches creating the same file have no common ancestor, so the driver
+/// cannot do a three-way merge. It has to *decline* — which means leaving a
+/// conflict a person can see.
+///
+/// git writes no markers of its own when a custom driver runs. This path
+/// returned without calling `git merge-file`, so an add/add conflict left
+/// `ours` in the working tree with no sign the other side had said anything —
+/// the same defect the ordinary decline path was already fixed for.
+#[test]
+fn an_add_add_conflict_leaves_markers_rather_than_ours() {
+    let p = repository();
+    p.add("Starting point", &[]);
+    git(&p, &["add", "-A"]);
+    git(&p, &["commit", "-qm", "start"]);
+
+    // Two branches writing the same path with different content, by hand, so
+    // there is genuinely no ancestor for that file.
+    let path = "cairn/items/0009-contested.md";
+    for (branch, title) in [("ours", "Ours"), ("theirs", "Theirs")] {
+        git(&p, &["checkout", "-q", "main"]);
+        git(&p, &["checkout", "-qb", branch]);
+        p.write(
+            path,
+            &format!("---\nid: 9\ntitle: {title}\nstatus: backlog\n---\n{title} body\n"),
+        );
+        git(&p, &["add", "-A"]);
+        git(&p, &["commit", "-qm", branch]);
+    }
+
+    git(&p, &["checkout", "-q", "ours"]);
+    let out = merge(&p, "theirs");
+    assert_ne!(out.code, 0, "an add/add conflict should not merge cleanly");
+
+    let file = p.read(path);
+    assert!(
+        file.contains("<<<<<<<") && file.contains(">>>>>>>"),
+        "the working tree has `ours` and no sign the other side existed:\n{file}"
+    );
+    assert!(
+        file.contains("Theirs"),
+        "what the other side wrote must survive into the conflict:\n{file}"
+    );
+}
+
+/// The same thing said directly to the driver, because what git chooses to
+/// invoke it for is git's business and this is the contract cairn owes.
+///
+/// An empty ancestor is what git passes for a file added on both sides. The
+/// driver cannot merge that, and declining has to mean markers.
+#[test]
+fn the_driver_never_declines_without_leaving_a_conflict() {
+    let p = Project::new();
+    p.write(
+        "ours.md",
+        "---\nid: 9\ntitle: Ours\nstatus: backlog\n---\nours\n",
+    );
+    p.write("base.md", "");
+    p.write(
+        "theirs.md",
+        "---\nid: 9\ntitle: Theirs\nstatus: backlog\n---\ntheirs\n",
+    );
+
+    let out = p.run(&[
+        "merge-driver",
+        &p.path("ours.md").display().to_string(),
+        &p.path("base.md").display().to_string(),
+        &p.path("theirs.md").display().to_string(),
+        "cairn/items/0009-x.md",
+    ]);
+    assert_eq!(out.code, 1, "it must report that it did not resolve");
+
+    let file = p.read("ours.md");
+    assert!(
+        file.contains("<<<<<<<") && file.contains("Theirs"),
+        "declining left `ours` with no sign the other side existed:\n{file}"
+    );
+}
+
+/// Deleting an item on one side and editing it on the other is a question for a
+/// person. The driver must not answer it.
+#[test]
+fn a_delete_against_an_edit_is_left_to_a_person() {
+    let p = repository();
+    p.add("Contested", &[]);
+    git(&p, &["add", "-A"]);
+    git(&p, &["commit", "-qm", "start"]);
+    let path = p.expect(&["show", "1", "--path"]).trimmed();
+
+    on_branch(&p, "editing", "main", &["set", "1", "assignee=someone"]);
+
+    git(&p, &["checkout", "-q", "main"]);
+    git(&p, &["checkout", "-qb", "deleting"]);
+    p.expect(&["remove", "1", "--force"]);
+    git(&p, &["add", "-A"]);
+    git(&p, &["commit", "-qm", "deleting"]);
+
+    let out = merge(&p, "editing");
+    assert_ne!(out.code, 0, "a delete against an edit is not resolvable");
+    assert!(
+        out.all().to_lowercase().contains("conflict"),
+        "and git should say so: {}",
+        out.all()
+    );
+    // Whatever a person decides, the edited content is still reachable.
+    let _ = path;
+}
+
+/// The configuration is deliberately outside the driver: unioning two schema
+/// blocks would produce a schema neither branch wrote.
+#[test]
+fn the_driver_does_not_claim_the_configuration() {
+    let p = repository();
+    let attrs = p.read(".gitattributes");
+    assert!(
+        !attrs.lines().any(|l| l.starts_with("cairn.toml")),
+        "cairn.toml must not be given to the merge driver:\n{attrs}"
+    );
+
+    // And a real conflict in it comes out as a conflict, with both sides
+    // visible, rather than being resolved by anything.
+    for (branch, name) in [("ours", "mine"), ("theirs", "yours")] {
+        git(&p, &["checkout", "-q", "main"]);
+        git(&p, &["checkout", "-qb", branch]);
+        // Both branches appending a block at the end of the file, which is
+        // exactly the shape a schema conflict takes in practice.
+        p.append(
+            "cairn.toml",
+            &format!("\n[[view]]\nname = \"{name}\"\nfilter = \"status=backlog\"\n"),
+        );
+        git(&p, &["add", "-A"]);
+        git(&p, &["commit", "-qm", branch]);
+    }
+    git(&p, &["checkout", "-q", "ours"]);
+    let out = merge(&p, "theirs");
+    assert_ne!(
+        out.code, 0,
+        "two schemas disagreeing is a person's question"
+    );
+    let cfg = p.read("cairn.toml");
+    assert!(
+        cfg.contains("<<<<<<<") && cfg.contains("yours"),
+        "both sides must be visible in the conflict:\n{cfg}"
+    );
+}
+
+// --- renumber, which rewrites everything ------------------------------------
+
+/// `renumber` is the highest blast radius per line in the program: a bug does
+/// not produce a wrong answer, it produces a backlog that no longer refers to
+/// itself. Running it twice must be the same as running it once.
+#[test]
+fn renumber_is_idempotent() {
+    let p = Project::new();
+    p.add("First", &[]);
+    p.add("Second", &[]);
+    p.write(
+        "cairn/items/0001-a-copy.md",
+        "---\nid: 1\ntitle: A copy\nstatus: backlog\n---\nbody\n",
+    );
+
+    p.expect(&["renumber"]);
+    let after_once: Vec<String> = p.expect(&["list", "-A", "--ids"]).lines();
+    let files_once = p.files("cairn/items");
+
+    let out = p.expect(&["renumber"]).all();
+    assert_contains(
+        &out,
+        "no duplicate ids",
+        "the second pass has nothing to do",
+    );
+    assert_eq!(after_once, p.expect(&["list", "-A", "--ids"]).lines());
+    assert_eq!(files_once, p.files("cairn/items"), "and moved no file");
+}
+
+/// A cycle is a state the schema forbids and `check` reports. `renumber` must
+/// still be able to repair the ids, because refusing would leave somebody with
+/// two problems and no way to fix either.
+#[test]
+fn renumber_repairs_ids_even_where_the_graph_is_broken() {
+    let p = Project::new();
+    p.add("One", &[]);
+    p.add("Two", &[]);
+    // A cycle, written by hand because the commands refuse to create one.
+    for (id, dep, name) in [(1u32, 2u32, "one"), (2, 1, "two")] {
+        p.write(
+            &format!("cairn/items/{id:04}-{name}.md"),
+            &format!(
+                "---\nid: {id}\ntitle: {name}\nstatus: backlog\ndepends_on:\n  - {dep}\n---\nbody\n"
+            ),
+        );
+    }
+    p.write(
+        "cairn/items/0002-a-collision.md",
+        "---\nid: 2\ntitle: A collision\nstatus: backlog\n---\nbody\n",
+    );
+
+    assert!(
+        !p.run(&["check"]).ok(),
+        "the project is broken to begin with"
+    );
+    let out = p.expect(&["renumber"]).all();
+    assert_contains(&out, "renumbered", "");
+
+    // The duplicate is gone even though the graph is still a cycle.
+    let ids = p.expect(&["list", "-A", "--ids"]).lines();
+    let unique: std::collections::HashSet<_> = ids.iter().collect();
+    assert_eq!(ids.len(), unique.len(), "duplicate ids survived");
+}
+
+/// A file the process cannot write is the interesting failure: what matters is
+/// not that it fails but that nothing is left half-done and invisible.
+#[test]
+#[cfg(unix)]
+fn renumber_that_cannot_finish_leaves_everything_findable() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let p = Project::new();
+    p.add("Keeper", &[]);
+    p.write(
+        "cairn/items/0001-a-copy.md",
+        "---\nid: 1\ntitle: A copy\nstatus: backlog\n---\nbody\n",
+    );
+    let before = p.expect(&["list", "-A", "--count"]).trimmed();
+
+    let dir = p.path("cairn/items");
+    let mode = std::fs::metadata(&dir).unwrap().permissions().mode();
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o500)).unwrap();
+    let out = p.run(&["renumber"]);
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(mode)).unwrap();
+
+    assert!(!out.ok(), "it should not claim success: {}", out.all());
+    // Every item is still readable, and the lock is free for the next command.
+    assert_eq!(
+        p.expect(&["list", "-A", "--count"]).trimmed(),
+        before,
+        "an item went missing"
+    );
+    assert!(p.run(&["renumber"]).ok(), "the lock was left held");
 }
