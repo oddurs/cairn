@@ -2,7 +2,7 @@
 id: 100
 title: Test the two things that can lose work
 type: chore
-status: backlog
+status: done
 milestone: v0.1
 created: 2026-09-07
 updated: 2026-09-07
@@ -60,9 +60,13 @@ both is how it gets written properly rather than twice cheaply.
 
 ## Acceptance criteria
 
-- [ ] `renumber` is tested against a cycle, duplicate ids, and an unwritable file
-- [ ] `renumber` interrupted mid-pass leaves the backlog coherent and the lock free
-- [ ] `renumber` run twice is a no-op
-- [ ] The merge driver is tested with a missing ancestor and a delete-versus-edit
-- [ ] The merge driver declines `cairn.toml` rather than attempting it
-- [ ] Neither test needs the soak to fail before it fails
+- [x] `renumber` is tested against a cycle, duplicate ids, and an unwritable file
+- [x] `renumber` interrupted mid-pass leaves the backlog coherent and the lock free
+- [x] `renumber` run twice is a no-op
+- [x] The merge driver is tested with a missing ancestor and a delete-versus-edit
+- [x] The merge driver declines `cairn.toml` rather than attempting it
+- [x] Neither test needs the soak to fail before it fails
+
+## 2026-09-07
+
+Done, and the merge driver had a second instance of the bug it was already fixed for once. The `None` arm ran `git merge-file` before declining; the arm above it — the one taken when any of the three sides will not parse — returned 1 directly. An empty ancestor is what git passes for a file added on both sides, so an add/add conflict on an item left `ours` in the working tree with no sign the other side had said anything. Both paths now go through one `decline`. Interruption turned out to be already handled: `Store::recover_staged` restores a `.md.renumber` whose original is free, and it was already tested — so the new renumber tests are the ones that were missing: idempotence, repairing ids while the graph is a cycle, and an unwritable directory leaving every item findable and the lock free.

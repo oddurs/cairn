@@ -6,14 +6,13 @@ A markdown-native roadmap and issue manager that lives in your repository.
 
 ## v0.1 — Usable in anger
 
-`#########·` 88% · 22 of 25 done · due 2026-10-15
+`##########` 92% · 23 of 25 done · due 2026-10-15
 
 Enough to run a real project's roadmap without reaching for anything else.
 
 ### backlog
 
 - [ ] [`0066`](https://github.com/oddurs/cairn/blob/main/cairn/items/0066-find-three-people-who-are-not-the-author.md) Find three people who are not the author <sup>chore · p0 · s7</sup>
-- [ ] [`0100`](https://github.com/oddurs/cairn/blob/main/cairn/items/0100-test-the-two-things-that-can-lose-work.md) Test the two things that can lose work <sup>chore · p0 · s10</sup>
 
 ### in progress
 
@@ -43,6 +42,7 @@ Enough to run a real project's roadmap without reaching for anything else.
 - [x] [`0095`](https://github.com/oddurs/cairn/blob/main/cairn/items/0095-the-obsolete-milestone-block-names-a-command-with-nothing-to-do.md) The obsolete milestone block names a command with nothing to do <sup>bug · p1 · s9</sup>
 - [x] [`0096`](https://github.com/oddurs/cairn/blob/main/cairn/items/0096-configuration-keys-are-strict-and-the-promise-says-they-are-not.md) Configuration keys are strict, and the promise says they are not <sup>docs · p1 · s9</sup>
 - [x] [`0099`](https://github.com/oddurs/cairn/blob/main/cairn/items/0099-harden-the-agent-surface.md) Harden the agent surface <sup>chore · p0 · s10</sup>
+- [x] [`0100`](https://github.com/oddurs/cairn/blob/main/cairn/items/0100-test-the-two-things-that-can-lose-work.md) Test the two things that can lose work <sup>chore · p0 · s10</sup>
 
 ## v0.2 — Comfortable
 

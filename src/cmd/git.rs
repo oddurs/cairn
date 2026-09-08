@@ -302,10 +302,17 @@ fn merge_item(args: &MergeArgs) -> Result<i32> {
     };
     // Without all three sides there is no three-way merge to do, and guessing
     // from two is how a deletion comes back from the dead.
+    //
+    // Declining still has to *leave* a conflict. This returned 1 directly once,
+    // which is the same defect the `None` arm below was already fixed for: git
+    // writes no markers of its own when a custom driver runs, so returning
+    // without calling `merge-file` hands somebody `ours` and no sign the other
+    // side ever said anything. An add/add conflict — two branches creating the
+    // same file, so there is no ancestor — took exactly that path.
     let (Some(ours), Some(base), Some(theirs)) =
         (read(&args.ours), read(&args.base), read(&args.theirs))
     else {
-        return Ok(1);
+        return decline(args);
     };
 
     match crate::item::merge_three_way(&ours, &base, &theirs) {
@@ -323,19 +330,26 @@ fn merge_item(args: &MergeArgs) -> Result<i32> {
         // leaves in `%A` is what the working tree gets — so returning without
         // doing this hands somebody `ours` and no sign the other side ever
         // said anything.
-        None => {
-            let status = std::process::Command::new("git")
-                .arg("merge-file")
-                .args(["-L", "ours", "-L", "base", "-L", "theirs"])
-                .arg(&args.ours)
-                .arg(&args.base)
-                .arg(&args.theirs)
-                .status()
-                .context("running git merge-file")?;
-            let _ = status;
-            Ok(1)
-        }
+        None => decline(args),
     }
+}
+
+/// Leave a conflict a person can see, and say the merge did not resolve.
+///
+/// git writes no markers of its own when a custom driver runs — whatever the
+/// driver leaves in `%A` is what the working tree gets — so every path that
+/// declines has to come through here.
+fn decline(args: &MergeArgs) -> Result<i32> {
+    let status = std::process::Command::new("git")
+        .arg("merge-file")
+        .args(["-L", "ours", "-L", "base", "-L", "theirs"])
+        .arg(&args.ours)
+        .arg(&args.base)
+        .arg(&args.theirs)
+        .status()
+        .context("running git merge-file")?;
+    let _ = status;
+    Ok(1)
 }
 
 /// Whether this project already has the integration, for `cairn config`.
