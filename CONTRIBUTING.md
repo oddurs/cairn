@@ -140,6 +140,29 @@ the manual. Adding a `[lib]` fails the build.
 
 ## What the tests are for
 
+### What each level proves
+
+`make check` is what every pull request must pass: the suite, formatting, lints,
+and cairn's own backlog validated against its own schema.
+
+It does **not** exercise concurrency. Both soak tests are `#[ignore]`, so
+`cargo test` reports them as ignored and the lock, the atomic write and
+identifier allocation get no contention in the ordinary loop. The fuzz pass it
+runs is 600 argument vectors; the long one is 20,000.
+
+That is a deliberate trade — a suite nobody will wait for is a suite nobody runs
+— and the cost of it is that "check passes" carries more weight in the head than
+it has earned. So the rest has a name:
+
+```
+make durability     # check, then soak, then the long fuzz, then conformance
+```
+
+Run it before a release, and after touching any of four things: **the lock, the
+write path, identifier allocation, or the merge driver.** Those are where a
+defect costs somebody their work rather than their afternoon. Every stage prints
+the seed it used, so a failure is reproducible.
+
 The suite is not decoration. It encodes decisions that are easy to undo by
 accident:
 

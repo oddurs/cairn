@@ -103,7 +103,7 @@ The rough edges that show up after a few weeks of daily use, and the pieces that
 
 ## v1.0 — Stable
 
-`########··` 79% · 19 of 24 done · due 2027-03-01
+`#########·` 83% · 20 of 24 done · due 2027-03-01
 
 Safe to depend on: every scriptable surface carries a promise, the command surface has been reviewed and pruned rather than accumulated, releases can be verified, and it installs from a package manager people already use.
 
@@ -112,7 +112,6 @@ Safe to depend on: every scriptable surface carries a promise, the command surfa
 - [ ] [`0052`](https://github.com/oddurs/cairn/blob/main/cairn/items/0052-sign-releases-and-ship-a-source-tarball.md) Sign releases and ship a source tarball <sup>chore · p0 · needs-a-key</sup>
 - [ ] [`0053`](https://github.com/oddurs/cairn/blob/main/cairn/items/0053-be-in-a-package-manager-people-already-use.md) Be in a package manager people already use <sup>chore · p0 · blocked-on-a-release</sup>
 - [ ] [`0067`](https://github.com/oddurs/cairn/blob/main/cairn/items/0067-decide-whether-identifiers-should-be-collision-free-by-construction.md) Decide whether identifiers should be collision-free by construction <sup>feature · p1 · s7</sup>
-- [ ] [`0103`](https://github.com/oddurs/cairn/blob/main/cairn/items/0103-say-what-make-check-proves-and-add-the-target-that-proves-the-rest.md) Say what make check proves, and add the target that proves the rest <sup>chore · p1 · s10</sup>
 
 ### in progress
 
@@ -139,6 +138,7 @@ Safe to depend on: every scriptable surface carries a promise, the command surfa
 - [x] [`0080`](https://github.com/oddurs/cairn/blob/main/cairn/items/0080-merge-sequence-fields-by-union.md) Merge sequence fields by union <sup>feature · p1 · s8</sup>
 - [x] [`0087`](https://github.com/oddurs/cairn/blob/main/cairn/items/0087-the-corpus-keeps-every-format-that-has-ever-existed.md) The corpus keeps every format that has ever existed <sup>chore · p0 · s9</sup>
 - [x] [`0098`](https://github.com/oddurs/cairn/blob/main/cairn/items/0098-write-down-what-the-configuration-does-not-promise.md) Write down what the configuration does not promise <sup>docs · p2</sup>
+- [x] [`0103`](https://github.com/oddurs/cairn/blob/main/cairn/items/0103-say-what-make-check-proves-and-add-the-target-that-proves-the-rest.md) Say what make check proves, and add the target that proves the rest <sup>chore · p1 · s10</sup>
 
 ## later — Someday
 
