@@ -352,8 +352,9 @@ pub fn depth(items: &[Item], cfg: &Config, item: &Item) -> usize {
 /// Refuse a write an agent is not permitted to make.
 ///
 /// **A guard rail, not a boundary.** The Model Context Protocol server knows who
-/// is calling because the caller says so, and it can refuse. A command line
-/// cannot: an agent with a shell runs `cairn set` and nothing here sees it.
+/// is calling — arriving on that transport is what makes a caller an agent —
+/// and it refuses. A command line cannot: an agent with a shell runs
+/// `cairn set` and nothing here sees it.
 /// Claiming otherwise would be the first dishonest thing in these documents.
 ///
 /// What it buys is worth having anyway. A schema that says *agents may set
@@ -609,4 +610,309 @@ pub fn universe(cfg: &Config, items: &[Item]) -> Vec<Item> {
     let mut out = items.to_vec();
     out.extend(Milestones::new(cfg, items).as_items().iter().cloned());
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::CONFIG_FILE;
+
+    /// A schema, parsed rather than constructed, so these tests exercise the
+    /// same deserialisation a project does.
+    fn schema(extra: &str) -> Config {
+        let text = format!(
+            "format = 2\n\
+             [project]\nname = \"T\"\n\
+             [[status]]\nname = \"todo\"\ncategory = \"open\"\n\
+             [[type]]\nname = \"milestone\"\n\
+             [[type]]\nname = \"epic\"\n\
+             [[type]]\nname = \"feature\"\n{extra}"
+        );
+        let mut cfg: Config = toml::from_str(&text).expect(CONFIG_FILE);
+        cfg.root = std::path::PathBuf::from("/nowhere");
+        cfg
+    }
+
+    fn field(name: &str, target: &str, by: &str) -> FieldDef {
+        let cfg = schema(&format!(
+            "[[field]]\nname = \"{name}\"\nkind = \"ref\"\n\
+             target = \"{target}\"\nby = \"{by}\"\nrollup = true\n"
+        ));
+        cfg.field(name).expect("the field just declared").clone()
+    }
+
+    /// An item with no file behind it. Every function here is pure, which is
+    /// the whole reason to test them this way: a failure says `would_cycle` is
+    /// wrong at depth 5, not that `cairn check` said something odd.
+    fn item(id: u32, kind: &str, key: Option<&str>, parent: Option<&str>) -> Item {
+        let mut it = Item {
+            id,
+            meta: Default::default(),
+            body: String::new(),
+            path: std::path::PathBuf::from(format!("{id:04}-x.md")),
+            front: String::new(),
+            eol: Default::default(),
+        };
+        it.meta.title = Some(format!("Item {id}"));
+        it.meta.kind = Some(kind.to_string());
+        it.meta.key = key.map(str::to_string);
+        if let Some(p) = parent {
+            it.meta.extra.insert(
+                serde_yaml_ng::Value::String("parent".into()),
+                serde_yaml_ng::Value::String(p.to_string()),
+            );
+        }
+        it
+    }
+
+    // --- resolve ------------------------------------------------------------
+
+    #[test]
+    fn a_key_resolves_without_regard_to_case() {
+        let def = field("parent", "milestone", "key");
+        let items = vec![item(1, "milestone", Some("v0.1"), None)];
+        assert_eq!(resolve(&items, &def, "V0.1").map(|i| i.id), Some(1));
+        assert_eq!(resolve(&items, &def, "  v0.1  ").map(|i| i.id), Some(1));
+        assert!(resolve(&items, &def, "v0.2").is_none());
+    }
+
+    /// A key-addressed field resolves only by key. Accepting an id as well
+    /// would make `milestone: 42` mean two things depending on what happens to
+    /// exist, and two spellings must not be able to name different items.
+    #[test]
+    fn a_key_addressed_field_does_not_answer_to_an_id() {
+        let def = field("parent", "milestone", "key");
+        let items = vec![item(42, "milestone", Some("v0.1"), None)];
+        assert!(resolve(&items, &def, "42").is_none());
+    }
+
+    #[test]
+    fn an_id_addressed_field_accepts_a_hash_and_nothing_else() {
+        let def = field("parent", "milestone", "id");
+        let items = vec![item(42, "milestone", Some("v0.1"), None)];
+        assert_eq!(resolve(&items, &def, "42").map(|i| i.id), Some(42));
+        assert_eq!(resolve(&items, &def, "#42").map(|i| i.id), Some(42));
+        assert!(resolve(&items, &def, "v0.1").is_none());
+        assert!(resolve(&items, &def, "").is_none());
+    }
+
+    /// A field naming a specific type does not resolve against another one,
+    /// which is what keeps a container a container.
+    #[test]
+    fn a_target_type_is_honoured() {
+        let def = field("parent", "milestone", "key");
+        let items = vec![
+            item(1, "epic", Some("v0.1"), None),
+            item(2, "milestone", Some("v0.2"), None),
+        ];
+        assert!(resolve(&items, &def, "v0.1").is_none());
+        assert_eq!(resolve(&items, &def, "v0.2").map(|i| i.id), Some(2));
+    }
+
+    // --- would_cycle --------------------------------------------------------
+
+    #[test]
+    fn an_item_cannot_be_its_own_parent() {
+        let def = field("parent", "milestone", "key");
+        let items = vec![item(1, "milestone", Some("a"), None)];
+        assert!(would_cycle(&items, &def, 1, "a"));
+    }
+
+    #[test]
+    fn a_two_item_cycle_is_refused() {
+        let def = field("parent", "milestone", "key");
+        // 2 already points at 1; giving 1 a parent of 2 closes the loop.
+        let items = vec![
+            item(1, "milestone", Some("a"), None),
+            item(2, "milestone", Some("b"), Some("a")),
+        ];
+        assert!(would_cycle(&items, &def, 1, "b"));
+    }
+
+    #[test]
+    fn a_cycle_five_deep_is_refused() {
+        let def = field("parent", "milestone", "key");
+        let keys = ["a", "b", "c", "d", "e"];
+        let items: Vec<Item> = keys
+            .iter()
+            .enumerate()
+            .map(|(n, k)| {
+                let parent = if n == 0 { None } else { Some(keys[n - 1]) };
+                item(n as u32 + 1, "milestone", Some(k), parent)
+            })
+            .collect();
+        // e -> d -> c -> b -> a. Pointing a at e closes it.
+        assert!(would_cycle(&items, &def, 1, "e"));
+    }
+
+    /// A diamond is not a cycle, and reporting one would refuse a shape people
+    /// legitimately build.
+    #[test]
+    fn a_diamond_is_not_a_cycle() {
+        let def = field("parent", "milestone", "key");
+        let items = vec![
+            item(1, "milestone", Some("root"), None),
+            item(2, "milestone", Some("left"), Some("root")),
+            item(3, "milestone", Some("right"), Some("root")),
+            item(4, "milestone", Some("leaf"), Some("left")),
+        ];
+        assert!(!would_cycle(&items, &def, 4, "right"));
+    }
+
+    #[test]
+    fn a_value_naming_nothing_closes_no_cycle() {
+        let def = field("parent", "milestone", "key");
+        let items = vec![item(1, "milestone", Some("a"), None)];
+        assert!(!would_cycle(&items, &def, 1, "nonexistent"));
+    }
+
+    // --- depth --------------------------------------------------------------
+
+    #[test]
+    fn depth_counts_the_chain_above_an_item() {
+        let cfg = schema(
+            "[[field]]\nname = \"parent\"\nkind = \"ref\"\n\
+             target = \"milestone\"\nby = \"key\"\nrollup = true\n",
+        );
+        let def = cfg.field("parent").unwrap().clone();
+        let _ = &def;
+        let items = vec![
+            item(1, "milestone", Some("a"), None),
+            item(2, "milestone", Some("b"), Some("a")),
+            item(3, "milestone", Some("c"), Some("b")),
+        ];
+        assert_eq!(depth(&items, &cfg, &items[0]), 0, "a leaf of the chain");
+        assert_eq!(depth(&items, &cfg, &items[1]), 1);
+        assert_eq!(depth(&items, &cfg, &items[2]), 2);
+    }
+
+    #[test]
+    fn depth_is_zero_when_nothing_composes() {
+        // No `rollup`, so nothing contributes to a hierarchy.
+        let cfg = schema(
+            "[[field]]\nname = \"parent\"\nkind = \"ref\"\n\
+             target = \"milestone\"\nby = \"key\"\n",
+        );
+        let items = vec![
+            item(1, "milestone", Some("a"), None),
+            item(2, "milestone", Some("b"), Some("a")),
+        ];
+        assert_eq!(depth(&items, &cfg, &items[1]), 0);
+    }
+
+    /// A cycle written by hand must not make this run forever. `check` reports
+    /// the cycle; `depth` has to survive it.
+    #[test]
+    fn depth_terminates_on_a_cycle() {
+        let cfg = schema(
+            "[[field]]\nname = \"parent\"\nkind = \"ref\"\n\
+             target = \"milestone\"\nby = \"key\"\nrollup = true\n",
+        );
+        let items = vec![
+            item(1, "milestone", Some("a"), Some("b")),
+            item(2, "milestone", Some("b"), Some("a")),
+        ];
+        assert!(depth(&items, &cfg, &items[0]) <= 2);
+    }
+
+    #[test]
+    fn depth_survives_a_parent_that_is_not_there() {
+        let cfg = schema(
+            "[[field]]\nname = \"parent\"\nkind = \"ref\"\n\
+             target = \"milestone\"\nby = \"key\"\nrollup = true\n",
+        );
+        let items = vec![item(1, "milestone", Some("a"), Some("gone"))];
+        assert_eq!(depth(&items, &cfg, &items[0]), 0);
+    }
+
+    // --- permitted, targets, is_container -----------------------------------
+
+    #[test]
+    fn permitted_lists_only_the_target_type_and_is_sorted() {
+        let cfg = schema(
+            "[[field]]\nname = \"parent\"\nkind = \"ref\"\n\
+             target = \"milestone\"\nby = \"key\"\n",
+        );
+        let def = cfg.field("parent").unwrap();
+        let items = vec![
+            item(1, "milestone", Some("v0.2"), None),
+            item(2, "milestone", Some("v0.1"), None),
+            item(3, "feature", Some("nope"), None),
+            item(4, "milestone", None, None),
+        ];
+        assert_eq!(permitted(&items, &cfg, def), vec!["v0.1", "v0.2"]);
+    }
+
+    /// A type named as a specific target is a container. `*` does not make
+    /// everything one, which is why `depends_on` does not empty `cairn next`.
+    #[test]
+    fn a_named_target_makes_a_container_and_a_wildcard_does_not() {
+        let cfg = schema(
+            "[[field]]\nname = \"parent\"\nkind = \"ref\"\n\
+             target = \"milestone\"\nby = \"key\"\n\
+             [[field]]\nname = \"related\"\nkind = \"ref\"\ntarget = \"*\"\nby = \"id\"\n",
+        );
+        assert!(cfg.is_container(Some("milestone")));
+        assert!(!cfg.is_container(Some("feature")));
+        assert!(!cfg.is_container(None));
+    }
+
+    // --- Milestones, which are the reason most of this exists ---------------
+
+    #[test]
+    fn no_milestone_field_means_no_milestones() {
+        let cfg = schema("");
+        let items = vec![item(1, "milestone", Some("v0.1"), None)];
+        assert!(
+            Milestones::new(&cfg, &items).is_empty(),
+            "the field is what names the type; without it there is nothing to read"
+        );
+    }
+
+    /// The field's own `target` decides which items are milestones, not the
+    /// name of the type.
+    #[test]
+    fn the_milestone_field_target_is_what_is_read() {
+        let cfg = schema(
+            "[[field]]\nname = \"milestone\"\nkind = \"ref\"\n\
+             target = \"epic\"\nby = \"key\"\nrollup = true\n",
+        );
+        let items = vec![
+            item(1, "milestone", Some("v0.1"), None),
+            item(2, "epic", Some("e1"), None),
+        ];
+        let found = Milestones::new(&cfg, &items);
+        assert_eq!(
+            found.keys(),
+            vec!["e1"],
+            "it read the type it was pointed at"
+        );
+    }
+
+    #[test]
+    fn a_keyless_milestone_is_not_offered_as_a_choice() {
+        let cfg = schema(
+            "[[field]]\nname = \"milestone\"\nkind = \"ref\"\n\
+             target = \"milestone\"\nby = \"key\"\nrollup = true\n",
+        );
+        let items = vec![
+            item(1, "milestone", Some("v0.1"), None),
+            item(2, "milestone", None, None),
+        ];
+        let found = Milestones::new(&cfg, &items);
+        assert_eq!(found.keys(), vec!["v0.1"]);
+        assert_eq!(found.as_items().len(), 2, "but it is still a milestone");
+    }
+
+    #[test]
+    fn targets_skips_what_does_not_resolve() {
+        let def = field("parent", "milestone", "key");
+        let mut child = item(2, "feature", None, Some("gone"));
+        child.meta.extra.insert(
+            serde_yaml_ng::Value::String("parent".into()),
+            serde_yaml_ng::Value::String("gone".into()),
+        );
+        let items = vec![item(1, "milestone", Some("a"), None), child];
+        assert!(targets(&items, &items[1], &def).is_empty());
+    }
 }

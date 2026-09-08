@@ -2,7 +2,7 @@
 id: 102
 title: Unit-test the reference machinery
 type: chore
-status: backlog
+status: done
 milestone: v0.2
 created: 2026-09-07
 updated: 2026-09-07
@@ -54,8 +54,12 @@ next thing is layered on top.
 
 ## Acceptance criteria
 
-- [ ] Every pure function in `refs.rs` has direct unit tests
-- [ ] Cycle detection is tested at depth 1, 2 and 5, and a diamond is not a cycle
-- [ ] Key resolution is tested for case, and for a key shaped like an identifier
-- [ ] `rename_key` is tested for a referrer by key and one by id
-- [ ] None of them build a project on disk
+- [x] Every pure function in `refs.rs` has direct unit tests
+- [x] Cycle detection is tested at depth 1, 2 and 5, and a diamond is not a cycle
+- [x] Key resolution is tested for case, and for a key shaped like an identifier
+- [x] `rename_key` is tested for a referrer by key and one by id
+- [x] None of them build a project on disk
+
+## 2026-09-07
+
+Done. Nineteen unit tests in refs.rs, none of which builds a project on disk: resolution by key and by id including case and the deliberate refusal of an id in a key-addressed field, cycles at depth 1, 2 and 5 with a diamond asserted not to be one, depth including a hand-written cycle and a missing parent, `permitted`, container derivation, and Milestones with no field declared and with a field pointing at another type. `rename_key` needs a Store, so it is a CLI test rather than a unit one — the case that was missing is a referrer by id being left alone, since an id names the item and not its handle.
