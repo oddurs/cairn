@@ -7611,6 +7611,11 @@ fn a_dependency_cycle_is_refused_at_every_depth() {
 
 /// The render hook fires with the file it wrote and how many items went into
 /// it, which is a different shape from the item hooks.
+///
+/// Unix only, and deliberately: the string form of a hook goes through the
+/// platform shell, which is the thing that makes it platform-specific. The
+/// manual says so, and the portable form is the argv array tested below.
+#[cfg(unix)]
 #[test]
 fn the_render_hook_reports_the_file_and_the_count() {
     let p = seeded();
