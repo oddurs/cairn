@@ -339,10 +339,55 @@ pub fn today() -> String {
 /// as a person simply is one, which is why the manual calls the restrictions a
 /// guard rail rather than a boundary.
 pub fn acting_agent() -> Option<String> {
+    if let Some(name) = ACTING.read().ok().and_then(|g| g.clone()) {
+        return Some(name);
+    }
     std::env::var("CAIRN_AGENT")
         .ok()
-        .map(|v| v.trim().to_string())
+        .map(|v| sanitise_agent(&v))
         .filter(|v| !v.is_empty())
+}
+
+/// Set within this process, by whatever established that an agent is calling.
+///
+/// This used to be `unsafe { env::set_var("CAIRN_AGENT", ..) }` from the MCP
+/// server. Two things were wrong with that. Mutating the process environment is
+/// unsound in the presence of any other thread reading it, which is why the
+/// call needs `unsafe` at all; and `set_var` *panics* on a value containing a
+/// NUL byte, so a `clientInfo.name` off the wire could kill the server. It did.
+static ACTING: std::sync::RwLock<Option<String>> = std::sync::RwLock::new(None);
+
+/// Declare that this process is acting for an agent, by name.
+pub fn act_as_agent(name: &str) {
+    let name = sanitise_agent(name);
+    if name.is_empty() {
+        return;
+    }
+    if let Ok(mut g) = ACTING.write() {
+        *g = Some(name);
+    }
+}
+
+/// A name that arrived from outside and is about to be written into
+/// frontmatter, passed to a hook, and shown to people.
+///
+/// Control characters are replaced rather than stripped, so `a\nb` cannot
+/// silently become `ab` and pass for a different caller, and the whole thing is
+/// bounded: a client is free to call itself anything, and a project's files are
+/// not the place to find out how long anything is.
+pub fn sanitise_agent(raw: &str) -> String {
+    let cleaned: String = raw
+        .chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .collect();
+    let mut out = String::new();
+    for word in cleaned.split_whitespace() {
+        if !out.is_empty() {
+            out.push(' ');
+        }
+        out.push_str(word);
+    }
+    out.chars().take(64).collect()
 }
 
 pub fn whoami() -> String {

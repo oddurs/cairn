@@ -68,6 +68,15 @@ pub fn run(args: Args) -> Result<i32> {
     // Anything a hook prints would land in the middle of the protocol stream.
     hooks::silence_output();
 
+    // The transport is the signal, and it is the only reliable one.
+    //
+    // This used to be established from `clientInfo.name` during `initialize`,
+    // which meant a client that never called `initialize` — or called a tool
+    // first — was not an agent as far as the permission model was concerned,
+    // and could write a field the schema said it may only read. Arriving over
+    // this transport is what makes a caller an agent; the name only says which.
+    crate::store::act_as_agent("mcp");
+
     let stdin = std::io::stdin();
     let mut stdout = std::io::stdout();
     for line in stdin.lock().lines() {
@@ -103,10 +112,17 @@ pub fn run(args: Args) -> Result<i32> {
                     .map(str::trim)
                     .filter(|n| !n.is_empty())
                 {
-                    let _ = CLIENT.set(name.to_string());
-                    // Everything downstream — provenance, and what an agent may
-                    // touch — reads this rather than being passed a flag.
-                    unsafe { std::env::set_var("CAIRN_AGENT", name) };
+                    // Sanitised once, here, because this string becomes an
+                    // assignee, a `created_by`, and a hook's environment. A
+                    // newline in it would otherwise be written into frontmatter
+                    // as a block scalar — valid YAML, and not a name.
+                    let name = crate::store::sanitise_agent(name);
+                    if !name.is_empty() {
+                        let _ = CLIENT.set(name.clone());
+                        // Refines the name only. That this is an agent at all
+                        // was settled before the first request was read.
+                        crate::store::act_as_agent(&name);
+                    }
                 }
                 success(id, initialize())
             }
@@ -409,12 +425,17 @@ fn create_item(a: &Value) -> Result<String> {
     if let Some(k) = s(a, "type").or_else(|| cfg.project.default_type.clone()) {
         apply_requested(&mut item, &cfg, "type", Assign::Set(k))?;
     }
-    apply(
-        &mut item,
-        &cfg,
-        "status",
-        Assign::Set(s(a, "status").unwrap_or_else(|| cfg.initial_status().to_string())),
-    )?;
+    match s(a, "status") {
+        // Asked for: the schema may forbid it.
+        Some(v) => apply_requested(&mut item, &cfg, "status", Assign::Set(v))?,
+        // The project's own default is not something the caller chose.
+        None => apply(
+            &mut item,
+            &cfg,
+            "status",
+            Assign::Set(cfg.initial_status().to_string()),
+        )?,
+    }
     for key in ["milestone", "assignee", "labels", "depends_on"] {
         if let Some(v) = s(a, key) {
             apply_requested(&mut item, &cfg, key, Assign::Set(v))?;
@@ -426,9 +447,13 @@ fn create_item(a: &Value) -> Result<String> {
             apply(&mut item, &cfg, &f.name, Assign::Set(d.clone()))?;
         }
     }
+    // `apply_requested`, not `apply`: these came from the caller, and the
+    // schema may say the caller is not allowed to set them. The defaults above
+    // stay on `apply`, which is the whole reason the two are separate — an
+    // agent that could not receive a default could not create anything.
     if let Some(fields) = a.get("fields").and_then(Value::as_object) {
         for (k, v) in fields {
-            apply(&mut item, &cfg, k, Assign::Set(value_to_string(v)))?;
+            apply_requested(&mut item, &cfg, k, Assign::Set(value_to_string(v)))?;
         }
     }
     for f in &cfg.fields {
@@ -467,17 +492,22 @@ fn update_item(a: &Value) -> Result<String> {
     let lock = Lock::acquire(&cfg)?;
     let mut item = store.find(require_id(&cfg, a)?)?;
 
-    let Some(fields) = a.get("fields").and_then(Value::as_object) else {
-        bail!("`fields` is required: an object of field names to values");
-    };
+    let fields = a.get("fields").and_then(Value::as_object);
+    let body = a.get("body").and_then(Value::as_str);
+    // `fields` used to be required, so replacing only the body was refused for
+    // want of an empty object. Either alone is a change; neither is not.
+    if fields.is_none() && body.is_none() {
+        bail!("nothing to change: pass `fields`, or `body`, or both");
+    }
+
     let before = item.meta.depends_on.clone();
-    for (k, v) in fields {
-        apply(&mut item, &cfg, k, Assign::Set(value_to_string(v)))?;
+    for (k, v) in fields.into_iter().flatten() {
+        apply_requested(&mut item, &cfg, k, Assign::Set(value_to_string(v)))?;
     }
     if item.meta.depends_on != before {
         crate::cmd::set::check_no_cycle(&store, &item)?;
     }
-    if let Some(body) = a.get("body").and_then(Value::as_str) {
+    if let Some(body) = body {
         item.set_body(body);
     }
     item.touch(&today());
@@ -560,8 +590,8 @@ fn claim_item(a: &Value) -> Result<String> {
             None => bail!("no `active` status is defined in cairn.toml"),
         },
     };
-    apply(&mut item, &cfg, "assignee", Assign::Set(who.clone()))?;
-    apply(&mut item, &cfg, "status", Assign::Set(status))?;
+    apply_requested(&mut item, &cfg, "assignee", Assign::Set(who.clone()))?;
+    apply_requested(&mut item, &cfg, "status", Assign::Set(status))?;
     item.touch(&today());
     item.save()?;
     drop(lock);
@@ -621,7 +651,7 @@ fn close_item(a: &Value) -> Result<String> {
             None => bail!("no `done` status is defined in cairn.toml"),
         },
     };
-    apply(&mut item, &cfg, "status", Assign::Set(status))?;
+    apply_requested(&mut item, &cfg, "status", Assign::Set(status))?;
     item.touch(&today());
     item.save()?;
     drop(lock);
@@ -701,6 +731,16 @@ fn int_prop(desc: &str) -> Value {
     json!({ "type": "integer", "description": desc })
 }
 
+/// An item id, as the server actually accepts it.
+///
+/// `require_id` takes `12` or `"MP-1002"` on purpose — a model that has seen
+/// the rendered form in output will send the rendered form. The schema said
+/// integer, which advertised less than the server does. A schema that
+/// under-promises is a schema a caller obeys unnecessarily.
+fn id_prop(desc: &str) -> Value {
+    json!({ "type": ["integer", "string"], "description": desc })
+}
+
 fn bool_prop(desc: &str) -> Value {
     json!({ "type": "boolean", "description": desc })
 }
@@ -763,7 +803,7 @@ fn tools() -> Vec<Value> {
             "name": "show_item",
             "description": "One item in full, including its Markdown body, its dependencies \
         and whether it is blocked.",
-            "inputSchema": obj(json!({ "id": int_prop("Item id") }), vec!["id"]),
+            "inputSchema": obj(json!({ "id": id_prop("Item id, as a number or in the project's rendered form") }), vec!["id"]),
         }),
         json!({
             "name": "claim_item",
@@ -772,7 +812,7 @@ fn tools() -> Vec<Value> {
         unclaimed item. Refuses an item someone else holds, or one that is blocked, unless force is \
         set. Returns the item's body so you can start immediately.",
             "inputSchema": obj(json!({
-                "id": int_prop("Item id; omit to take the next ready one"),
+                "id": id_prop("Item id; omit to take the next ready one"),
                 "as": str_prop("Claim as this name (default: CAIRN_USER, else git user.name)"),
                 "status": str_prop("Status to move to (default: the first active status)"),
                 "milestone": str_prop("When picking automatically, restrict to this milestone"),
@@ -806,20 +846,20 @@ fn tools() -> Vec<Value> {
             "description": "Change fields on an item. Every value is validated against the \
         schema before anything is written.",
             "inputSchema": obj(json!({
-                "id": int_prop("Item id"),
+                "id": id_prop("Item id"),
                 "fields": json!({
                     "type": "object",
                     "description": "Field names to values, e.g. {\"status\":\"doing\",\"priority\":\"p0\"}. \
         An empty string clears a field.",
                 }),
                 "body": str_prop("Replace the Markdown body"),
-            }), vec!["id", "fields"]),
+            }), vec!["id"]),
         }),
         json!({
             "name": "close_item",
             "description": "Mark an item finished.",
             "inputSchema": obj(json!({
-                "id": int_prop("Item id"),
+                "id": id_prop("Item id"),
                 "status": str_prop("Status to move to (default: the first done status)"),
             }), vec!["id"]),
         }),
@@ -829,7 +869,7 @@ fn tools() -> Vec<Value> {
         what was tried, what to watch for. Use this rather than update_item's `body` when adding to the \
         record: it cannot erase what is already there. A status says what was decided; a note says why.",
             "inputSchema": obj(json!({
-                "id": int_prop("Item id"),
+                "id": id_prop("Item id"),
                 "text": str_prop("The note, in Markdown"),
                 "heading": str_prop("Heading to file it under (default: today's date)"),
             }), vec!["id", "text"]),
