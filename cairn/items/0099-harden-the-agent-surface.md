@@ -2,7 +2,7 @@
 id: 99
 title: Harden the agent surface
 type: chore
-status: backlog
+status: done
 milestone: v0.1
 created: 2026-09-07
 updated: 2026-09-07
@@ -67,9 +67,13 @@ accepts. Then the cases nobody writes by hand:
 
 ## Acceptance criteria
 
-- [ ] Each of the twelve tools has a test asserting its schema matches what it accepts
-- [ ] Read-only and propose are tested on a field and on a status, for refusal *and* for nothing written
-- [ ] `clientInfo.name` is tested with a newline, a NUL, something very long, and a metacharacter
-- [ ] `tools/call` before `initialize` behaves deliberately
-- [ ] Two concurrent clients are tested
-- [ ] The `unsafe` is either justified in a comment or removed
+- [x] Each of the twelve tools has a test asserting its schema matches what it accepts
+- [x] Read-only and propose are tested on a field and on a status, for refusal *and* for nothing written
+- [x] `clientInfo.name` is tested with a newline, a NUL, something very long, and a metacharacter
+- [x] `tools/call` before `initialize` behaves deliberately
+- [x] Two concurrent clients are tested
+- [x] The `unsafe` is either justified in a comment or removed
+
+## 2026-09-07
+
+Done, and it found more than the item predicted. The permission model was not enforced over MCP at all: create_item and update_item applied the caller's `fields` object with `apply` rather than `apply_requested`, and claim_item and close_item did the same for status — so every custom field, every status move and every close went straight past the check. The command line enforced it and the server did not, the exact inverse of what the manual and the code comment both claimed. Also: a NUL byte in clientInfo.name reached `env::set_var`, which panics, and killed the server mid-stream. The `unsafe` is gone — identity is a process global that `acting_agent` consults, hooks are passed CAIRN_AGENT explicitly rather than by inheritance, and the name is sanitised once before it becomes an assignee. Eleven tools, not twelve; the twelfth was serverInfo.name in a grep.

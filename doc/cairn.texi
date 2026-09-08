@@ -1804,10 +1804,19 @@ a model reads them rather than discovering them by being refused.
 @cindex guard rail
 @strong{A guard rail, not a security boundary.}
 
-The Model Context Protocol server knows who is calling, because the caller
-identifies itself, and it can refuse. A command line cannot: an agent with a
-shell runs @command{cairn set} and nothing here sees it. Nothing detects an
-agent --- a program that wants to be treated as a person simply is one.
+The Model Context Protocol server knows who is calling and refuses. A command
+line cannot: an agent with a shell runs @command{cairn set} and nothing here
+sees it. Nothing detects an agent --- a program that wants to be treated as a
+person simply is one.
+
+@cindex transport
+What makes a caller an agent over MCP is the transport, not what it says about
+itself. Arriving on that connection is enough; @code{clientInfo.name} only
+settles which agent, and a client that never sends one is still an agent called
+@code{mcp}. This was worth getting right: while the identity came from
+@code{clientInfo.name} alone, a client that called a tool before
+@code{initialize} was not an agent as far as the restrictions were concerned,
+and could set a field the schema reserved.
 
 Saying otherwise would be the first dishonest sentence in this manual. The
 comparison is a git hook: useful, conventional, and not a lock.

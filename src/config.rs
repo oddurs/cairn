@@ -262,9 +262,15 @@ pub enum FieldKind {
 /// What an agent may do with a field or a status.
 ///
 /// A guard rail rather than a boundary, and the manual says so. The Model
-/// Context Protocol server knows who is calling and can refuse; a command line
+/// Context Protocol server knows who is calling and refuses; a command line
 /// cannot, because an agent with a shell can run `cairn set`. Claiming more
 /// than that would be worse than offering nothing.
+///
+/// "Can refuse" was doing a lot of work in an earlier version of this comment.
+/// The server applied a caller's fields with `apply` rather than
+/// `apply_requested`, so every custom field, every status move and every close
+/// went past the check untouched — the command line enforced this and the MCP
+/// server did not, which is the exact inverse of what this comment claimed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum Agent {

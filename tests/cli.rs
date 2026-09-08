@@ -5479,3 +5479,380 @@ fn a_saved_view_using_an_alias_is_not_called_a_typo() {
         "an alias `get` answers is a legitimate key: {out}"
     );
 }
+
+// --- the agent surface, held to what it advertises --------------------------
+
+/// A project that restricts what an agent may touch, in both of the ways the
+/// schema allows: a field it may only read, and a status it may only propose.
+fn restricted_for_agents() -> Project {
+    let p = seeded();
+    let cfg = p
+        .read("cairn.toml")
+        .replace(
+            "[[field]]\nname = \"priority\"",
+            "[[field]]\nname = \"risk\"\nkind = \"text\"\nagent = \"read-only\"\n\n\
+             [[field]]\nname = \"priority\"",
+        )
+        .replace(
+            "name = \"done\"\ncategory = \"done\"",
+            "name = \"done\"\nagent = \"propose\"\ncategory = \"done\"",
+        );
+    p.write("cairn.toml", &cfg);
+    p
+}
+
+/// One call, with an `initialize` before it unless asked otherwise.
+fn tool(
+    p: &Project,
+    name: &str,
+    args: serde_json::Value,
+    client: Option<&str>,
+) -> serde_json::Value {
+    let call = serde_json::json!({
+        "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+        "params": { "name": name, "arguments": args }
+    })
+    .to_string();
+    let replies = match client {
+        Some(who) => {
+            let init = serde_json::json!({
+                "jsonrpc": "2.0", "id": 0, "method": "initialize",
+                "params": { "clientInfo": { "name": who } }
+            })
+            .to_string();
+            mcp_anonymous(p, &[&init, &call])
+        }
+        None => mcp_anonymous(p, &[&call]),
+    };
+    replies.last().expect("a reply")["result"].clone()
+}
+
+fn refused(r: &serde_json::Value) -> bool {
+    r["isError"] == serde_json::json!(true)
+}
+
+fn text(r: &serde_json::Value) -> String {
+    r["content"][0]["text"]
+        .as_str()
+        .unwrap_or_default()
+        .to_string()
+}
+
+/// The permission model was enforced on the command line and not over MCP —
+/// the exact inverse of what the code and the manual both claimed.
+///
+/// `create_item` and `update_item` applied the caller's `fields` object with
+/// `apply` rather than `apply_requested`, so every custom field went straight
+/// past the check. `claim_item` and `close_item` did the same for `status`.
+#[test]
+fn an_agent_cannot_write_a_field_the_schema_reserves() {
+    let p = restricted_for_agents();
+
+    for (name, args) in [
+        (
+            "create_item",
+            serde_json::json!({"title": "New", "fields": {"risk": "high"}}),
+        ),
+        (
+            "update_item",
+            serde_json::json!({"id": 1, "fields": {"risk": "high"}}),
+        ),
+    ] {
+        let r = tool(&p, name, args, Some("claude"));
+        assert!(refused(&r), "{name} wrote a read-only field: {}", text(&r));
+        assert_contains(&text(&r), "may read `risk` but not set it", "and said why");
+    }
+
+    // Nothing was written by the refused create.
+    assert!(
+        !p.expect(&["list", "-A", "--plain"]).stdout.contains("New"),
+        "a refused create must leave nothing behind"
+    );
+    // And the field is genuinely still unset on the item that was updated.
+    assert!(
+        !p.expect(&["show", "1", "--json"])
+            .stdout
+            .contains("\"risk\""),
+        "the read-only field was written anyway"
+    );
+}
+
+#[test]
+fn an_agent_cannot_move_an_item_to_a_status_it_may_only_propose() {
+    let p = restricted_for_agents();
+
+    let r = tool(
+        &p,
+        "close_item",
+        serde_json::json!({"id": 1}),
+        Some("claude"),
+    );
+    assert!(
+        refused(&r),
+        "close_item moved to a propose status: {}",
+        text(&r)
+    );
+    assert_contains(&text(&r), "may not move an item to `done`", "");
+
+    let r = tool(
+        &p,
+        "create_item",
+        serde_json::json!({"title": "Born done", "status": "done"}),
+        Some("claude"),
+    );
+    assert!(
+        refused(&r),
+        "create_item started at a propose status: {}",
+        text(&r)
+    );
+}
+
+/// The permission model hung off `clientInfo.name`, recorded during
+/// `initialize`. A client that called a tool first was not an agent as far as
+/// the check was concerned, and could write anything.
+///
+/// Arriving over this transport is what makes a caller an agent. The name only
+/// says which one.
+#[test]
+fn skipping_initialize_does_not_escape_the_permission_model() {
+    let p = restricted_for_agents();
+
+    let r = tool(
+        &p,
+        "create_item",
+        serde_json::json!({"title": "Snuck in", "fields": {"risk": "high"}}),
+        None,
+    );
+    assert!(
+        refused(&r),
+        "a tool call before initialize wrote it: {}",
+        text(&r)
+    );
+    assert_contains(&text(&r), "`mcp`", "named as an agent even unidentified");
+}
+
+/// `clientInfo.name` arrives off the wire and becomes an assignee, a
+/// `created_by`, and a hook's environment. A NUL byte in it used to reach
+/// `std::env::set_var`, which panics, and killed the server mid-stream.
+#[test]
+fn a_hostile_client_name_does_not_bring_the_server_down() {
+    let p = seeded();
+
+    for name in [
+        "cl\u{0}ude",
+        "evil\ntitle: pwned",
+        "tab\there",
+        "$(rm -rf /)",
+        "../../etc/passwd",
+    ] {
+        let r = tool(&p, "check", serde_json::json!({}), Some(name));
+        assert!(
+            !r.is_null(),
+            "the server did not answer for a client called {name:?}"
+        );
+    }
+
+    // And a name with a newline in it is written as a name, not as a scalar
+    // that happens to contain a line break.
+    let p = seeded();
+    tool(
+        &p,
+        "claim_item",
+        serde_json::json!({"id": 1, "force": true}),
+        Some("evil\ntitle: pwned"),
+    );
+    let file = p.read(&p.expect(&["show", "1", "--path"]).trimmed());
+    assert!(
+        file.contains("assignee: 'evil title: pwned'"),
+        "the newline survived into the frontmatter:\n{file}"
+    );
+    assert!(p.run(&["check"]).ok(), "and the project still parses");
+}
+
+/// A very long name is bounded before it reaches a file.
+#[test]
+fn a_client_name_is_bounded() {
+    let p = seeded();
+    let long = "n".repeat(10_000);
+    tool(
+        &p,
+        "claim_item",
+        serde_json::json!({"id": 1, "force": true}),
+        Some(&long),
+    );
+    let json: serde_json::Value =
+        serde_json::from_str(&p.expect(&["show", "1", "--json"]).stdout).unwrap();
+    let who = json["assignee"].as_str().unwrap_or_default();
+    assert!(
+        who.len() <= 64 && !who.is_empty(),
+        "a client is free to call itself anything; a project's files are not \
+         the place to find out how long: {} chars",
+        who.len()
+    );
+}
+
+/// Every tool advertises a schema. A schema that under-promises is one a
+/// caller obeys unnecessarily; one that over-promises is a lie.
+#[test]
+fn every_tool_accepts_what_its_schema_advertises() {
+    let p = seeded();
+    let replies = mcp(&p, &[r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#]);
+    let tools = replies[0]["result"]["tools"].as_array().expect("tools");
+    assert_eq!(
+        tools.len(),
+        11,
+        "a tool was added or removed without a test"
+    );
+
+    for t in tools {
+        let name = t["name"].as_str().unwrap();
+        let schema = &t["inputSchema"];
+        assert_eq!(schema["type"], "object", "{name}");
+        let required = schema["required"].as_array().expect("required");
+        let props = schema["properties"].as_object().expect("properties");
+        for r in required {
+            let r = r.as_str().unwrap();
+            assert!(
+                props.contains_key(r),
+                "{name} requires `{r}` and does not describe it"
+            );
+        }
+
+        // Every tool taking an id must say it accepts the rendered form too,
+        // because `require_id` does and a model that has seen `0001` in output
+        // will send `0001`.
+        if let Some(id) = props.get("id") {
+            assert_eq!(
+                id["type"],
+                serde_json::json!(["integer", "string"]),
+                "{name} advertises less than it accepts for `id`"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_tool_accepts_an_id_in_either_form() {
+    let p = seeded();
+    for id in [serde_json::json!(1), serde_json::json!("0001")] {
+        let r = tool(
+            &p,
+            "show_item",
+            serde_json::json!({"id": id}),
+            Some("claude"),
+        );
+        assert!(!refused(&r), "{id} was refused: {}", text(&r));
+    }
+}
+
+/// `fields` was required, so replacing only the body meant sending an empty
+/// object for want of anything better.
+#[test]
+fn an_update_may_change_only_the_body() {
+    let p = seeded();
+    let r = tool(
+        &p,
+        "update_item",
+        serde_json::json!({"id": 1, "body": "Rewritten."}),
+        Some("claude"),
+    );
+    assert!(!refused(&r), "{}", text(&r));
+    assert_contains(&p.expect(&["show", "1"]).stdout, "Rewritten.", "");
+
+    // Neither one is not a change.
+    let r = tool(
+        &p,
+        "update_item",
+        serde_json::json!({"id": 1}),
+        Some("claude"),
+    );
+    assert!(refused(&r));
+    assert_contains(&text(&r), "nothing to change", "");
+}
+
+/// Arguments of the wrong JSON type, which a model produces more often than a
+/// missing argument.
+#[test]
+fn a_tool_given_the_wrong_type_fails_in_band() {
+    let p = seeded();
+    for (name, args) in [
+        ("show_item", serde_json::json!({"id": {"nested": true}})),
+        (
+            "update_item",
+            serde_json::json!({"id": 1, "fields": "not an object"}),
+        ),
+        ("search_items", serde_json::json!({"query": 42})),
+        ("list_items", serde_json::json!({"limit": "many"})),
+        ("add_note", serde_json::json!({"id": 1, "text": []})),
+    ] {
+        let r = tool(&p, name, args, Some("claude"));
+        assert!(
+            !r.is_null() && r["content"][0]["type"] == "text",
+            "{name} did not answer in band"
+        );
+    }
+    assert!(p.run(&["check"]).ok(), "and nothing was corrupted");
+}
+
+/// Two clients against one project. The lock is the only thing between them.
+#[test]
+fn two_agents_at_once_leave_one_consistent_backlog() {
+    let p = seeded();
+    let mut kids = Vec::new();
+    for who in ["claude", "codex"] {
+        let init = serde_json::json!({
+            "jsonrpc": "2.0", "id": 0, "method": "initialize",
+            "params": { "clientInfo": { "name": who } }
+        })
+        .to_string();
+        let mut input = vec![init];
+        for n in 0..8 {
+            input.push(
+                serde_json::json!({
+                    "jsonrpc": "2.0", "id": n + 1, "method": "tools/call",
+                    "params": { "name": "create_item",
+                                "arguments": { "title": format!("{who} {n}") } }
+                })
+                .to_string(),
+            );
+        }
+        let root = p.root().to_path_buf();
+        kids.push(std::thread::spawn(move || {
+            let mut child = Command::new(bin())
+                .arg("mcp")
+                .current_dir(&root)
+                .env("NO_COLOR", "1")
+                .env("PATH", path_with_binary())
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+                .expect("spawn");
+            use std::io::Write;
+            child
+                .stdin
+                .take()
+                .unwrap()
+                .write_all(format!("{}\n", input.join("\n")).as_bytes())
+                .expect("write");
+            child.wait_with_output().expect("wait")
+        }));
+    }
+    for k in kids {
+        let out = k.join().expect("thread");
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    assert!(p.run(&["check"]).ok(), "{}", p.run(&["check"]).all());
+    let ids = p.expect(&["list", "-A", "--ids"]).lines();
+    let unique: std::collections::HashSet<_> = ids.iter().collect();
+    assert_eq!(
+        ids.len(),
+        unique.len(),
+        "two clients were given the same id"
+    );
+}

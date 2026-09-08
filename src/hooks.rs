@@ -136,6 +136,15 @@ fn spawn(cfg: &Config, event: Event, hook: &Hook, env: Vec<(&str, String)>, stdi
         .env("CAIRN_EVENT", event.name())
         .env("CAIRN_ROOT", &cfg.root)
         .env("CAIRN_CONFIG", cfg.root.join(crate::config::CONFIG_FILE))
+        // Passed explicitly rather than inherited. It used to reach a hook
+        // because the MCP server wrote it into the process environment; now
+        // that it does not, a hook that wants to know who is acting still can.
+        .envs(
+            crate::store::acting_agent()
+                .map(|a| ("CAIRN_AGENT".to_string(), a))
+                .into_iter()
+                .collect::<Vec<_>>(),
+        )
         // Guard against a hook that calls cairn and re-triggers itself.
         .env("CAIRN_NO_HOOKS", "1")
         .stdin(Stdio::piped());
