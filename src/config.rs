@@ -115,6 +115,16 @@ pub struct Project {
     #[serde(default)]
     pub require_criteria: bool,
 
+    /// How long a claim may go untouched before it is called stale, in days.
+    ///
+    /// Absent by default, and inert when absent: a project where a claim means
+    /// an afternoon and one where it means a quarter are both real, and neither
+    /// is cairn's to guess. Stale means *visible*, never revoked — nothing is
+    /// ever released automatically, because taking work away from somebody slow
+    /// is worse than leaving it held.
+    #[serde(default)]
+    pub claim_stale_after: Option<u32>,
+
     /// The heading acceptance criteria live under, if the project keeps them
     /// somewhere specific.
     ///
@@ -743,6 +753,7 @@ impl Default for Project {
             dir: default_dir(),
             id_width: default_id_width(),
             require_criteria: false,
+            claim_stale_after: None,
             criteria_section: None,
             id_format: None,
             id_start: default_id_start(),
@@ -1096,6 +1107,7 @@ pub const RESERVED_FIELDS: &[&str] = &[
     "milestone",
     "labels",
     "assignee",
+    "claimed",
     "owner",
     "created_by",
     "created",

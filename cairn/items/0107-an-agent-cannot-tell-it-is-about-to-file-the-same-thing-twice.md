@@ -2,7 +2,7 @@
 id: 107
 title: An agent cannot tell it is about to file the same thing twice
 type: feature
-status: backlog
+status: done
 milestone: v0.1
 created: 2026-09-08
 updated: 2026-09-08
@@ -58,9 +58,13 @@ error, because a tool result is what the model reads.
 
 ## Acceptance criteria
 
-- [ ] `cairn new` reports near-duplicate titles and creates anyway
-- [ ] `create_item` reports them in the tool result, where a model will read it
-- [ ] Matching ignores case, punctuation and word order
-- [ ] Closed items are included, since re-filing something already done is the same mistake
-- [ ] `--quiet` suppresses the note; nothing about the exit status changes
-- [ ] A test files a plausible near-duplicate and asserts the warning names both
+- [x] `cairn new` reports near-duplicate titles and creates anyway
+- [x] `create_item` reports them in the tool result, where a model will read it
+- [x] Matching ignores case, punctuation and word order
+- [x] Closed items are included, since re-filing something already done is the same mistake
+- [x] `--quiet` suppresses the note; nothing about the exit status changes
+- [x] A test files a plausible near-duplicate and asserts the warning names both
+
+## 2026-09-08
+
+Done. `near_duplicates` normalises case and punctuation, compares word sets, and reports anything sharing three quarters of the shorter title's words — nothing clever, nothing that needs a model. Closed items count, since re-filing something already finished is the same mistake. Reported and created anyway on both surfaces; over the protocol it is in the tool result under `similar` and `note`, because standard error is not something a model reads. `--quiet` suppresses it.

@@ -81,21 +81,18 @@ pub fn run(args: Args) -> Result<i32> {
     let lock = Lock::acquire(&cfg)?;
     let mut item = store.find_ref(&args.id)?;
 
-    let addition = if args.bare {
-        text.to_string()
-    } else {
-        let heading = args.heading.clone().unwrap_or_else(today);
-        format!("## {heading}\n\n{text}")
-    };
-    // One blank line between what was there and what is being added, whatever
-    // the body ended with.
-    let body = item.body.trim_end();
-    let combined = if body.is_empty() {
-        addition
-    } else {
-        format!("{body}\n\n{addition}")
-    };
-    item.set_body(&combined);
+    match args.bare {
+        true => {
+            let body = item.body.trim_end();
+            let combined = if body.is_empty() {
+                text.to_string()
+            } else {
+                format!("{body}\n\n{text}")
+            };
+            item.set_body(&combined);
+        }
+        false => item.append_note(&args.heading.clone().unwrap_or_else(today), text),
+    }
     item.touch(&today());
     item.save()?;
     drop(lock);

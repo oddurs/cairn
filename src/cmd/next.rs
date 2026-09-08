@@ -191,6 +191,24 @@ pub fn run(args: Args) -> Result<i32> {
     t.drop_empty_columns(&["id", "status", "title"]);
     print!("{}", t.render());
 
+    // A claim nobody is honouring is offered back, with who has it and for how
+    // long. Offered, never taken: cairn must not quietly move work away from
+    // somebody slow, so this says what it found and stops.
+    let offered: Vec<&&Item> = picked.iter().filter(|i| ctx.is_stale(i)).collect();
+    if !offered.is_empty() {
+        println!();
+        for i in &offered {
+            let who = i.meta.assignee.as_deref().unwrap_or("somebody");
+            let days = crate::filter::held_days(i).unwrap_or_default();
+            eprintln!(
+                "{} {} has been claimed by {who} for {days} day(s) — `cairn claim {}` to take it over",
+                style::yellow("stale:"),
+                cfg.format_id(i.id),
+                cfg.format_id(i.id)
+            );
+        }
+    }
+
     // "What should I do now" has a shape as well as a list.
     let all: Vec<&Item> = items.iter().collect();
     println!("\n{}", style::dim(&summary(&ctx, &all)));

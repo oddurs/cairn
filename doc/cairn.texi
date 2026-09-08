@@ -1825,6 +1825,82 @@ What it buys is worth having regardless. A project that can say @emph{agents may
 set status and add notes, and may not change priority or acceptance criteria} is
 one somebody will point an agent at, and that is worth more than any feature.
 
+@section A claim is a promise somebody might not keep
+
+@cindex claim
+@cindex stale
+@vindex claimed
+@command{cairn claim} takes a lock on @emph{intent}, and it was the only lock
+here with nothing recording when it was taken. A person who stops working
+notices. An agent does not stop --- it ceases to exist, when a session is killed
+or hits a limit --- and the item it held stayed @code{doing} for ever: invisible
+to @command{cairn next} because it was claimed, and invisible to a person
+because nothing listed it.
+
+A claim now writes @code{claimed}, a date, beside @code{assignee}. It is its own
+key because @code{updated} means something else and every other edit moves it.
+Handing the item back or finishing it clears it.
+
+@example
+claim_stale_after = 3     # in [project], days
+@end example
+
+@noindent
+With that set, a claim untouched for longer is @dfn{stale}. @command{cairn next}
+offers it back, saying who holds it and for how long; @code{stale} and
+@code{held_days} work in any filter and as columns; and @command{cairn claim}
+will take one over without @option{--force}, saying whose it was.
+
+@quotation
+@strong{Stale means visible, never revoked.} Nothing is released automatically.
+Taking work away from somebody slow is worse than leaving it held, and cairn
+cannot tell the two apart --- only a person can.
+@end quotation
+
+Absent, nothing is ever stale and nothing about the tool changes. A project
+where a claim means an afternoon and one where it means a quarter are both real,
+and neither is cairn's to guess.
+
+@section Handing work back
+
+@cindex release
+@command{cairn release --reason} appends a dated note in the releaser's name,
+and @command{cairn claim} shows the most recent one to whoever takes the item
+next.
+
+The reason is the most valuable thing somebody handing work back knows, and it
+used to evaporate: an agent would spend an hour discovering an approach does not
+work, release, and the next one would walk the same dead end. A person who
+releases something usually says so in passing --- in a message, at a standup, to
+whoever asks. An agent has no passing. If it is not in the item, it did not
+happen.
+
+It is a note rather than a field on purpose. Three attempts on a hard item is a
+history, and a history is what a body is for; one @code{released_because} would
+be overwritten by the second attempt.
+
+@section Filing the same thing twice
+
+@cindex duplicates
+@command{cairn new} reports items whose titles look like the one being filed,
+and creates it anyway:
+
+@example
+$ cairn new "Rate limit the API"
+note: 0004 "Rate-limit the public API" looks similar --- check before filing another
+created 0042  Rate limit the API
+@end example
+
+Reported, never refused. Two items genuinely called the same thing is a real
+situation, and a tool that refused would teach people to mangle titles to get
+past it, which is worse than a duplicate.
+
+This is aimed at agents in particular. A person filing the same bug twice
+usually half-remembers doing it; an agent starts every session cold, so the
+backlog is not its record but its memory. Over the protocol the warning is in
+the tool @emph{result} rather than on standard error, because a result is what a
+model reads.
+
 @section Who is working, and who is answerable
 
 @vindex owner

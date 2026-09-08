@@ -78,6 +78,10 @@ pub struct ReleaseArgs {
     #[arg(long, action = ArgAction::SetTrue)]
     pub keep_status: bool,
 
+    /// Why it is being handed back, recorded as a note on the item
+    #[arg(long, value_name = "TEXT")]
+    pub reason: Option<String>,
+
     #[arg(short, long, action = ArgAction::SetTrue)]
     pub quiet: bool,
 }
@@ -128,15 +132,33 @@ pub fn claim(args: ClaimArgs) -> Result<i32> {
     let mut item = store.find(id)?;
     let who = args.who.clone().unwrap_or_else(whoami);
 
+    // A claim nobody has honoured for longer than the project allows is
+    // available. Taking one over is still an explicit act — somebody named this
+    // item — and it is said out loud, because the previous holder's name is
+    // about to be replaced by yours.
+    let stale = ctx.is_stale(&item);
     if let Some(holder) = item.meta.assignee.as_deref()
         && !holder.is_empty()
         && !holder.eq_ignore_ascii_case(&who)
         && !args.force
     {
-        bail!(
-            "{} is already claimed by {holder}\nuse --force to take it anyway",
-            cfg.format_id(id)
+        if !stale {
+            bail!(
+                "{} is already claimed by {holder}\nuse --force to take it anyway",
+                cfg.format_id(id)
+            );
+        }
+        let days = crate::filter::held_days(&item).unwrap_or_default();
+        eprintln!(
+            "{} taken over from {holder}, who has held it for {days} day(s)",
+            style::yellow("note:")
         );
+    }
+
+    // What the last person to hand this back knew is the first thing the next
+    // one should read.
+    if let Some(reason) = item.last_note("Released by") {
+        eprintln!("{} {reason}", style::dim("last released because:"));
     }
     if ctx.is_closed(&item) && !args.force {
         bail!(
@@ -171,6 +193,7 @@ pub fn claim(args: ClaimArgs) -> Result<i32> {
     };
 
     apply(&mut item, &cfg, "assignee", Assign::Set(who.clone()))?;
+    apply(&mut item, &cfg, "claimed", Assign::Set(today()))?;
     apply(&mut item, &cfg, "status", Assign::Set(status))?;
     item.touch(&today());
     item.save()?;
@@ -207,6 +230,15 @@ pub fn release(args: ReleaseArgs) -> Result<i32> {
     for raw in &args.ids {
         let mut item = store.find_ref(raw)?;
         apply(&mut item, &cfg, "assignee", Assign::Set(String::new()))?;
+        apply(&mut item, &cfg, "claimed", Assign::Set(String::new()))?;
+        // The most valuable thing somebody handing work back knows is why, and
+        // it used to evaporate: the next taker walked the same dead end. A note
+        // rather than a field, because three attempts on a hard item is a
+        // history and a history is what a body is for.
+        if let Some(reason) = &args.reason {
+            let who = crate::store::whoami();
+            item.append_note(&format!("Released by {who}"), reason);
+        }
         if !args.keep_status {
             let status = args
                 .status

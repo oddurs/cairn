@@ -203,6 +203,7 @@ pub fn item_json(
     // Who is answerable, and what made it. Writable and shown as columns since
     // they arrived, and absent from here — so an export dropped them and a
     // round trip through the interchange document lost them silently.
+    o.insert("claimed".into(), opt_json(item.meta.claimed.as_deref()));
     o.insert("owner".into(), opt_json(item.meta.owner.as_deref()));
     o.insert(
         "created_by".into(),
@@ -261,4 +262,21 @@ fn yaml_to_json(v: &serde_yaml_ng::Value) -> serde_json::Value {
         ),
         Y::Tagged(t) => yaml_to_json(&t.value),
     }
+}
+
+/// One line naming items that look like the one being filed.
+///
+/// Shared by `cairn new` and `create_item`, because the agent path is the one
+/// this exists for and a warning on standard error is not something a model
+/// reads — over the protocol it has to be in the result.
+pub fn similar_line(cfg: &crate::config::Config, similar: &[&crate::item::Item]) -> String {
+    let named: Vec<String> = similar
+        .iter()
+        .map(|i| format!("{} \"{}\"", cfg.format_id(i.id), i.title()))
+        .collect();
+    format!(
+        "{} look{} similar — check before filing another",
+        named.join(" and "),
+        if similar.len() == 1 { "s" } else { "" }
+    )
 }

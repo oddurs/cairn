@@ -2,7 +2,7 @@
 id: 108
 title: Handing work back loses the reason for handing it back
 type: feature
-status: backlog
+status: done
 milestone: v0.1
 created: 2026-09-08
 updated: 2026-09-08
@@ -59,9 +59,13 @@ is a history, and a history is what a body is for.
 
 ## Acceptance criteria
 
-- [ ] `cairn release --reason` appends a dated note naming who released it
-- [ ] The protocol server exposes the same, since an agent is the likeliest caller
-- [ ] `cairn claim` shows the most recent release reason when there is one
-- [ ] `cairn next` marks an item previously released with a reason
-- [ ] Releasing without a reason still works and says nothing extra
-- [ ] Nothing is stored in frontmatter: three attempts is a history, not a field
+- [x] `cairn release --reason` appends a dated note naming who released it
+- [x] The protocol server exposes the same, since an agent is the likeliest caller
+- [x] `cairn claim` shows the most recent release reason when there is one
+- [x] `cairn next` marks an item previously released with a reason
+- [x] Releasing without a reason still works and says nothing extra
+- [x] Nothing is stored in frontmatter: three attempts is a history, not a field
+
+## 2026-09-08
+
+Done. `release --reason` appends a dated note in the releaser's name, and `claim` shows the most recent one to whoever takes the item next. A note rather than a field, as filed: three attempts on a hard item is a history. `release_item` is a twelfth protocol tool, described so a model reaches for it rather than leaving an item claimed when it cannot finish. The appending logic was implemented separately in `note` and in the protocol server; it is now `Item::append_note`, used by all three.

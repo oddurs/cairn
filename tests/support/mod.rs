@@ -576,6 +576,7 @@ pub struct Schema {
     default_status: Option<String>,
     criteria_section: Option<String>,
     require_criteria: bool,
+    claim_stale_after: Option<u32>,
     types: Vec<(String, Option<String>)>,
     statuses: Vec<Status>,
     fields: Vec<Field>,
@@ -603,6 +604,7 @@ impl Schema {
             default_status: None,
             criteria_section: None,
             require_criteria: false,
+            claim_stale_after: None,
             types: Vec::new(),
             statuses: vec![Status::new("todo", Category::Open)],
             fields: Vec::new(),
@@ -702,6 +704,11 @@ impl Schema {
     }
     pub fn require_criteria(mut self) -> Schema {
         self.require_criteria = true;
+        self
+    }
+    /// How long a claim may go untouched before it is called stale, in days.
+    pub fn claim_stale_after(mut self, days: u32) -> Schema {
+        self.claim_stale_after = Some(days);
         self
     }
     #[track_caller]
@@ -833,6 +840,9 @@ impl Schema {
         }
         if self.require_criteria {
             s += "require_criteria = true\n";
+        }
+        if let Some(d) = self.claim_stale_after {
+            s += &format!("claim_stale_after = {d}\n");
         }
         for (name, description) in &self.types {
             s += &format!("\n[[type]]\nname = {name:?}\n");
@@ -1307,6 +1317,32 @@ impl Project {
             None => self.mcp(&[&call]),
         };
         replies.last().expect("a reply")["result"].clone()
+    }
+
+    /// The same, with no `CAIRN_USER` set — as a client on somebody else's
+    /// machine is, so the identity has to come from the protocol.
+    pub fn mcp_call_anonymous(
+        &self,
+        tool: &str,
+        args: serde_json::Value,
+        client: &str,
+    ) -> serde_json::Value {
+        let init = serde_json::json!({
+            "jsonrpc": "2.0", "id": 0, "method": "initialize",
+            "params": { "clientInfo": { "name": client } }
+        })
+        .to_string();
+        let call = serde_json::json!({
+            "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+            "params": { "name": tool, "arguments": args }
+        })
+        .to_string();
+        let input = format!("{init}\n{call}\n");
+        let out = self.spawn(self.root(), &["mcp"], &[("CAIRN_USER", None)], Some(&input));
+        assert!(out.ok(), "cairn mcp exited {}:\n{}", out.code, out.stderr);
+        let last = out.stdout.lines().rfind(|l| !l.trim().is_empty());
+        serde_json::from_str::<serde_json::Value>(last.expect("a reply")).expect("JSON")["result"]
+            .clone()
     }
 
     /// The tools the server advertises.

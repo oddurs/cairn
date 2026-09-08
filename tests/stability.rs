@@ -46,6 +46,7 @@ const MCP_TOOLS: &[&str] = &[
     "claim_item",
     "create_item",
     "update_item",
+    "release_item",
     "close_item",
     "add_note",
     "check",

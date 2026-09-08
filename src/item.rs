@@ -109,6 +109,15 @@ pub struct Meta {
     /// Who is working on it. `claim` sets this.
     #[serde(default)]
     pub assignee: Option<String>,
+    /// When the current claim was taken.
+    ///
+    /// Its own key rather than reading `updated`, which means something else
+    /// and which every other edit moves. A claim is a lock on *intent*, and it
+    /// was the only lock here with nothing recording when it was taken — so a
+    /// session that died left an item claimed for ever, invisible to `next`
+    /// because it was held and invisible to a person because nothing listed it.
+    #[serde(default)]
+    pub claimed: Option<String>,
     /// Who is answerable for it, which is a different question.
     ///
     /// With people the two are usually the same, which is why one field served.
@@ -213,6 +222,7 @@ impl Item {
             "status" => opt(self.meta.status.as_deref()),
             "milestone" => opt(self.meta.milestone.as_deref()),
             "assignee" => opt(self.meta.assignee.as_deref()),
+            "claimed" => opt(self.meta.claimed.as_deref()),
             "owner" => opt(self.meta.owner.as_deref()),
             "created_by" => opt(self.meta.created_by.as_deref()),
             "created" => opt(self.meta.created.as_deref()),
@@ -465,6 +475,9 @@ impl Item {
         if let Some(v) = &self.meta.assignee {
             put("assignee", Value::String(v.clone()));
         }
+        if let Some(v) = &self.meta.claimed {
+            put("claimed", Value::String(v.clone()));
+        }
         if let Some(v) = &self.meta.owner {
             put("owner", Value::String(v.clone()));
         }
@@ -533,6 +546,51 @@ impl Item {
     ///
     /// `Item::parse` guarantees a body read from disk holds no CRLF; this keeps
     /// that true for bodies that never came from disk.
+    /// Append a note under a heading, leaving what is already there alone.
+    ///
+    /// The rule every caller wants and two of them had implemented separately:
+    /// one blank line between what was there and what is being added, whatever
+    /// the body ended with. A note can never erase, which is the whole reason
+    /// there is a `note` command distinct from setting the body.
+    pub fn append_note(&mut self, heading: &str, text: &str) {
+        let addition = format!("## {heading}\n\n{text}");
+        let body = self.body.trim_end();
+        let combined = if body.is_empty() {
+            addition
+        } else {
+            format!("{body}\n\n{addition}")
+        };
+        self.set_body(&combined);
+    }
+
+    /// The text under the most recent heading beginning with `prefix`.
+    ///
+    /// Used to find the last reason somebody handed an item back, so the next
+    /// taker meets it rather than discovering the same dead end.
+    pub fn last_note(&self, prefix: &str) -> Option<String> {
+        let mut found: Option<String> = None;
+        let mut collecting = false;
+        let mut text = String::new();
+        for line in self.body.lines() {
+            if let Some(heading) = line.trim().strip_prefix("## ") {
+                if collecting {
+                    found = Some(text.trim().to_string());
+                }
+                collecting = heading.starts_with(prefix);
+                text.clear();
+                continue;
+            }
+            if collecting {
+                text.push_str(line);
+                text.push('\n');
+            }
+        }
+        if collecting {
+            found = Some(text.trim().to_string());
+        }
+        found.filter(|f| !f.is_empty())
+    }
+
     pub fn set_body(&mut self, text: &str) {
         self.body = text.replace("\r\n", "\n");
     }
@@ -1185,4 +1243,47 @@ fn merge_value(
         }
         _ => None,
     }
+}
+
+/// Items whose titles are close enough to `title` to be worth mentioning.
+///
+/// An agent starts every session cold, so the backlog is not its record but its
+/// memory — and filing a duplicate is therefore not an unlucky mistake but the
+/// characteristic failure of an agent using this tool. Three items called
+/// `Task 1` appeared in a scratch project without a murmur.
+///
+/// Deliberately boring: normalise, compare word sets, report anything sharing
+/// most of its words. Nothing clever, nothing that needs a model, nothing that
+/// can be wrong in an interesting way. It reports and never refuses — two items
+/// genuinely called the same thing is a real situation, and a tool that refused
+/// would teach people to mangle titles to get past it.
+pub fn near_duplicates<'a>(title: &str, items: &'a [Item]) -> Vec<&'a Item> {
+    fn words(text: &str) -> std::collections::BTreeSet<String> {
+        text.split(|c: char| !c.is_alphanumeric())
+            .filter(|w| w.len() > 2)
+            .map(str::to_lowercase)
+            .collect()
+    }
+
+    let wanted = words(title);
+    if wanted.is_empty() {
+        return Vec::new();
+    }
+    let mut found: Vec<(usize, &Item)> = items
+        .iter()
+        .filter_map(|i| {
+            let theirs = words(i.title());
+            if theirs.is_empty() {
+                return None;
+            }
+            let shared = wanted.intersection(&theirs).count();
+            // Most of the shorter title's words, so a long title does not match
+            // every short one that happens to be a prefix of it.
+            let smaller = wanted.len().min(theirs.len());
+            (shared * 4 >= smaller * 3).then_some((shared, i))
+        })
+        .collect();
+    // Most alike first, then by id, so the report is stable.
+    found.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.id.cmp(&b.1.id)));
+    found.into_iter().map(|(_, i)| i).take(3).collect()
 }
