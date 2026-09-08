@@ -51,16 +51,14 @@ Enough to run a real project's roadmap without reaching for anything else.
 
 ## v0.2 — Comfortable
 
-`##########` 92% · 44 of 48 done · due 2026-12-01
+`##########` 96% · 46 of 48 done · due 2026-12-01
 
 The rough edges that show up after a few weeks of daily use, and the pieces that make the central claim true rather than merely stated.
 
 ### backlog
 
 - [ ] [`0056`](https://github.com/oddurs/cairn/blob/main/cairn/items/0056-collect-a-contributor-licence-agreement.md) Collect a contributor licence agreement <sup>chore · p0</sup>
-- [ ] [`0109`](https://github.com/oddurs/cairn/blob/main/cairn/items/0109-reading-costs-the-caller-and-there-is-no-way-to-ask-for-less.md) Reading costs the caller and there is no way to ask for less <sup>feature · p1 · s11</sup>
 - [ ] [`0110`](https://github.com/oddurs/cairn/blob/main/cairn/items/0110-a-proposal-should-be-a-proposal-not-prose.md) A proposal should be a proposal, not prose <sup>feature · p2 · s11</sup>
-- [ ] [`0111`](https://github.com/oddurs/cairn/blob/main/cairn/items/0111-what-changed-since-i-last-looked.md) What changed since I last looked <sup>feature · p2 · s11</sup>
 
 ### done
 
@@ -108,6 +106,8 @@ The rough edges that show up after a few weeks of daily use, and the pieces that
 - [x] [`0097`](https://github.com/oddurs/cairn/blob/main/cairn/items/0097-adopt-a-schema-instead-of-retyping-it.md) Adopt a schema instead of retyping it <sup>feature · p2</sup>
 - [x] [`0101`](https://github.com/oddurs/cairn/blob/main/cairn/items/0101-be-right-about-data-nobody-here-wrote.md) Be right about data nobody here wrote <sup>chore · p1 · s10</sup>
 - [x] [`0102`](https://github.com/oddurs/cairn/blob/main/cairn/items/0102-unit-test-the-reference-machinery.md) Unit-test the reference machinery <sup>chore · p1 · s10</sup>
+- [x] [`0109`](https://github.com/oddurs/cairn/blob/main/cairn/items/0109-reading-costs-the-caller-and-there-is-no-way-to-ask-for-less.md) Reading costs the caller and there is no way to ask for less <sup>feature · p1 · s11</sup>
+- [x] [`0111`](https://github.com/oddurs/cairn/blob/main/cairn/items/0111-what-changed-since-i-last-looked.md) What changed since I last looked <sup>feature · p2 · s11</sup>
 
 ## v1.0 — Stable
 

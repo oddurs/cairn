@@ -280,3 +280,16 @@ pub fn similar_line(cfg: &crate::config::Config, similar: &[&crate::item::Item])
         if similar.len() == 1 { "s" } else { "" }
     )
 }
+
+/// A date, said the way `updated` records one.
+///
+/// Day granularity, because that is all `updated` carries. Anything finer would
+/// be a lie, and pretending otherwise would push cairn towards timestamps in
+/// frontmatter that a person has to read.
+pub fn a_date(raw: &str) -> anyhow::Result<String> {
+    let text = raw.trim();
+    if chrono::NaiveDate::parse_from_str(text, "%Y-%m-%d").is_ok() {
+        return Ok(text.to_string());
+    }
+    anyhow::bail!("`{raw}` is not a date; use YYYY-MM-DD")
+}

@@ -7648,3 +7648,157 @@ fn an_agent_can_hand_work_back_with_a_reason() {
     assert_missing(&file, "claimed:", "the claim was not cleared");
     assert!(p.run(&["check"]).ok());
 }
+
+// --- asking for less --------------------------------------------------------
+
+/// Every read returned twenty-two keys and about six hundred characters an
+/// item. Context is the one resource an agent cannot get more of, and cairn was
+/// spending it on the caller's behalf without asking.
+#[test]
+fn an_agent_can_ask_for_only_the_keys_it_needs() {
+    let p = seeded();
+    for n in 0..6 {
+        p.add(&format!("Filler {n}"), &[]);
+    }
+
+    let full = tool_text(&p.mcp_call("list_items", serde_json::json!({}), Some("claude")));
+    let narrow = tool_text(&p.mcp_call(
+        "list_items",
+        serde_json::json!({"fields": ["title", "status", "priority", "blocked"]}),
+        Some("claude"),
+    ));
+    assert!(
+        narrow.len() * 2 < full.len(),
+        "asking for four keys of twenty-two saved almost nothing: {} against {}",
+        narrow.len(),
+        full.len()
+    );
+
+    let doc: serde_json::Value = serde_json::from_str(&narrow).expect("JSON");
+    let first = &doc["items"][0];
+    let keys: Vec<&String> = first.as_object().expect("an object").keys().collect();
+    assert_eq!(keys.len(), 5, "got more than was asked for: {keys:?}");
+    // A result nothing can be acted on is worth less than the bytes it took.
+    assert!(first["id"].is_number(), "id must survive: {first}");
+}
+
+/// A milestone carries no priority. Asking for one across a mixed list is a
+/// reasonable request that answers `null`, not a failure because the first item
+/// happened not to have one.
+#[test]
+fn a_field_an_item_lacks_is_null_rather_than_an_error() {
+    let p = seeded();
+    // Written by hand, because every item a command creates receives the
+    // schema's default.
+    p.write_item(
+        "0050-bare.md",
+        "id: 50\ntitle: Bare\nstatus: backlog",
+        "body\n",
+    );
+    let doc: serde_json::Value = serde_json::from_str(&tool_text(&p.mcp_call(
+        "list_items",
+        serde_json::json!({"fields": ["title", "priority"], "include_closed": true}),
+        Some("claude"),
+    )))
+    .expect("JSON");
+
+    let items = doc["items"].as_array().expect("items");
+    assert!(
+        items.iter().any(|i| i["priority"].is_null()),
+        "nothing came back null: {doc}"
+    );
+    assert!(
+        items.iter().any(|i| i["priority"].is_string()),
+        "nothing came back set: {doc}"
+    );
+}
+
+/// A schema field lives under `fields` in the full shape, and a caller asking
+/// for `priority` means the project's priority. Where cairn keeps it is cairn's
+/// business.
+#[test]
+fn a_schema_field_can_be_asked_for_by_its_own_name() {
+    let p = seeded();
+    let doc: serde_json::Value = serde_json::from_str(&tool_text(&p.mcp_call(
+        "show_item",
+        serde_json::json!({"id": 1, "fields": ["title", "priority"]}),
+        Some("claude"),
+    )))
+    .expect("JSON");
+    assert_json(&doc, "priority", serde_json::json!("p0"));
+}
+
+#[test]
+fn asking_for_a_field_that_does_not_exist_says_what_does() {
+    let p = seeded();
+    let r = p.mcp_call(
+        "next_items",
+        serde_json::json!({"fields": ["nonesuch"]}),
+        Some("claude"),
+    );
+    assert!(refused(&r), "{}", tool_text(&r));
+    assert_contains(&tool_text(&r), "unknown field `nonesuch`", "");
+    assert_contains(&tool_text(&r), "priority", "and lists what is available");
+}
+
+/// The default is what every existing consumer already reads.
+#[test]
+fn asking_for_nothing_returns_what_it_always_did() {
+    let p = seeded();
+    let doc: serde_json::Value = serde_json::from_str(&tool_text(&p.mcp_call(
+        "list_items",
+        serde_json::json!({}),
+        Some("claude"),
+    )))
+    .expect("JSON");
+    let keys: Vec<&String> = doc["items"][0]
+        .as_object()
+        .expect("object")
+        .keys()
+        .collect();
+    assert!(keys.len() > 15, "the default shape narrowed: {keys:?}");
+}
+
+// --- what changed since I last looked ---------------------------------------
+
+#[test]
+fn a_returning_caller_can_ask_only_for_what_moved() {
+    let p = Project::new();
+    p.add("Ancient", &[]);
+    p.add("Recent", &[]);
+    // Reach in, because `updated` is what the filter reads and time is not a
+    // thing a test may wait for.
+    let old = p.expect(&["show", "1", "--path"]).trimmed();
+    let text = p
+        .read(&old)
+        .replace(&format!("updated: {}", today()), "updated: 2020-01-01");
+    p.write(&old, &text);
+
+    assert_eq!(p.expect(&["list", "--ids"]).lines().len(), 2);
+    assert_eq!(
+        p.expect(&["list", "--since", "2026-01-01", "--ids"])
+            .lines(),
+        vec!["0002".to_string()],
+    );
+    // And on search, and over the protocol.
+    p.expect(&["search", "e", "--since", "2026-01-01"]);
+    let doc: serde_json::Value = serde_json::from_str(&tool_text(&p.mcp_call(
+        "list_items",
+        serde_json::json!({"since": "2026-01-01", "fields": ["title"]}),
+        Some("claude"),
+    )))
+    .expect("JSON");
+    assert_json(&doc, "count", serde_json::json!(1));
+
+    // A date that is not one says what it wanted.
+    let out = p.fails(&["list", "--since", "yesterday"]);
+    assert_contains(&out.all(), "YYYY-MM-DD", "");
+}
+
+fn today() -> String {
+    let out = std::process::Command::new("date")
+        .args(["+%Y-%m-%d"])
+        .output()
+        .expect("date");
+    String::from_utf8_lossy(&out.stdout).trim().to_string()
+}

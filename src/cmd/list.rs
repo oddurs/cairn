@@ -47,6 +47,10 @@ pub struct Args {
     #[arg(short, long, value_name = "WHO")]
     pub assignee: Option<String>,
 
+    /// Only items updated on or after this date (YYYY-MM-DD)
+    #[arg(long, value_name = "DATE")]
+    pub since: Option<String>,
+
     /// Raw filter expression, e.g. 'priority=p0,category!=done'
     #[arg(short, long, value_name = "EXPR")]
     pub filter: Option<String>,
@@ -220,6 +224,9 @@ pub fn build_filter(args: &Args, view: Option<&crate::config::View>) -> Result<F
     }
     if let Some(a) = &args.assignee {
         f.push("assignee", Op::Eq, vec![a.clone()]);
+    }
+    if let Some(since) = &args.since {
+        f.push("updated", Op::Ge, vec![crate::cmd::a_date(since)?]);
     }
     if let Some(expr) = &args.filter {
         f = f.and(Filter::parse(expr)?);

@@ -313,6 +313,13 @@ fn list_items(a: &Value) -> Result<String> {
     if let Some(expr) = s(a, "filter") {
         filter = filter.and(Filter::parse(&expr)?);
     }
+    if let Some(since) = s(a, "since") {
+        filter.push(
+            "updated",
+            crate::filter::Op::Ge,
+            vec![crate::cmd::a_date(&since)?],
+        );
+    }
 
     let mut hits: Vec<Item> = items
         .iter()
@@ -327,7 +334,11 @@ fn list_items(a: &Value) -> Result<String> {
     );
     hits.truncate(n(a, "limit", 50));
 
-    let arr: Vec<Value> = hits.iter().map(|i| enrich(&cfg, &store, &ctx, i)).collect();
+    let keys = wanted(&cfg, a)?;
+    let arr: Vec<Value> = hits
+        .iter()
+        .map(|i| narrow(enrich(&cfg, &store, &ctx, i), &keys))
+        .collect();
     pretty(&json!({ "count": arr.len(), "items": arr }))
 }
 
@@ -355,9 +366,10 @@ fn next_items(a: &Value) -> Result<String> {
             count: false,
         },
     )?;
+    let keys = wanted(&cfg, a)?;
     let arr: Vec<Value> = picked
         .iter()
-        .map(|i| enrich(&cfg, &store, &ctx, i))
+        .map(|i| narrow(enrich(&cfg, &store, &ctx, i), &keys))
         .collect();
     pretty(&json!({ "count": arr.len(), "items": arr }))
 }
@@ -386,6 +398,8 @@ fn search_items(a: &Value) -> Result<String> {
         .take(n(a, "limit", 20))
         .map(|i| enrich(&cfg, &store, &ctx, i))
         .collect();
+    let keys = wanted(&cfg, a)?;
+    let hits: Vec<Value> = hits.into_iter().map(|v| narrow(v, &keys)).collect();
     pretty(&json!({ "count": hits.len(), "items": hits }))
 }
 
@@ -397,7 +411,7 @@ fn show_item(a: &Value) -> Result<String> {
     let item = store.find(require_id(&cfg, a)?)?;
     let mut v = crate::cmd::item_json(&cfg, &item, &store, true);
     decorate(&mut v, &ctx, &item);
-    pretty(&v)
+    pretty(&narrow(v, &wanted(&cfg, a)?))
 }
 
 fn create_item(a: &Value) -> Result<String> {
@@ -736,6 +750,79 @@ fn enrich(cfg: &Config, store: &Store, ctx: &Ctx, item: &Item) -> Value {
     v
 }
 
+/// The keys a caller asked for, if it asked.
+///
+/// Every read used to return everything cairn knows: twenty-two keys, about six
+/// hundred characters an item. A caller asking *what should I do next* needs
+/// five of them, and for fifty items that is most of a context window spent on
+/// an answer nobody wanted. A person skimming a table pays nothing for the
+/// columns they ignore; this is the boundary where they do.
+///
+/// Absent, the shape is exactly what it was, because changing a default is how
+/// every consumer breaks at once.
+fn wanted(cfg: &Config, a: &Value) -> Result<Option<Vec<String>>> {
+    let Some(list) = a.get("fields") else {
+        return Ok(None);
+    };
+    let Some(list) = list.as_array() else {
+        bail!("`fields` is a list of field names");
+    };
+
+    // Validated once, against the schema, rather than per item. A milestone
+    // carries no priority, and asking for one across a mixed list is a
+    // reasonable request that should answer `null` — not fail because the first
+    // item happened not to have one.
+    let mut known: Vec<String> = crate::config::RESERVED_FIELDS
+        .iter()
+        .chain(crate::filter::DERIVED_KEYS.iter())
+        .chain(crate::item::Item::ALIASES.iter())
+        .map(|s| (*s).to_string())
+        .collect();
+    known.extend(cfg.fields.iter().map(|f| f.name.clone()));
+    // Shaping the boundary adds, on every item that crosses it.
+    known.extend(["ref", "path", "blockers", "blocked", "ready", "fields"].map(String::from));
+    known.sort();
+    known.dedup();
+
+    let mut out = vec!["id".to_string()];
+    for v in list {
+        let Some(name) = v.as_str() else {
+            bail!("`fields` is a list of field names");
+        };
+        if !known.iter().any(|k| k == name) {
+            bail!("unknown field `{name}`\navailable: {}", known.join(", "));
+        }
+        if name != "id" {
+            out.push(name.to_string());
+        }
+    }
+    Ok(Some(out))
+}
+
+/// Keep only what was asked for, `null` where an item has nothing.
+///
+/// `id` always survives: a result nothing can be acted on is worth less than
+/// the bytes it took.
+fn narrow(v: Value, keys: &Option<Vec<String>>) -> Value {
+    let Some(keys) = keys else { return v };
+    let Some(o) = v.as_object() else { return v };
+    let schema_fields = o.get("fields").and_then(Value::as_object);
+    let mut out = serde_json::Map::new();
+    for k in keys {
+        // A schema field lives under `fields` in the full shape. A caller
+        // asking for `priority` means the project's priority, and making them
+        // know where cairn happens to keep it would be the tool's filing system
+        // leaking into its interface.
+        let found = o
+            .get(k)
+            .or_else(|| schema_fields.and_then(|f| f.get(k)))
+            .cloned()
+            .unwrap_or(Value::Null);
+        out.insert(k.clone(), found);
+    }
+    Value::Object(out)
+}
+
 /// Dependency state is the thing an agent most needs and cannot compute from
 /// one item, so every item that crosses this boundary carries it.
 fn decorate(v: &mut Value, ctx: &Ctx, item: &Item) {
@@ -810,6 +897,12 @@ fn tools() -> Vec<Value> {
                 "unassigned": bool_prop("Only work with no assignee"),
                 "filter": str_prop(FILTER_HELP),
                 "include_blocked": bool_prop("Include blocked work, with its blockers"),
+                "fields": json!({
+                    "type": "array", "items": {"type": "string"},
+                    "description": "Return only these keys, to spend less of your context. \
+        `[\"id\", \"title\", \"status\", \"priority\", \"blocked\"]` answers what to do next; the \
+        default returns everything about every item. `id` is always included."
+                }),
             }), vec![]),
         }),
         json!({
@@ -823,9 +916,17 @@ fn tools() -> Vec<Value> {
                 "label": str_prop("One or more labels, comma-separated"),
                 "assignee": str_prop("Assignee"),
                 "filter": str_prop(FILTER_HELP),
+                "since": str_prop("Only items updated on or after this date (YYYY-MM-DD). \
+        Cheaper than re-reading the backlog when you have looked before."),
                 "sort": str_prop("Sort keys, '-' prefix for descending. Default milestone,status,id"),
                 "limit": int_prop("Maximum items to return (default 50)"),
                 "include_closed": bool_prop("Include done and dropped items"),
+                "fields": json!({
+                    "type": "array", "items": {"type": "string"},
+                    "description": "Return only these keys, to spend less of your context. \
+        `[\"id\", \"title\", \"status\", \"priority\", \"blocked\"]` answers what to do next; the \
+        default returns everything about every item. `id` is always included."
+                }),
             }), vec![]),
         }),
         json!({
@@ -835,13 +936,27 @@ fn tools() -> Vec<Value> {
                 "query": str_prop("Text to look for, case-insensitive"),
                 "limit": int_prop("Maximum items to return (default 20)"),
                 "include_closed": bool_prop("Include done and dropped items"),
+                "fields": json!({
+                    "type": "array", "items": {"type": "string"},
+                    "description": "Return only these keys, to spend less of your context. \
+        `[\"id\", \"title\", \"status\", \"priority\", \"blocked\"]` answers what to do next; the \
+        default returns everything about every item. `id` is always included."
+                }),
             }), vec!["query"]),
         }),
         json!({
             "name": "show_item",
             "description": "One item in full, including its Markdown body, its dependencies \
         and whether it is blocked.",
-            "inputSchema": obj(json!({ "id": id_prop("Item id, as a number or in the project's rendered form") }), vec!["id"]),
+            "inputSchema": obj(json!({
+                "id": id_prop("Item id, as a number or in the project's rendered form"),
+                "fields": json!({
+                    "type": "array", "items": {"type": "string"},
+                    "description": "Return only these keys, to spend less of your context. \
+        `[\"id\", \"title\", \"status\", \"priority\", \"blocked\"]` answers what to do next; the \
+        default returns everything about every item. `id` is always included."
+                }),
+            }), vec!["id"]),
         }),
         json!({
             "name": "claim_item",

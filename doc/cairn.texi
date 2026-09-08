@@ -1879,6 +1879,58 @@ It is a note rather than a field on purpose. Three attempts on a hard item is a
 history, and a history is what a body is for; one @code{released_because} would
 be overwritten by the second attempt.
 
+@section Asking for less
+
+@cindex context
+@cindex fields
+Every read over the protocol used to return everything cairn knows: twenty-two
+keys, about six hundred characters an item. A caller asking @emph{what should I
+do next} needs five of them, and across fifty items that is most of a context
+window spent on an answer nobody wanted.
+
+@example
+@{"name": "next_items", "arguments": @{"fields": ["id", "title", "priority", "blocked"]@}@}
+@end example
+
+@noindent
+A field an item does not carry comes back @code{null} rather than failing --- a
+milestone has no priority, and asking for one across a mixed list is a
+reasonable question. A name the schema does not declare is an error saying what
+is available, because silence there would look like an item without a value.
+@code{id} is always included: a result nothing can be acted on is worth less
+than the bytes it took.
+
+Absent, the shape is exactly what it was. Changing a default is how every
+consumer breaks at once.
+
+A person skimming a table pays nothing for the columns they ignore. This is the
+boundary where they do, which is the whole reason it is here and not on the
+command line, where @option{--columns} has always done the same job.
+
+@section What changed since I last looked
+
+@cindex since
+@example
+cairn list --since 2026-09-01
+cairn search parser --since 2026-09-01
+@end example
+
+@noindent
+Items whose @code{updated} falls on or after a date, on @command{list},
+@command{search} and the read tools. A returning caller had one option, which
+was to read everything again.
+
+@quotation
+@strong{This is not an audit trail.} @code{updated} moves when a field changes
+and not when only a body does, and it says nothing about *what* changed. It is a
+filter for "look at these again". @command{cairn log} is the audit trail, and it
+works because git is underneath it.
+@end quotation
+
+Day granularity, because that is all @code{updated} carries. Anything finer
+would be a lie, and pretending otherwise would push cairn towards timestamps in
+frontmatter that a person has to read.
+
 @section Filing the same thing twice
 
 @cindex duplicates
