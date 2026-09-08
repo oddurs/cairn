@@ -38,6 +38,10 @@ pub struct Args {
     #[arg(short, long, value_name = "EXPR")]
     pub filter: Option<String>,
 
+    /// Only items updated on or after this date (YYYY-MM-DD)
+    #[arg(long, value_name = "DATE")]
+    pub since: Option<String>,
+
     /// Include done and dropped items
     #[arg(short = 'A', long, action = ArgAction::SetTrue)]
     pub all: bool,
@@ -69,10 +73,17 @@ pub fn run(args: Args) -> Result<i32> {
     let items = store.load_for_reading()?;
     let ctx = Ctx::new(&cfg, &items);
 
-    let filter = match &args.filter {
+    let mut filter = match &args.filter {
         Some(expr) => Filter::parse(expr)?,
         None => Filter::default(),
     };
+    if let Some(since) = &args.since {
+        filter.push(
+            "updated",
+            crate::filter::Op::Ge,
+            vec![crate::cmd::a_date(since)?],
+        );
+    }
     let needle = args.query.to_lowercase();
 
     let mut hits: Vec<Item> = items

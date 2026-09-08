@@ -2,7 +2,7 @@
 id: 109
 title: Reading costs the caller and there is no way to ask for less
 type: feature
-status: backlog
+status: done
 milestone: v0.2
 created: 2026-09-08
 updated: 2026-09-08
@@ -57,9 +57,13 @@ schema is cheaper than fifty items nobody needed.
 
 ## Acceptance criteria
 
-- [ ] `fields` on `list_items`, `next_items`, `search_items` and `show_item`
-- [ ] Absent, the shape is byte-identical to today's
-- [ ] An unknown field name is an error naming what is available, not silence
-- [ ] `id` is always present whatever is asked for, since a result nothing can be done with is worthless
-- [ ] The tool descriptions tell a model it may ask for less
-- [ ] A test asserts a narrow request is materially smaller than the default
+- [x] `fields` on `list_items`, `next_items`, `search_items` and `show_item`
+- [x] Absent, the shape is byte-identical to today's
+- [x] An unknown field name is an error naming what is available, not silence
+- [x] `id` is always present whatever is asked for, since a result nothing can be done with is worthless
+- [x] The tool descriptions tell a model it may ask for less
+- [x] A test asserts a narrow request is materially smaller than the default
+
+## 2026-09-08
+
+Done. `fields` on list_items, next_items, search_items and show_item; asking for four of twenty-two keys is 78% smaller, measured. The request is validated once against the schema rather than per item, so a milestone with no priority answers null instead of failing the whole call — the first implementation got that wrong and a test caught it. A schema field can be asked for by its own name even though cairn keeps it under `fields`, because where cairn files it is cairn's business. `id` always survives. Absent, the shape is byte-identical.

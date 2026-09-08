@@ -2,7 +2,7 @@
 id: 111
 title: What changed since I last looked
 type: feature
-status: backlog
+status: done
 milestone: v0.2
 created: 2026-09-08
 updated: 2026-09-08
@@ -54,8 +54,12 @@ different item from this one.
 
 ## Acceptance criteria
 
-- [ ] `--since` on `list` and `search`, accepting a date
-- [ ] The same on the read tools
-- [ ] `since` works as an ordinary filter comparison too, if that falls out for free
-- [ ] The manual says what `updated` does and does not capture, so nobody mistakes this for an audit trail
-- [ ] A date that is not one is an error naming the form it wanted
+- [x] `--since` on `list` and `search`, accepting a date
+- [x] The same on the read tools
+- [x] `since` works as an ordinary filter comparison too, if that falls out for free
+- [x] The manual says what `updated` does and does not capture, so nobody mistakes this for an audit trail
+- [x] A date that is not one is an error naming the form it wanted
+
+## 2026-09-08
+
+Done. `--since` on list and search and on the read tools, filtering `updated`. Day granularity, because that is all `updated` carries; a date that is not one says what form it wanted. The manual states plainly that this is not an audit trail — `updated` moves for a field change and not for a body-only one, and says nothing about what changed. `cairn log` remains the audit trail.
