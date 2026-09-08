@@ -17,7 +17,7 @@
   },
   "item": {
     "path": "cairn/items/0003-support-oauth-login.md",
-    "html": "---\nid: 3\ntitle: Support OAuth login\ntype: feature\nstatus: doing\nmilestone: v0.1\nassignee: you\ncreated: 2026-09-05\nupdated: 2026-09-05\npriority: p0\n---\n\n## Problem\n\n## Proposal\n\n## Acceptance criteria\n\n- [ ]"
+    "html": "---\nid: 3\ntitle: Support OAuth login\ntype: feature\nstatus: doing\nmilestone: v0.1\nassignee: you\nclaimed: 2026-09-05\ncreated: 2026-09-05\nupdated: 2026-09-05\npriority: p0\n---\n\n## Problem\n\n## Proposal\n\n## Acceptance criteria\n\n- [ ]"
   },
   "mcp": {
     "cmd": "cairn mcp",
