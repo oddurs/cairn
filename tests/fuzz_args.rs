@@ -15,27 +15,11 @@
 // The point is not the specific sequences. It is that they were not chosen by
 // somebody who already knew where the bugs were — which is where this project's
 // defects have actually come from.
+mod support;
+use support::*;
+
 use std::collections::BTreeSet;
 use std::process::{Command, Stdio};
-
-/// splitmix64, so a failure replays exactly from the seed it prints.
-struct Rng(u64);
-
-impl Rng {
-    fn next(&mut self) -> u64 {
-        self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
-        let mut z = self.0;
-        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-        z ^ (z >> 31)
-    }
-    fn below(&mut self, n: usize) -> usize {
-        (self.next() % n as u64) as usize
-    }
-    fn pick<'a>(&mut self, items: &'a [&'a str]) -> &'a str {
-        items[self.below(items.len())]
-    }
-}
 
 /// Every subcommand, including the hidden ones: hidden from `--help` is not the
 /// same as unreachable, and an unreachable command could not be fuzzed at all.
@@ -180,9 +164,9 @@ const VALUES: &[&str] = &[
 
 fn corpus(rng: &mut Rng) -> String {
     match rng.below(10) {
-        0..=3 => rng.pick(COMMANDS).to_string(),
-        4..=6 => rng.pick(FLAGS).to_string(),
-        _ => rng.pick(VALUES).to_string(),
+        0..=3 => rng.choose(COMMANDS).to_string(),
+        4..=6 => rng.choose(FLAGS).to_string(),
+        _ => rng.choose(VALUES).to_string(),
     }
 }
 
@@ -223,7 +207,7 @@ fn arbitrary_arguments_never_panic() {
     println!("      reproduce with CAIRN_FUZZ_SEED={seed} CAIRN_FUZZ_ROUNDS={rounds}");
 
     let dir = project();
-    let mut rng = Rng(seed);
+    let mut rng = Rng::new(seed);
     let mut codes: BTreeSet<i32> = BTreeSet::new();
 
     for round in 0..rounds {

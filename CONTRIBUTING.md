@@ -140,6 +140,44 @@ the manual. Adding a `[lib]` fails the build.
 
 ## What the tests are for
 
+### The harness
+
+Every integration test shares `tests/support/`. There used to be four
+`Project`s, three random generators and two `Out`s across six files, and they
+had drifted — `run` returned three different types depending on which file you
+were in — because an improvement to the harness had to be made four times or not
+at all.
+
+Two things in it are worth knowing before writing a test.
+
+**Build a schema; do not edit one.** `Schema` assembles `cairn.toml` from
+values:
+
+```rust
+let p = Project::with(
+    Schema::standard()
+        .field(Field::text("risk").agent(Agent::ReadOnly))
+        .amend_status("done", |s| s.agent(Agent::Propose))
+        .render(|r| r.group_by("epic").link_items()),
+);
+```
+
+This replaced forty-one `.replace()` calls against the shipped template, which
+broke constantly: a `[render]` table appended twice, a `link_items = false` that
+had moved, a `title = "Roadmap"` that was not where the test guessed. A schema
+built from parts cannot be wrong about the file it is editing, because it is not
+editing one. It refuses a duplicate field or status at the line that added it,
+rather than leaving cairn to complain later, and `Schema::standard()` is itself
+tested against the real program.
+
+`Project::new()` still writes the shipped template, for the tests that are about
+the template.
+
+**The assertions print the difference, not the haystack.** `assert_contains`
+shows the nearest matching lines and an excerpt; `assert_json` names a dotted
+path; `assert_lines_eq` prints only the lines that differ. A failure that dumps
+five kilobytes of JSON is a failure nobody reads.
+
 ### What each level proves
 
 `make check` is what every pull request must pass: the suite, formatting, lints,
@@ -156,6 +194,7 @@ it has earned. So the rest has a name:
 
 ```
 make durability     # check, then soak, then the long fuzz, then conformance
+make coverage       # line and region coverage, with a floor
 ```
 
 Run it before a release, and after touching any of four things: **the lock, the

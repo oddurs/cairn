@@ -6,7 +6,7 @@ A markdown-native roadmap and issue manager that lives in your repository.
 
 ## v0.1 — Usable in anger
 
-`##########` 92% · 24 of 26 done · due 2026-10-15
+`##########` 93% · 25 of 27 done · due 2026-10-15
 
 Enough to run a real project's roadmap without reaching for anything else.
 
@@ -44,6 +44,7 @@ Enough to run a real project's roadmap without reaching for anything else.
 - [x] [`0099`](https://github.com/oddurs/cairn/blob/main/cairn/items/0099-harden-the-agent-surface.md) Harden the agent surface <sup>chore · p0 · s10</sup>
 - [x] [`0100`](https://github.com/oddurs/cairn/blob/main/cairn/items/0100-test-the-two-things-that-can-lose-work.md) Test the two things that can lose work <sup>chore · p0 · s10</sup>
 - [x] [`0104`](https://github.com/oddurs/cairn/blob/main/cairn/items/0104-a-measured-test-coverage-sprint.md) A measured test coverage sprint <sup>chore · p1 · s10</sup>
+- [x] [`0105`](https://github.com/oddurs/cairn/blob/main/cairn/items/0105-a-test-harness-worth-having.md) A test harness worth having <sup>chore · p1 · s10</sup>
 
 ## v0.2 — Comfortable
 

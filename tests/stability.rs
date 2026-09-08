@@ -15,7 +15,8 @@
 // Adding to these lists is how a field becomes promised, and should be a
 // decision. Removing from them is a major release.
 use std::collections::BTreeSet;
-use std::process::{Command, Stdio};
+mod support;
+use support::*;
 
 /// Every item carries these, in every command that emits items.
 const ITEM_FIELDS: &[&str] = &[
@@ -50,44 +51,14 @@ const MCP_TOOLS: &[&str] = &[
     "check",
 ];
 
-struct Project(tempfile::TempDir);
-
-impl Project {
-    fn new() -> Project {
-        let p = Project(tempfile::tempdir().expect("temp dir"));
-        p.expect(&["init", "--bare", "--name", "Stable"]);
-        p.expect(&["new", "First", "-q"]);
-        p.expect(&["new", "Second", "-q"]);
-        p.expect(&["set", "2", "depends_on+=1", "-q"]);
-        p
-    }
-
-    fn run(&self, args: &[&str]) -> (i32, String) {
-        let out = Command::new(env!("CARGO_BIN_EXE_cairn"))
-            .args(args)
-            .current_dir(self.0.path())
-            .env("NO_COLOR", "1")
-            .env("CAIRN_USER", "stability")
-            .env("CAIRN_NO_HOOKS", "1")
-            .stdin(Stdio::null())
-            .output()
-            .expect("running cairn");
-        (
-            out.status.code().unwrap_or(-1),
-            String::from_utf8_lossy(&out.stdout).into_owned(),
-        )
-    }
-
-    fn expect(&self, args: &[&str]) -> String {
-        let (code, stdout) = self.run(args);
-        assert_eq!(code, 0, "cairn {args:?} failed");
-        stdout
-    }
-
-    fn json(&self, args: &[&str]) -> serde_json::Value {
-        serde_json::from_str(&self.expect(args))
-            .unwrap_or_else(|e| panic!("cairn {args:?} did not emit JSON: {e}"))
-    }
+/// A project with a dependency in it, so every shape that carries one is
+/// exercised.
+fn stable() -> Project {
+    let p = Project::new();
+    p.expect(&["new", "First", "-q"]);
+    p.expect(&["new", "Second", "-q"]);
+    p.expect(&["set", "2", "depends_on+=1", "-q"]);
+    p
 }
 
 fn keys(v: &serde_json::Value) -> BTreeSet<String> {
@@ -110,7 +81,7 @@ fn assert_has(present: &BTreeSet<String>, required: &[&str], what: &str) {
 
 #[test]
 fn every_command_that_emits_items_carries_the_documented_fields() {
-    let p = Project::new();
+    let p = stable();
 
     for args in [
         vec!["list", "--json"],
@@ -134,7 +105,7 @@ fn every_command_that_emits_items_carries_the_documented_fields() {
 
 #[test]
 fn the_interchange_document_keeps_its_shape() {
-    let p = Project::new();
+    let p = stable();
     let doc = p.json(&["export"]);
     assert_has(
         &keys(&doc),
@@ -154,7 +125,7 @@ fn the_interchange_document_keeps_its_shape() {
 
 #[test]
 fn the_resolved_configuration_keeps_its_shape() {
-    let p = Project::new();
+    let p = stable();
     let cfg = p.json(&["config", "--json"]);
     assert_has(
         &keys(&cfg),
@@ -172,47 +143,13 @@ fn the_resolved_configuration_keeps_its_shape() {
 
 #[test]
 fn the_agent_tools_are_all_still_there() {
-    let p = Project::new();
-    let request = concat!(
-        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":"#,
-        r#"{"protocolVersion":"2024-11-05","capabilities":{},"#,
-        r#""clientInfo":{"name":"stability","version":"0"}}}"#,
-        "\n",
-        r#"{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}"#,
-        "\n"
-    );
-
-    use std::io::Write;
-    let mut child = Command::new(env!("CARGO_BIN_EXE_cairn"))
-        .arg("mcp")
-        .current_dir(p.0.path())
-        .env("NO_COLOR", "1")
-        .env("CAIRN_NO_HOOKS", "1")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("spawning cairn mcp");
-    child
-        .stdin
-        .take()
-        .expect("stdin")
-        .write_all(request.as_bytes())
-        .expect("writing the request");
-    let out = child.wait_with_output().expect("waiting");
-    let last = String::from_utf8_lossy(&out.stdout)
-        .lines()
-        .next_back()
-        .expect("a reply")
-        .to_string();
-    let reply: serde_json::Value = serde_json::from_str(&last).expect("JSON");
-
-    let present: BTreeSet<String> = reply["result"]["tools"]
-        .as_array()
-        .expect("tools")
+    let p = stable();
+    let present: BTreeSet<String> = p
+        .mcp_tools()
         .iter()
-        .filter_map(|t| t["name"].as_str().map(String::from))
+        .filter_map(|t| t["name"].as_str().map(str::to_string))
         .collect();
+
     assert_has(&present, MCP_TOOLS, "the MCP server");
 }
 
@@ -220,38 +157,39 @@ fn the_agent_tools_are_all_still_there() {
 /// else, ever — a script that branches on the status has to be able to.
 #[test]
 fn exit_codes_mean_what_the_manual_says() {
-    let p = Project::new();
+    let p = stable();
 
-    assert_eq!(p.run(&["check"]).0, 0, "a valid project checks clean");
-    assert_eq!(p.run(&["list"]).0, 0, "listing succeeds");
+    assert_eq!(p.run(&["check"]).code, 0, "a valid project checks clean");
+    assert_eq!(p.run(&["list"]).code, 0, "listing succeeds");
 
     // 2 is clap's, and is only ever clap's.
     assert_eq!(
-        p.run(&["list", "--no-such-flag"]).0,
+        p.run(&["list", "--no-such-flag"]).code,
         2,
         "a bad command line is 2"
     );
-    assert_eq!(p.run(&["no-such-command"]).0, 2, "an unknown command is 2");
+    assert_eq!(
+        p.run(&["no-such-command"]).code,
+        2,
+        "an unknown command is 2"
+    );
 
     // 1 is the operation failing, or finding what it was asked to look for.
     assert_eq!(
-        p.run(&["show", "999"]).0,
+        p.run(&["show", "999"]).code,
         1,
         "an item that does not exist is 1, not 2: the command line was fine"
     );
-    std::fs::write(
-        p.0.path().join("cairn/items/broken.md"),
-        "not an item at all",
-    )
-    .expect("writing a broken item");
-    assert_eq!(p.run(&["check"]).0, 1, "a project with problems is 1");
+    std::fs::write(p.root().join("cairn/items/broken.md"), "not an item at all")
+        .expect("writing a broken item");
+    assert_eq!(p.run(&["check"]).code, 1, "a project with problems is 1");
 }
 
 /// `--ids` puts one identifier on a line and nothing else. Anything more
 /// breaks every `| xargs` in existence.
 #[test]
 fn ids_output_is_only_ids() {
-    let p = Project::new();
+    let p = stable();
     for args in [
         vec!["list", "--ids"],
         vec!["next", "--ids"],
@@ -269,13 +207,13 @@ fn ids_output_is_only_ids() {
 /// `--count` prints one integer and nothing else.
 #[test]
 fn count_output_is_only_a_number() {
-    let p = Project::new();
+    let p = stable();
     for args in [
         vec!["list", "--count"],
         vec!["next", "--count"],
         vec!["search", "First", "--count"],
     ] {
-        let out = p.expect(&args);
+        let out = p.expect(&args).stdout;
         out.trim()
             .parse::<usize>()
             .unwrap_or_else(|_| panic!("`cairn {args:?}` printed {out:?}, not a number"));
@@ -292,7 +230,7 @@ fn count_output_is_only_a_number() {
 /// `doing`.
 #[test]
 fn plain_output_carries_names_rather_than_labels() {
-    let p = Project::new();
+    let p = stable();
     p.expect(&["set", "1", "status=doing", "-q"]);
 
     for args in [
@@ -300,7 +238,7 @@ fn plain_output_carries_names_rather_than_labels() {
         vec!["next", "--plain"],
         vec!["search", "First", "--plain"],
     ] {
-        let out = p.expect(&args);
+        let out = p.expect(&args).stdout;
         assert!(
             !out.contains("in progress"),
             "`cairn {args:?}` printed a display label rather than a status name:\n{out}"

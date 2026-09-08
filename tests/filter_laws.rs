@@ -15,93 +15,34 @@
 // backlog rather than a handful of items somebody chose, because the interesting
 // cases — an unset field, a field only some items have — are the ones nobody
 // thinks to write down.
+mod support;
+use support::*;
+
 use std::collections::BTreeSet;
-use std::process::{Command, Stdio};
-
-struct Rng(u64);
-
-impl Rng {
-    fn next(&mut self) -> u64 {
-        self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
-        let mut z = self.0;
-        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-        z ^ (z >> 31)
-    }
-    fn below(&mut self, n: usize) -> usize {
-        (self.next() % n as u64) as usize
-    }
-    fn pick<'a>(&mut self, items: &'a [&'a str]) -> &'a str {
-        items[self.below(items.len())]
-    }
-}
-
-struct Project(tempfile::TempDir);
-
-impl Project {
-    fn expect(&self, args: &[&str]) -> String {
-        let out = Command::new(env!("CARGO_BIN_EXE_cairn"))
-            .args(args)
-            .current_dir(self.0.path())
-            .env("NO_COLOR", "1")
-            .env("CAIRN_USER", "laws")
-            .env("CAIRN_NO_HOOKS", "1")
-            .stdin(Stdio::null())
-            .output()
-            .expect("running cairn");
-        assert!(
-            out.status.success(),
-            "cairn {args:?} failed: {}",
-            String::from_utf8_lossy(&out.stderr)
-        );
-        String::from_utf8_lossy(&out.stdout).into_owned()
-    }
-
-    /// The ids a filter selects.
-    /// The ids a filter selects. `-A` so that containers and closed work are
-    /// both included: a law about the grammar must hold over every item, not
-    /// over the subset an ordinary listing shows.
-    fn select(&self, expr: &str) -> BTreeSet<u32> {
-        self.expect(&["list", "-A", "--ids", "--filter", expr])
-            .lines()
-            .filter_map(|l| l.trim().parse().ok())
-            .collect()
-    }
-
-    fn everything(&self) -> BTreeSet<u32> {
-        self.expect(&["list", "-A", "--ids"])
-            .lines()
-            .filter_map(|l| l.trim().parse().ok())
-            .collect()
-    }
-}
 
 const STATUSES: &[&str] = &["backlog", "planned", "doing", "blocked", "done", "dropped"];
 const TYPES: &[&str] = &["feature", "bug", "chore", "docs"];
 const PRIORITIES: &[&str] = &["p0", "p1", "p2"];
 const LABELS: &[&str] = &["auth", "ui", "perf"];
-
-/// A backlog where every field is set on some items and unset on others, which
-/// is the shape that makes negation interesting.
 fn backlog(seed: u64, count: usize) -> Project {
-    let dir = tempfile::tempdir().expect("temp dir");
-    let p = Project(dir);
-    p.expect(&["init", "--bare", "--name", "Laws"]);
+    let p = Project::with_init(&["init", "--bare", "--name", "Laws"]);
 
-    let mut rng = Rng(seed);
+    let mut rng = Rng::new(seed);
     // A milestone is an item in format 2, so it has to exist before anything
     // can be scheduled against it.
-    let m = p.expect(&["new", "v0.1", "-t", "milestone", "-q"]);
-    p.expect(&["set", m.trim(), "key=v0.1"]);
+    let m = p
+        .expect(&["new", "v0.1", "-t", "milestone", "-q"])
+        .trimmed();
+    p.expect(&["set", &m, "key=v0.1"]);
 
     for n in 0..count {
         let out = p.expect(&["new", &format!("Item {n}"), "-q"]);
-        let id = out.trim().to_string();
+        let id = out.trimmed().to_string();
         p.expect(&[
             "set",
             &id,
-            &format!("status={}", rng.pick(STATUSES)),
-            &format!("type={}", rng.pick(TYPES)),
+            &format!("status={}", rng.choose(STATUSES)),
+            &format!("type={}", rng.choose(TYPES)),
             "-q",
         ]);
         // Deliberately left unset on roughly a third of items.
@@ -109,7 +50,7 @@ fn backlog(seed: u64, count: usize) -> Project {
             p.expect(&[
                 "set",
                 &id,
-                &format!("priority={}", rng.pick(PRIORITIES)),
+                &format!("priority={}", rng.choose(PRIORITIES)),
                 "-q",
             ]);
         }
@@ -117,7 +58,7 @@ fn backlog(seed: u64, count: usize) -> Project {
             p.expect(&["set", &id, "milestone=v0.1", "-q"]);
         }
         if rng.below(2) == 0 {
-            p.expect(&["set", &id, &format!("labels+={}", rng.pick(LABELS)), "-q"]);
+            p.expect(&["set", &id, &format!("labels+={}", rng.choose(LABELS)), "-q"]);
         }
     }
     p
@@ -132,7 +73,7 @@ fn backlog(seed: u64, count: usize) -> Project {
 #[test]
 fn negation_partitions_the_backlog() {
     let p = backlog(0xF11, 30);
-    let all = p.everything();
+    let all = p.every_id();
 
     for (key, values) in [
         ("status", STATUSES),
@@ -141,8 +82,8 @@ fn negation_partitions_the_backlog() {
         ("milestone", &["v0.1", "v0.2"][..]),
     ] {
         for value in values {
-            let yes = p.select(&format!("{key}={value}"));
-            let no = p.select(&format!("{key}!={value}"));
+            let yes = p.matching(&format!("{key}={value}"));
+            let no = p.matching(&format!("{key}!={value}"));
 
             let both: Vec<_> = yes.intersection(&no).collect();
             assert!(
@@ -168,9 +109,9 @@ fn alternation_is_union() {
     for (key, values) in [("status", STATUSES), ("type", TYPES)] {
         for a in values {
             for b in values {
-                let left = p.select(&format!("{key}={a}"));
-                let right = p.select(&format!("{key}={b}"));
-                let together = p.select(&format!("{key}={a}|{b}"));
+                let left = p.matching(&format!("{key}={a}"));
+                let right = p.matching(&format!("{key}={b}"));
+                let together = p.matching(&format!("{key}={a}|{b}"));
                 let expected: BTreeSet<u32> = left.union(&right).copied().collect();
                 assert_eq!(
                     together, expected,
@@ -191,12 +132,12 @@ fn a_comma_is_intersection_and_does_not_care_about_order() {
         for kind in TYPES {
             let a = format!("status={status}");
             let b = format!("type={kind}");
-            let left = p.select(&a);
-            let right = p.select(&b);
+            let left = p.matching(&a);
+            let right = p.matching(&b);
             let expected: BTreeSet<u32> = left.intersection(&right).copied().collect();
 
-            let forwards = p.select(&format!("{a},{b}"));
-            let backwards = p.select(&format!("{b},{a}"));
+            let forwards = p.matching(&format!("{a},{b}"));
+            let backwards = p.matching(&format!("{b},{a}"));
 
             assert_eq!(forwards, expected, "`{a},{b}` is not an intersection");
             assert_eq!(
@@ -212,15 +153,15 @@ fn a_comma_is_intersection_and_does_not_care_about_order() {
 #[test]
 fn an_empty_value_selects_exactly_the_items_without_the_field() {
     let p = backlog(0xE0F, 30);
-    let all = p.everything();
+    let all = p.every_id();
 
     for (key, values) in [("priority", PRIORITIES), ("milestone", &["v0.1"][..])] {
-        let unset = p.select(&format!("{key}="));
+        let unset = p.matching(&format!("{key}="));
 
         // Everything with any real value, gathered by hand.
         let mut set: BTreeSet<u32> = BTreeSet::new();
         for value in values {
-            set.extend(p.select(&format!("{key}={value}")));
+            set.extend(p.matching(&format!("{key}={value}")));
         }
 
         assert!(
