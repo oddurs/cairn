@@ -6,13 +6,15 @@ A markdown-native roadmap and issue manager that lives in your repository.
 
 ## v0.1 — Usable in anger
 
-`##########` 91% · 21 of 23 done · due 2026-10-15
+`#########·` 84% · 21 of 25 done · due 2026-10-15
 
 Enough to run a real project's roadmap without reaching for anything else.
 
 ### backlog
 
 - [ ] [`0066`](https://github.com/oddurs/cairn/blob/main/cairn/items/0066-find-three-people-who-are-not-the-author.md) Find three people who are not the author <sup>chore · p0 · s7</sup>
+- [ ] [`0099`](https://github.com/oddurs/cairn/blob/main/cairn/items/0099-harden-the-agent-surface.md) Harden the agent surface <sup>chore · p0 · s10</sup>
+- [ ] [`0100`](https://github.com/oddurs/cairn/blob/main/cairn/items/0100-test-the-two-things-that-can-lose-work.md) Test the two things that can lose work <sup>chore · p0 · s10</sup>
 
 ### in progress
 
@@ -44,13 +46,15 @@ Enough to run a real project's roadmap without reaching for anything else.
 
 ## v0.2 — Comfortable
 
-`##########` 98% · 42 of 43 done · due 2026-12-01
+`##########` 93% · 42 of 45 done · due 2026-12-01
 
 The rough edges that show up after a few weeks of daily use, and the pieces that make the central claim true rather than merely stated.
 
 ### backlog
 
 - [ ] [`0056`](https://github.com/oddurs/cairn/blob/main/cairn/items/0056-collect-a-contributor-licence-agreement.md) Collect a contributor licence agreement <sup>chore · p0</sup>
+- [ ] [`0101`](https://github.com/oddurs/cairn/blob/main/cairn/items/0101-be-right-about-data-nobody-here-wrote.md) Be right about data nobody here wrote <sup>chore · p1 · s10</sup>
+- [ ] [`0102`](https://github.com/oddurs/cairn/blob/main/cairn/items/0102-unit-test-the-reference-machinery.md) Unit-test the reference machinery <sup>chore · p1 · s10</sup>
 
 ### done
 
@@ -99,7 +103,7 @@ The rough edges that show up after a few weeks of daily use, and the pieces that
 
 ## v1.0 — Stable
 
-`#########·` 83% · 19 of 23 done · due 2027-03-01
+`########··` 79% · 19 of 24 done · due 2027-03-01
 
 Safe to depend on: every scriptable surface carries a promise, the command surface has been reviewed and pruned rather than accumulated, releases can be verified, and it installs from a package manager people already use.
 
@@ -108,6 +112,7 @@ Safe to depend on: every scriptable surface carries a promise, the command surfa
 - [ ] [`0052`](https://github.com/oddurs/cairn/blob/main/cairn/items/0052-sign-releases-and-ship-a-source-tarball.md) Sign releases and ship a source tarball <sup>chore · p0 · needs-a-key</sup>
 - [ ] [`0053`](https://github.com/oddurs/cairn/blob/main/cairn/items/0053-be-in-a-package-manager-people-already-use.md) Be in a package manager people already use <sup>chore · p0 · blocked-on-a-release</sup>
 - [ ] [`0067`](https://github.com/oddurs/cairn/blob/main/cairn/items/0067-decide-whether-identifiers-should-be-collision-free-by-construction.md) Decide whether identifiers should be collision-free by construction <sup>feature · p1 · s7</sup>
+- [ ] [`0103`](https://github.com/oddurs/cairn/blob/main/cairn/items/0103-say-what-make-check-proves-and-add-the-target-that-proves-the-rest.md) Say what make check proves, and add the target that proves the rest <sup>chore · p1 · s10</sup>
 
 ### in progress
 
