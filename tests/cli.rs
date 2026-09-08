@@ -6366,3 +6366,33 @@ fn history_follows_an_item_through_two_renames_in_one_commit() {
         out.stdout
     );
 }
+
+/// Renaming a key rewrites every reference that named it — and must leave
+/// alone anything that referred to the same item by id, which did not change.
+#[test]
+fn renaming_a_key_moves_references_by_key_and_not_by_id() {
+    let p = Project::new();
+    p.expect(&["new", "First release", "-t", "milestone", "-q"]);
+    p.expect(&["set", "1", "key=v0.1"]);
+    p.add("Scheduled", &["-m", "v0.1"]);
+    p.add("Blocked by the milestone", &["-d", "1"]);
+
+    let out = p.expect(&["set", "1", "key=v1.0"]).all();
+    assert_contains(&out, "also 0002", "it says which references it moved");
+
+    let scheduled: serde_json::Value =
+        serde_json::from_str(&p.expect(&["show", "2", "--json"]).stdout).unwrap();
+    assert_eq!(
+        scheduled["milestone"], "v1.0",
+        "a reference by key was not moved"
+    );
+
+    let blocked: serde_json::Value =
+        serde_json::from_str(&p.expect(&["show", "3", "--json"]).stdout).unwrap();
+    assert_eq!(
+        blocked["depends_on"],
+        serde_json::json!([1]),
+        "a reference by id names the item, not its handle, and did not change"
+    );
+    assert!(p.run(&["check"]).ok(), "{}", p.run(&["check"]).all());
+}
