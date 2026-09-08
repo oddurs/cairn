@@ -124,7 +124,7 @@ description = "Rough size, not an estimate"
 [[field]]
 name = "sprint"
 kind = "enum"
-values = ["s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9"]
+values = ["s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10"]
 column = true
 description = "Durability sprint; see ROADMAP.md"
 
