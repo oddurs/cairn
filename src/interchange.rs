@@ -96,6 +96,13 @@ pub struct Incoming {
     pub labels: Vec<String>,
     #[serde(default)]
     pub assignee: Option<String>,
+    /// Who is answerable, as distinct from who is doing it, and what made the
+    /// item. Written by cairn since they existed and read back only now: an
+    /// export carried neither, so a round trip lost both without a word.
+    #[serde(default)]
+    pub owner: Option<String>,
+    #[serde(default)]
+    pub created_by: Option<String>,
     #[serde(default)]
     pub created: Option<String>,
     #[serde(default)]

@@ -3,6 +3,7 @@
   "body": "Körper mit Ümlauten. 中文段落。\n",
   "category": "open",
   "created": null,
+  "created_by": null,
   "depends_on": [],
   "fields": {},
   "id": 5,
@@ -11,6 +12,7 @@
     "日本語"
   ],
   "milestone": null,
+  "owner": null,
   "ref": "0005",
   "source": null,
   "status": "backlog",

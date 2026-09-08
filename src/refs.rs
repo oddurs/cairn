@@ -179,7 +179,25 @@ pub fn validate_on_write(cfg: &Config, store: &crate::store::Store, item: &Item)
         None => items.push(item.clone()),
     }
 
-    for def in cfg.ref_fields() {
+    // The built-ins as well as the declared fields. This iterated
+    // `cfg.ref_fields()` alone, which is the *declared* ones — so the comment
+    // above claiming the rule "already applied to `depends_on`" was false, and
+    // `set 1 depends_on=999` was accepted for `check` to complain about later.
+    let builtin = cfg.builtin_ref_fields();
+    let declared: Vec<&FieldDef> = cfg.ref_fields().collect();
+    let every = declared
+        .into_iter()
+        .chain(builtin.iter())
+        // A project that redeclares `depends_on` gets its own definition, not
+        // both.
+        .fold(Vec::new(), |mut acc: Vec<&FieldDef>, f| {
+            if !acc.iter().any(|x| x.name == f.name) {
+                acc.push(f);
+            }
+            acc
+        });
+
+    for def in every {
         for value in values(item, def) {
             if resolve(&items, def, &value).is_none() {
                 let known = permitted(&items, cfg, def);

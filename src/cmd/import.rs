@@ -443,10 +443,16 @@ fn apply_fields(
             .collect();
         apply(item, cfg, "labels", Assign::Set(labels.join(",")))?;
     }
-    if let Some(a) = &inc.assignee
-        && !a.is_empty()
-    {
-        apply(item, cfg, "assignee", Assign::Set(a.clone()))?;
+    for (key, value) in [
+        ("assignee", &inc.assignee),
+        ("owner", &inc.owner),
+        ("created_by", &inc.created_by),
+    ] {
+        if let Some(v) = value
+            && !v.is_empty()
+        {
+            apply(item, cfg, key, Assign::Set(v.clone()))?;
+        }
     }
 
     // Schema defaults first, then whatever the document carried.

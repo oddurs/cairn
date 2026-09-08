@@ -3,6 +3,7 @@
   "body": "Body.\n",
   "category": "open",
   "created": null,
+  "created_by": null,
   "depends_on": [],
   "fields": {
     "invented_by_a_later_version": "kept",
@@ -15,6 +16,7 @@
   "key": null,
   "labels": [],
   "milestone": null,
+  "owner": null,
   "ref": "0003",
   "source": null,
   "status": "backlog",

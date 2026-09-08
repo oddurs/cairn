@@ -66,6 +66,13 @@ durability: check soak fuzz conformance
 demo: build
 	python3 doc/demo.py --cairn $(CAIRN)
 
+# Re-capture both recordings from real command output. `record` was declared
+# phony with no rule, so it silently did nothing — while the CI job that checks
+# the recordings are current told people to run it.
+record: build
+	python3 doc/demo.py --cairn $(CAIRN)
+	python3 doc/samples.py --cairn $(CAIRN)
+
 doc: info
 
 info: doc/cairn.info

@@ -3,6 +3,7 @@
   "body": "Body.\n",
   "category": "open",
   "created": null,
+  "created_by": null,
   "depends_on": [
     1,
     2
@@ -16,6 +17,7 @@
     "ops"
   ],
   "milestone": null,
+  "owner": null,
   "ref": "0004",
   "source": null,
   "status": "backlog",

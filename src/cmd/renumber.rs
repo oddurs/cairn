@@ -126,10 +126,12 @@ pub fn run(args: Args) -> Result<i32> {
     }
 
     // The retained item keeps its id, and nothing can unambiguously refer to
-    // the copy, so references are left alone rather than guessed at.
-    let id_map: HashMap<u32, u32> = HashMap::new();
-
-    apply(&cfg, &store, &mut items, &plan, &id_map)?;
+    // the copy, so references are left alone rather than guessed at. There was
+    // a `HashMap` threaded through here for rewriting them, always empty at the
+    // only call site — eighteen lines that could not run, kept alive by an
+    // argument. If references ever do need rewriting, `refs::rename_key` is the
+    // shape to copy, and it is tested.
+    apply(&store, &mut items, &plan)?;
 
     println!("{} {} item(s)", style::green("renumbered:"), plan.len());
     eprintln!(
@@ -297,13 +299,7 @@ fn duplicate_plan(items: &[Item], duplicates: &BTreeMap<u32, Vec<usize>>) -> Vec
 }
 
 /// Two phases, so a rename can never land on a file that has not moved yet.
-fn apply(
-    cfg: &Config,
-    store: &Store,
-    items: &mut [Item],
-    plan: &[(usize, u32)],
-    id_map: &HashMap<u32, u32>,
-) -> Result<()> {
+fn apply(store: &Store, items: &mut [Item], plan: &[(usize, u32)]) -> Result<()> {
     let mut staged: Vec<(usize, PathBuf)> = Vec::new();
     for (index, _) in plan {
         let from = items[*index].path.clone();
@@ -322,25 +318,5 @@ fn apply(
         std::fs::remove_file(temp).with_context(|| format!("removing {}", temp.display()))?;
     }
 
-    if !id_map.is_empty() {
-        for it in items.iter_mut() {
-            let before = it.meta.depends_on.clone();
-            for dep in it.meta.depends_on.iter_mut() {
-                if let Some(new) = id_map.get(dep) {
-                    *dep = *new;
-                }
-            }
-            it.meta.depends_on.sort_unstable();
-            if it.meta.depends_on != before {
-                it.touch(&today());
-                it.save()?;
-                println!(
-                    "  {} references updated in {}",
-                    style::dim(&cfg.format_id(it.id)),
-                    store.rel(&it.path)
-                );
-            }
-        }
-    }
     Ok(())
 }

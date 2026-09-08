@@ -88,7 +88,9 @@ The frontmatter is a YAML mapping. All keys are optional except where noted.
 | `type` | string | Names a type the project declares. |
 | `status` | string | Names a status the project declares. Required. |
 | `milestone` | string | Names a milestone the project declares. |
-| `assignee` | string | |
+| `assignee` | string | Who is doing the work. |
+| `owner` | string | Who is answerable for the work, which need not be who is doing it. With people the two are usually the same; with a program working and a person answerable they are not. |
+| `created_by` | string | What made the item, when that was not a person. A reader **must not** infer anything from its absence: most items have no such record. |
 | `labels` | sequence of strings | A reader **must** also accept a single string, split on commas with surrounding whitespace discarded. |
 | `depends_on` | sequence of unsigned integers | A reader **must** also accept a single comma-separated string, and **must** accept each element with an optional leading `#`. |
 | `created` | date | `YYYY-MM-DD`. |

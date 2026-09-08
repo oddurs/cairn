@@ -3,6 +3,7 @@
   "body": "## Problem\n\nText.\n",
   "category": "active",
   "created": "2026-01-02",
+  "created_by": null,
   "depends_on": [
     1
   ],
@@ -16,6 +17,7 @@
     "backend"
   ],
   "milestone": "v0.1",
+  "owner": null,
   "ref": "0002",
   "source": "github:owner/repo#42",
   "status": "doing",
