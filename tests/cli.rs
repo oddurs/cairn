@@ -6110,3 +6110,259 @@ fn renumber_that_cannot_finish_leaves_everything_findable() {
     );
     assert!(p.run(&["renumber"]).ok(), "the lock was left held");
 }
+
+// --- data nobody here wrote -------------------------------------------------
+
+/// A `gh` on PATH that answers with whatever is given here.
+///
+/// The seam was already there: cairn runs `gh` by name, so PATH is the
+/// injection point and no flag has to be invented to make the path testable.
+/// The whole real code path runs — argument construction included.
+#[cfg(unix)]
+fn with_fake_gh(p: &Project, script: &str) -> std::ffi::OsString {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = p.path("fake-bin");
+    std::fs::create_dir_all(&dir).unwrap();
+    let gh = dir.join("gh");
+    std::fs::write(&gh, format!("#!/bin/sh\n{script}\n")).unwrap();
+    std::fs::set_permissions(&gh, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    let mut paths = vec![dir];
+    paths.extend(std::env::split_paths(&path_with_binary()));
+    std::env::join_paths(paths).expect("PATH")
+}
+
+#[cfg(unix)]
+fn import_github(p: &Project, script: &str, args: &[&str]) -> Out {
+    let path = with_fake_gh(p, script);
+    let path = path.to_string_lossy().to_string();
+    let mut all = vec!["import", "--from", "github", "--repo", "owner/name"];
+    all.extend_from_slice(args);
+    p.run_env(&all, &[("PATH", Some(path.as_str()))])
+}
+
+/// GitHub data that is well-formed enough to be plausible and wrong in the
+/// ways real data is wrong: a null body, a missing title, a label that is an
+/// object where a name was expected, a timestamp that is not one.
+#[cfg(unix)]
+#[test]
+fn malformed_github_issues_do_not_produce_malformed_items() {
+    let p = Project::new();
+    let issues = serde_json::json!([
+        { "number": 1, "title": "Ordinary", "body": "fine", "state": "OPEN",
+          "labels": [{"name": "bug"}], "assignees": [], "milestone": null,
+          "createdAt": "2026-01-02T03:04:05Z", "updatedAt": "2026-01-02T03:04:05Z" },
+        { "number": 2, "title": "No body", "body": null, "state": "CLOSED",
+          "labels": [], "assignees": [], "milestone": null },
+        { "number": 3, "body": "no title at all", "state": "OPEN" },
+        { "number": 4, "title": "Odd labels", "labels": [{"colour": "red"}, "plain"],
+          "state": "OPEN" },
+        { "number": 5, "title": "Bad dates", "state": "OPEN",
+          "createdAt": "yesterday", "updatedAt": "" },
+    ]);
+    let out = import_github(&p, &format!("cat <<'JSON'\n{issues}\nJSON"), &["--dry-run"]);
+    assert!(
+        !out.all().contains("panicked"),
+        "external data brought cairn down: {}",
+        out.all()
+    );
+
+    // Now for real, and the result has to be a project that validates.
+    let out = import_github(&p, &format!("cat <<'JSON'\n{issues}\nJSON"), &[]);
+    assert!(out.ok(), "{}", out.all());
+    assert!(
+        p.run(&["check"]).ok(),
+        "the import wrote something the schema rejects:\n{}",
+        p.run(&["check"]).all()
+    );
+    // An issue with no title arrives visibly untitled rather than plausibly
+    // titled, and is findable.
+    assert_contains(&out.all(), "(untitled)", "an untitled issue says so");
+
+    // A timestamp that is not one does not become a date. It used to be written
+    // into `created` verbatim, where every comparison against it is quietly
+    // wrong and nothing ever says so.
+    let listing = p.expect(&["list", "-A", "--plain", "--columns", "title,created"]);
+    assert!(
+        !listing.stdout.contains("yesterday"),
+        "`yesterday` was written into a date field:\n{}",
+        listing.stdout
+    );
+}
+
+/// The same defect from the other direction: whatever put it there, a date that
+/// is not a date is reported rather than sorted around.
+#[test]
+fn a_date_that_is_not_a_date_is_reported() {
+    let p = Project::new();
+    p.write(
+        "cairn/items/0009-odd.md",
+        "---\nid: 9\ntitle: Odd\nstatus: backlog\ncreated: yesterday\n---\nbody\n",
+    );
+    let out = p.expect(&["check"]).all();
+    assert_contains(&out, "`created` is `yesterday`", "it names the value");
+    assert_contains(&out, "YYYY-MM-DD", "and the shape it wanted");
+    assert!(p.run(&["check"]).ok(), "a warning, not an error");
+}
+
+/// `gh` missing, and `gh` failing, are different situations and both are the
+/// user's to fix.
+#[cfg(unix)]
+#[test]
+fn a_github_import_says_which_way_it_failed() {
+    let p = Project::new();
+
+    let out = import_github(&p, "echo 'gh: not logged in' >&2; exit 1", &[]);
+    assert!(!out.ok());
+    assert_contains(&out.all(), "gh issue list", "it names what it ran");
+    assert_contains(&out.all(), "not logged in", "and passes on what gh said");
+
+    // Output that is not JSON at all — a paginator, a proxy login page.
+    let out = import_github(&p, "echo '<html>login</html>'", &[]);
+    assert!(!out.ok());
+    assert_contains(&out.all(), "parsing", "it says where it failed");
+
+    // And with no `gh` on PATH at all.
+    let empty = p.path("empty-bin");
+    std::fs::create_dir_all(&empty).unwrap();
+    let empty = empty.display().to_string();
+    let out = p.run_env(
+        &["import", "--from", "github", "--repo", "owner/name"],
+        &[("PATH", Some(empty.as_str()))],
+    );
+    assert!(!out.ok());
+    assert_contains(&out.all(), "cli.github.com", "and says where to get it");
+}
+
+/// An interchange document written by something other than cairn.
+#[test]
+fn an_interchange_document_that_is_wrong_is_refused_rather_than_half_read() {
+    let p = Project::new();
+    let before = p.expect(&["list", "-A", "--count"]).trimmed();
+
+    for doc in [
+        // Wrong types where a string and a list belong.
+        r#"{"items":[{"id":1,"title":42,"status":"backlog"}]}"#,
+        r#"{"items":[{"id":1,"title":"T","labels":"not-a-list","status":"backlog"}]}"#,
+        // A status and a type this project has never heard of.
+        r#"{"items":[{"id":1,"title":"T","status":"invented"}]}"#,
+        // Two records claiming one id.
+        r#"{"items":[{"id":1,"title":"A","status":"backlog"},{"id":1,"title":"B","status":"backlog"}]}"#,
+        // Not a document at all.
+        r#"[]"#,
+        r#"{"items":"none"}"#,
+    ] {
+        let out = p.run_stdin(&["import"], doc);
+        assert!(
+            !out.all().contains("panicked"),
+            "a malformed document brought cairn down:\n{doc}\n{}",
+            out.all()
+        );
+        assert!(
+            p.run(&["check"]).ok(),
+            "a malformed document left the project invalid:\n{doc}\n{}",
+            p.run(&["check"]).all()
+        );
+    }
+    let _ = before;
+}
+
+/// A body containing the frontmatter delimiter, arriving from outside.
+#[test]
+fn an_imported_body_containing_a_delimiter_round_trips() {
+    let p = Project::new();
+    let doc = serde_json::json!({
+        "items": [{
+            "id": 1, "title": "Tricky", "status": "backlog",
+            "body": "before\n---\nid: 999\ntitle: not an item\n---\nafter\n"
+        }]
+    });
+    let out = p.run_stdin(&["import"], &doc.to_string());
+    assert!(out.ok(), "{}", out.all());
+    assert!(p.run(&["check"]).ok(), "{}", p.run(&["check"]).all());
+
+    let shown = p.expect(&["show", "1"]).stdout;
+    assert_contains(&shown, "not an item", "the body survived intact");
+    assert_eq!(
+        p.expect(&["list", "-A", "--count"]).trimmed(),
+        "1",
+        "the delimiter in a body was read as a second item"
+    );
+}
+
+/// `cairn log` parses the output of `git log`, an external program whose
+/// format is stable by convention rather than by contract. It has produced two
+/// real defects already.
+#[test]
+fn history_survives_a_commit_message_that_looks_like_data() {
+    let p = repository();
+    p.expect(&["set", "1", "priority=p0"]);
+    git(&p, &["add", "-A"]);
+    // A message carrying every shape the parser looks for.
+    git(
+        &p,
+        &["commit", "-qm", "start\n\nid: 999\nstatus: done\n---\n"],
+    );
+
+    p.expect(&["set", "1", "assignee=someone"]);
+    git(&p, &["add", "-A"]);
+    git(&p, &["commit", "-qm", "0001|0002|---|id: 1"]);
+
+    let out = p.expect(&["log", "1"]);
+    assert!(out.ok(), "{}", out.all());
+    let json: serde_json::Value =
+        serde_json::from_str(&p.expect(&["log", "1", "--json"]).stdout).expect("JSON");
+    let revisions = json["revisions"].as_array().map(Vec::len).unwrap_or(0);
+    assert!(
+        revisions >= 2,
+        "the history was lost to a commit message: {json}"
+    );
+}
+
+/// A repository with no commits at all, which is where somebody runs this by
+/// accident the first time.
+#[test]
+fn history_in_an_empty_repository_explains_itself() {
+    let p = Project::empty();
+    git(&p, &["init", "-q", "-b", "main", "."]);
+    p.expect(&["init", "--bare", "--name", "Fresh"]);
+    p.add("Unversioned", &[]);
+
+    let out = p.run(&["log", "1"]);
+    assert!(
+        !out.all().contains("panicked"),
+        "an empty repository brought cairn down: {}",
+        out.all()
+    );
+    assert!(
+        out.all().to_lowercase().contains("no history")
+            || out.all().to_lowercase().contains("not")
+            || out.ok(),
+        "it should say something rather than nothing: {}",
+        out.all()
+    );
+}
+
+/// A file renamed twice in one commit, which is what `renumber` does.
+#[test]
+fn history_follows_an_item_through_two_renames_in_one_commit() {
+    let p = repository();
+    p.add("Original title", &[]);
+    git(&p, &["add", "-A"]);
+    git(&p, &["commit", "-qm", "one"]);
+
+    p.expect(&["set", "1", "title=Second title"]);
+    p.expect(&["set", "1", "title=Third title"]);
+    git(&p, &["add", "-A"]);
+    git(&p, &["commit", "-qm", "renamed twice in one commit"]);
+
+    let out = p.expect(&["log", "1"]);
+    assert!(out.ok(), "{}", out.all());
+    assert_contains(&out.stdout, "title", "the retitle is in the history");
+    // And it did not wander into a different item on the way.
+    assert!(
+        !out.stdout.contains("Watched"),
+        "the trail crossed into another item:\n{}",
+        out.stdout
+    );
+}

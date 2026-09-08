@@ -627,14 +627,18 @@ fn read_github(args: &Args) -> Result<(Vec<Incoming>, String)> {
                     .and_then(|a| a.get("login"))
                     .and_then(|l| l.as_str())
                     .map(str::to_string),
+                // `chars`, not a byte slice. These are ISO timestamps from a
+                // well-behaved GitHub and they are also arbitrary strings from
+                // outside this program, and a byte offset that lands inside a
+                // character panics — which is how the identifier parser broke.
                 created: v
                     .get("createdAt")
                     .and_then(|c| c.as_str())
-                    .map(|c| c[..10.min(c.len())].to_string()),
+                    .and_then(date_part),
                 updated: v
                     .get("updatedAt")
                     .and_then(|c| c.as_str())
-                    .map(|c| c[..10.min(c.len())].to_string()),
+                    .and_then(date_part),
                 source: Some(format!("github:{repo}#{number}")),
                 body: v.get("body").and_then(|b| b.as_str()).map(str::to_string),
                 ..Default::default()
@@ -642,6 +646,20 @@ fn read_github(args: &Args) -> Result<(Vec<Incoming>, String)> {
         })
         .collect();
     Ok((items, format!("github:{repo}")))
+}
+
+/// The `YYYY-MM-DD` at the front of an ISO timestamp, if that is what it is.
+///
+/// `None` rather than a guess when it is not. A timestamp arriving as
+/// `yesterday` used to be written into `created` verbatim, where nothing looks
+/// at it again and every date comparison quietly gets it wrong; falling back to
+/// the import's own date is worse than nothing only if you would rather have a
+/// wrong answer than an honest one.
+fn date_part(raw: &str) -> Option<String> {
+    let head: String = raw.chars().take(10).collect();
+    chrono::NaiveDate::parse_from_str(&head, "%Y-%m-%d")
+        .ok()
+        .map(|_| head)
 }
 
 fn which(program: &str) -> Option<std::path::PathBuf> {

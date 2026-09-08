@@ -46,14 +46,13 @@ Enough to run a real project's roadmap without reaching for anything else.
 
 ## v0.2 — Comfortable
 
-`##########` 93% · 42 of 45 done · due 2026-12-01
+`##########` 96% · 43 of 45 done · due 2026-12-01
 
 The rough edges that show up after a few weeks of daily use, and the pieces that make the central claim true rather than merely stated.
 
 ### backlog
 
 - [ ] [`0056`](https://github.com/oddurs/cairn/blob/main/cairn/items/0056-collect-a-contributor-licence-agreement.md) Collect a contributor licence agreement <sup>chore · p0</sup>
-- [ ] [`0101`](https://github.com/oddurs/cairn/blob/main/cairn/items/0101-be-right-about-data-nobody-here-wrote.md) Be right about data nobody here wrote <sup>chore · p1 · s10</sup>
 - [ ] [`0102`](https://github.com/oddurs/cairn/blob/main/cairn/items/0102-unit-test-the-reference-machinery.md) Unit-test the reference machinery <sup>chore · p1 · s10</sup>
 
 ### done
@@ -100,6 +99,7 @@ The rough edges that show up after a few weeks of daily use, and the pieces that
 - [x] [`0088`](https://github.com/oddurs/cairn/blob/main/cairn/items/0088-prefer-schema-over-documented-keys.md) Prefer schema over documented keys <sup>docs · p1 · s9</sup>
 - [x] [`0090`](https://github.com/oddurs/cairn/blob/main/cairn/items/0090-the-body-may-be-interpreted-and-the-specification-should-say-so.md) The body may be interpreted, and the specification should say so <sup>bug · p1 · s9</sup>
 - [x] [`0097`](https://github.com/oddurs/cairn/blob/main/cairn/items/0097-adopt-a-schema-instead-of-retyping-it.md) Adopt a schema instead of retyping it <sup>feature · p2</sup>
+- [x] [`0101`](https://github.com/oddurs/cairn/blob/main/cairn/items/0101-be-right-about-data-nobody-here-wrote.md) Be right about data nobody here wrote <sup>chore · p1 · s10</sup>
 
 ## v1.0 — Stable
 
