@@ -163,6 +163,26 @@ fn collect_inner(
         if item.meta.title.as_deref().unwrap_or("").trim().is_empty() {
             r.error_at(&at, item, "title", "missing `title`".into());
         }
+        // `created` and `updated` are reserved, so the custom-field checks below
+        // never look at them — and an import from somewhere else can put
+        // anything in one. A date nothing can parse sorts arbitrarily and never
+        // says so.
+        for (key, value) in [
+            ("created", item.meta.created.as_deref()),
+            ("updated", item.meta.updated.as_deref()),
+        ] {
+            if let Some(v) = value
+                && chrono::NaiveDate::parse_from_str(v, "%Y-%m-%d").is_err()
+            {
+                r.warn_at(
+                    &at,
+                    item,
+                    key,
+                    format!("`{key}` is `{v}`, which is not a date in YYYY-MM-DD form"),
+                );
+            }
+        }
+
         if item.meta.id.is_none() {
             r.warn(
                 &at,

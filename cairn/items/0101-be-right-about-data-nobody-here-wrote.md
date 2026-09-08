@@ -2,7 +2,7 @@
 id: 101
 title: Be right about data nobody here wrote
 type: chore
-status: backlog
+status: done
 milestone: v0.2
 created: 2026-09-07
 updated: 2026-09-07
@@ -64,9 +64,13 @@ that "as far as anybody knows" is currently doing more work than it should.
 
 ## Acceptance criteria
 
-- [ ] `--from github` is testable without the network, driven by a recorded response
-- [ ] Malformed GitHub data is covered: missing title, null body, wrong-typed label, colliding id
-- [ ] `gh` absent and `gh` failing both produce a deliberate message
-- [ ] An interchange document with wrong-typed and unknown-valued fields is covered
-- [ ] `log` is tested against a separator in a commit message, a double rename, a shallow clone and an empty repository
-- [ ] Nothing in either path fails by writing a partial result
+- [x] `--from github` is testable without the network, driven by a recorded response
+- [x] Malformed GitHub data is covered: missing title, null body, wrong-typed label, colliding id
+- [x] `gh` absent and `gh` failing both produce a deliberate message
+- [x] An interchange document with wrong-typed and unknown-valued fields is covered
+- [x] `log` is tested against a separator in a commit message, a double rename, a shallow clone and an empty repository
+- [x] Nothing in either path fails by writing a partial result
+
+## 2026-09-07
+
+Done. The seam turned out to already exist: cairn runs `gh` by name, so PATH is the injection point and no flag had to be invented — the whole real path runs, argument construction included. Two defects came out of it. A byte slice on `createdAt` (`c[..10]`) would panic on a multibyte character, the same class as the identifier parser; and a timestamp that is not one — `yesterday` — was written into `created` verbatim, where every date comparison against it is quietly wrong. `date_part` now returns None unless the head parses as YYYY-MM-DD, and `cairn check` reports a bad `created` or `updated` on any item, whatever put it there, since the reserved dates were never covered by the custom-field checks.
