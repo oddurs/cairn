@@ -216,6 +216,7 @@ fn dispatch(name: &str, a: &Value) -> Result<String> {
         "create_item" => create_item(a),
         "update_item" => update_item(a),
         "claim_item" => claim_item(a),
+        "propose_change" => propose_change(a),
         "release_item" => release_item(a),
         "close_item" => close_item(a),
         "add_note" => add_note(a),
@@ -658,6 +659,58 @@ fn add_note(a: &Value) -> Result<String> {
     pretty(&json!({ "noted": cfg.format_id(item.id), "body": item.body }))
 }
 
+/// Ask for a change you are not permitted to make.
+///
+/// The permission that refuses the write tells the caller to come here, so this
+/// is the other end of it rather than a second way to do the same thing.
+fn propose_change(a: &Value) -> Result<String> {
+    let cfg = Config::discover()?;
+    let store = Store::new(&cfg);
+    let lock = Lock::acquire(&cfg)?;
+    let mut item = store.find(require_id(&cfg, a)?)?;
+
+    let Some(field) = s(a, "field") else {
+        bail!("`field` is required: the field you want changed");
+    };
+    let Some(value) = s(a, "value") else {
+        bail!("`value` is required: what you want it changed to");
+    };
+    let Some(why) = s(a, "why") else {
+        bail!("`why` is required: a proposal without one is a preference, not an argument");
+    };
+
+    // Checked against the schema, not against the permission — being refused
+    // the write is the reason this exists.
+    let mut trial = item.clone();
+    apply(&mut trial, &cfg, &field, Assign::Set(value.clone()))?;
+
+    let from = item.get(&field).display();
+    if from == value {
+        bail!("`{field}` is already `{value}`");
+    }
+    item.append_note(
+        &format!(
+            "Proposed {field}: {} -> {value} ({}, {})",
+            if from.is_empty() { "unset" } else { &from },
+            caller(),
+            today()
+        ),
+        &why,
+    );
+    item.touch(&today());
+    item.save()?;
+    drop(lock);
+    hooks::item(&cfg, &store, hooks::Event::AfterChange, &item);
+
+    pretty(&json!({
+        "proposed": cfg.format_id(item.id),
+        "field": field,
+        "from": from,
+        "to": value,
+        "note": "a person decides; nothing has changed yet",
+    }))
+}
+
 /// Hand an item back, with the reason the next taker needs.
 fn release_item(a: &Value) -> Result<String> {
     let cfg = Config::discover()?;
@@ -1007,6 +1060,18 @@ fn tools() -> Vec<Value> {
                 }),
                 "body": str_prop("Replace the Markdown body"),
             }), vec!["id"]),
+        }),
+        json!({
+            "name": "propose_change",
+            "description": "Ask for a change you are not permitted to make. When a field or a \
+        status is declared `agent = \"propose\"`, setting it is refused and this is where the \
+        answer goes: a person reviews proposals and applies them. Nothing changes until they do.",
+            "inputSchema": obj(json!({
+                "id": id_prop("Item id"),
+                "field": str_prop("The field you want changed"),
+                "value": str_prop("What you want it changed to"),
+                "why": str_prop("Why. A proposal without a reason is a preference, not an argument"),
+            }), vec!["id", "field", "value", "why"]),
         }),
         json!({
             "name": "release_item",

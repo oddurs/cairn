@@ -2,7 +2,7 @@
 id: 110
 title: A proposal should be a proposal, not prose
 type: feature
-status: backlog
+status: done
 milestone: v0.2
 created: 2026-09-08
 updated: 2026-09-08
@@ -74,10 +74,22 @@ record of where it came from.
 
 ## Acceptance criteria
 
-- [ ] `cairn propose <id> <field>=<value> --why "..."` records field, from, to, who, when and why
-- [ ] It is stored in the body, findable, and survives an unrelated frontmatter edit
-- [ ] `cairn proposals` lists open ones across the backlog
-- [ ] `--accept` applies one and records that it was accepted, by whom
-- [ ] The protocol server exposes proposing, since an agent is the caller the feature exists for
-- [ ] An agent refused by `agent = "propose"` is told about this command by name
-- [ ] The spelling --- `propose` against `set --propose` --- is decided in the item before it ships
+- [x] `cairn propose <id> <field>=<value> --why "..."` records field, from, to, who, when and why
+- [x] It is stored in the body, findable, and survives an unrelated frontmatter edit
+- [x] `cairn proposals` lists open ones across the backlog
+- [x] `--accept` applies one and records that it was accepted, by whom
+- [x] The protocol server exposes proposing, since an agent is the caller the feature exists for
+- [x] An agent refused by `agent = "propose"` is told about this command by name
+- [x] The spelling --- `propose` against `set --propose` --- is decided in the item before it ships
+
+## 2026-09-08
+
+Spelling decided, before building: `cairn propose`, not `set --propose`.
+
+The fourth rule says a command earns its line if removing it would make a real task harder. Two tasks are involved and they are different in kind. Making a proposal could indeed be a flag on `set` — it is a write that gets refused and recorded instead. But *reviewing* proposals is the task that has no home today, and it is not a listing of items: it is a listing of things somebody wants done to items. `cairn list` cannot express it and a flag on `set` cannot either.
+
+So the surface is `cairn proposals`, which earns its line, and `cairn propose` exists because a verb whose noun is a command reads wrong the other way round — `cairn set 12 priority=p0 --propose` then `cairn proposals` names one act two ways. One pair, both spelled the same.
+
+## 2026-09-08
+
+Done, spelled `cairn propose` and `cairn proposals` as decided above. A proposal is a note with structure — field, from, to, who, when, why — parsed back out of the body, so it survives any frontmatter edit and several on one field accumulate rather than overwrite. `--accept` applies the most recent and records that it was accepted, so the change does not later read as though it was always so. The value is checked against the schema; the permission deliberately is not, since being refused the write is why the command exists. `propose_change` is the thirteenth protocol tool, and the refusal now names the command with the change already spelled out rather than advising a note.

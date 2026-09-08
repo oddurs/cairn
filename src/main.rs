@@ -147,6 +147,12 @@ enum Command {
     /// Add to an item's body: `cairn note 12 "Dropped: too costly"`
     Note(cmd::note::Args),
 
+    /// Ask for a change somebody else decides: `cairn propose 12 priority=p0 --why "..."`
+    Propose(cmd::propose::Args),
+
+    /// What is waiting for a person to decide
+    Proposals(cmd::propose::ListArgs),
+
     /// Move items to the first `done` status
     Close(cmd::set::CloseArgs),
 
@@ -268,6 +274,8 @@ fn run(command: Command) -> Result<i32> {
         Command::Log(a) => cmd::log::run(a),
         Command::Set(a) => cmd::set::run(a),
         Command::Note(a) => cmd::note::run(a),
+        Command::Propose(a) => cmd::propose::run(a),
+        Command::Proposals(a) => cmd::propose::list(a),
         Command::Close(a) => cmd::set::close(a),
         Command::Reopen(a) => cmd::set::reopen(a),
         Command::Edit(a) => cmd::show::edit(a),
