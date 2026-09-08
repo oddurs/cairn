@@ -2,7 +2,7 @@
 id: 112
 title: Write down what an agent is, and is not, to cairn
 type: docs
-status: backlog
+status: done
 milestone: v1.0
 depends_on:
 - 106
@@ -77,8 +77,12 @@ it, which is the whole reason this project writes decisions down.
 
 ## Acceptance criteria
 
-- [ ] A manual chapter stating the three ways an agent differs from a person
-- [ ] Each is tied to the decision it produced, by item number
-- [ ] The four refusals are stated with their reasons
-- [ ] It says plainly that this is posture, not format: `spec/README.md` is unchanged
-- [ ] `cairn agent` is unchanged --- this is for the person choosing, not the model working
+- [x] A manual chapter stating the three ways an agent differs from a person
+- [x] Each is tied to the decision it produced, by item number
+- [x] The four refusals are stated with their reasons
+- [x] It says plainly that this is posture, not format: `spec/README.md` is unchanged
+- [x] `cairn agent` is unchanged --- this is for the person choosing, not the model working
+
+## 2026-09-08
+
+Done. Two manual sections beside 'Coding agents': the three ways an agent differs from a person, each tied to the item it produced, and the four refusals with their reasons — no parallel agent API, no memory store, no leases or heartbeats, nothing that calls a model. It says plainly that this is posture rather than format and that spec §7 is right to say a reader of items needs none of it. `cairn agent` is unchanged: that block is for the model working, and this is for the person choosing.

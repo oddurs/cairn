@@ -5419,7 +5419,7 @@ fn every_tool_accepts_what_its_schema_advertises() {
     let tools = replies[0]["result"]["tools"].as_array().expect("tools");
     assert_eq!(
         tools.len(),
-        12,
+        13,
         "a tool was added or removed without a test"
     );
 
@@ -7801,4 +7801,177 @@ fn today() -> String {
         .output()
         .expect("date");
     String::from_utf8_lossy(&out.stdout).trim().to_string()
+}
+
+// --- a proposal is a proposal -----------------------------------------------
+
+/// A project where an agent may ask for a priority but not set one.
+fn proposing() -> Project {
+    let p = Project::with(
+        Schema::standard()
+            .amend("priority", |f| f.agent(Agent::Propose))
+            .amend_status("done", |s| s.agent(Agent::Propose)),
+    );
+    seed(&p);
+    p
+}
+
+/// The permission already refused the write and told the caller to write a
+/// note. Then the proposal was prose a person had to find by reading every body
+/// in the backlog.
+#[test]
+fn a_refusal_names_the_command_that_replaces_it() {
+    let p = proposing();
+    let out = p.fails_as_agent(&["set", "1", "priority=p1"]);
+    assert_contains(&out.all(), "cairn propose", "it names the way through");
+    assert_contains(&out.all(), "priority=p1", "with the change already spelled");
+    assert_contains(&out.all(), "cairn proposals", "and who reviews it");
+}
+
+#[test]
+fn a_proposal_is_listed_reviewed_and_applied() {
+    let p = proposing();
+    p.expect(&[
+        "propose",
+        "1",
+        "priority=p3",
+        "--why",
+        "It blocks nothing and nobody has asked.",
+    ]);
+
+    // Nothing has changed yet.
+    assert_json(
+        &p.json(&["show", "1", "--json"]),
+        "fields.priority",
+        serde_json::json!("p0"),
+    );
+
+    let listed = p.expect(&["proposals"]).stdout;
+    assert_contains(&listed, "priority: p0 -> p3", "the change, both ends");
+    assert_contains(&listed, "blocks nothing", "and the reason");
+
+    let json = p.json(&["proposals", "--json"]);
+    assert_json(&json, "0.field", serde_json::json!("priority"));
+    assert_json(&json, "0.from", serde_json::json!("p0"));
+    assert_json(&json, "0.to", serde_json::json!("p3"));
+
+    p.expect(&["proposals", "--accept", "1"]);
+    assert_json(
+        &p.json(&["show", "1", "--json"]),
+        "fields.priority",
+        serde_json::json!("p3"),
+    );
+
+    // Applied, and recorded as applied rather than looking as though it was
+    // always so.
+    assert_contains(&p.item_file("1"), "## Accepted priority", "");
+    assert!(
+        p.expect(&["proposals"])
+            .all()
+            .contains("nothing is proposed"),
+        "an accepted proposal is still listed as waiting"
+    );
+    assert!(p.run(&["check"]).ok());
+}
+
+/// A proposal lives in the body, so an unrelated write cannot lose it.
+#[test]
+fn a_proposal_survives_an_unrelated_change() {
+    let p = proposing();
+    p.expect(&["propose", "1", "priority=p1", "--why", "Because."]);
+    p.expect(&["set", "1", "area=parser"]);
+    p.expect(&["set", "1", "labels+=x"]);
+    assert_contains(&p.expect(&["proposals"]).stdout, "priority: p0 -> p1", "");
+}
+
+/// Several proposals on one item is a conversation, not a value.
+#[test]
+fn proposals_accumulate_rather_than_replace() {
+    let p = proposing();
+    p.expect(&["propose", "1", "priority=p1", "--why", "First argument."]);
+    p.expect(&["propose", "1", "priority=p3", "--why", "Second argument."]);
+
+    let listed = p.expect(&["proposals"]).stdout;
+    assert_contains(&listed, "First argument.", "the earlier one survived");
+    assert_contains(&listed, "Second argument.", "and the later one is there");
+
+    // Accepting takes the most recent.
+    p.expect(&["proposals", "--accept", "1"]);
+    assert_json(
+        &p.json(&["show", "1", "--json"]),
+        "fields.priority",
+        serde_json::json!("p3"),
+    );
+}
+
+#[test]
+fn a_proposal_is_checked_against_the_schema() {
+    let p = proposing();
+    let out = p.fails(&["propose", "1", "priority=urgent"]);
+    assert_contains(
+        &out.all(),
+        "urgent",
+        "a value the schema forbids is refused",
+    );
+
+    let out = p.fails(&["propose", "1", "priority=p0"]);
+    assert_contains(&out.all(), "already", "proposing what is already true");
+
+    let out = p.fails(&["propose", "1", "nonsense"]);
+    assert_contains(&out.all(), "field=value", "");
+
+    let out = p.fails(&["proposals", "--accept", "2"]);
+    assert_contains(&out.all(), "nothing proposed", "");
+}
+
+/// The agent is the caller this exists for, so it has to be reachable from
+/// where an agent is.
+#[test]
+fn an_agent_can_propose_what_it_may_not_set() {
+    let p = proposing();
+
+    let refused_write = p.mcp_call(
+        "update_item",
+        serde_json::json!({"id": 1, "fields": {"priority": "p3"}}),
+        Some("claude"),
+    );
+    assert!(refused(&refused_write));
+    assert_contains(
+        &tool_text(&refused_write),
+        "propose",
+        "the refusal points here",
+    );
+
+    let r = p.mcp_call_anonymous(
+        "propose_change",
+        serde_json::json!({
+            "id": 1, "field": "priority", "value": "p3",
+            "why": "Nothing depends on it any more."
+        }),
+        "claude",
+    );
+    assert!(!refused(&r), "{}", tool_text(&r));
+
+    // Nothing changed, and a person can see what is waiting.
+    assert_json(
+        &p.json(&["show", "1", "--json"]),
+        "fields.priority",
+        serde_json::json!("p0"),
+    );
+    let listed = p.expect(&["proposals"]).stdout;
+    assert_contains(&listed, "claude", "in the agent's own name");
+    assert_contains(&listed, "Nothing depends on it", "");
+}
+
+/// A proposal without a reason is a preference, not an argument.
+#[test]
+fn an_agent_must_say_why() {
+    let p = proposing();
+    let r = p.mcp_call(
+        "propose_change",
+        serde_json::json!({"id": 1, "field": "priority", "value": "p3"}),
+        Some("claude"),
+    );
+    assert!(refused(&r));
+    assert_contains(&tool_text(&r), "why", "");
 }

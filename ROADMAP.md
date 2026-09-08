@@ -51,14 +51,13 @@ Enough to run a real project's roadmap without reaching for anything else.
 
 ## v0.2 — Comfortable
 
-`##########` 96% · 46 of 48 done · due 2026-12-01
+`##########` 98% · 47 of 48 done · due 2026-12-01
 
 The rough edges that show up after a few weeks of daily use, and the pieces that make the central claim true rather than merely stated.
 
 ### backlog
 
 - [ ] [`0056`](https://github.com/oddurs/cairn/blob/main/cairn/items/0056-collect-a-contributor-licence-agreement.md) Collect a contributor licence agreement <sup>chore · p0</sup>
-- [ ] [`0110`](https://github.com/oddurs/cairn/blob/main/cairn/items/0110-a-proposal-should-be-a-proposal-not-prose.md) A proposal should be a proposal, not prose <sup>feature · p2 · s11</sup>
 
 ### done
 
@@ -107,11 +106,12 @@ The rough edges that show up after a few weeks of daily use, and the pieces that
 - [x] [`0101`](https://github.com/oddurs/cairn/blob/main/cairn/items/0101-be-right-about-data-nobody-here-wrote.md) Be right about data nobody here wrote <sup>chore · p1 · s10</sup>
 - [x] [`0102`](https://github.com/oddurs/cairn/blob/main/cairn/items/0102-unit-test-the-reference-machinery.md) Unit-test the reference machinery <sup>chore · p1 · s10</sup>
 - [x] [`0109`](https://github.com/oddurs/cairn/blob/main/cairn/items/0109-reading-costs-the-caller-and-there-is-no-way-to-ask-for-less.md) Reading costs the caller and there is no way to ask for less <sup>feature · p1 · s11</sup>
+- [x] [`0110`](https://github.com/oddurs/cairn/blob/main/cairn/items/0110-a-proposal-should-be-a-proposal-not-prose.md) A proposal should be a proposal, not prose <sup>feature · p2 · s11</sup>
 - [x] [`0111`](https://github.com/oddurs/cairn/blob/main/cairn/items/0111-what-changed-since-i-last-looked.md) What changed since I last looked <sup>feature · p2 · s11</sup>
 
 ## v1.0 — Stable
 
-`########··` 80% · 20 of 25 done · due 2027-03-01
+`#########·` 84% · 21 of 25 done · due 2027-03-01
 
 Safe to depend on: every scriptable surface carries a promise, the command surface has been reviewed and pruned rather than accumulated, releases can be verified, and it installs from a package manager people already use.
 
@@ -120,7 +120,6 @@ Safe to depend on: every scriptable surface carries a promise, the command surfa
 - [ ] [`0052`](https://github.com/oddurs/cairn/blob/main/cairn/items/0052-sign-releases-and-ship-a-source-tarball.md) Sign releases and ship a source tarball <sup>chore · p0 · needs-a-key</sup>
 - [ ] [`0053`](https://github.com/oddurs/cairn/blob/main/cairn/items/0053-be-in-a-package-manager-people-already-use.md) Be in a package manager people already use <sup>chore · p0 · blocked-on-a-release</sup>
 - [ ] [`0067`](https://github.com/oddurs/cairn/blob/main/cairn/items/0067-decide-whether-identifiers-should-be-collision-free-by-construction.md) Decide whether identifiers should be collision-free by construction <sup>feature · p1 · s7</sup>
-- [ ] [`0112`](https://github.com/oddurs/cairn/blob/main/cairn/items/0112-write-down-what-an-agent-is-and-is-not-to-cairn.md) Write down what an agent is, and is not, to cairn <sup>docs · p2 · s11</sup>
 
 ### in progress
 
@@ -148,6 +147,7 @@ Safe to depend on: every scriptable surface carries a promise, the command surfa
 - [x] [`0087`](https://github.com/oddurs/cairn/blob/main/cairn/items/0087-the-corpus-keeps-every-format-that-has-ever-existed.md) The corpus keeps every format that has ever existed <sup>chore · p0 · s9</sup>
 - [x] [`0098`](https://github.com/oddurs/cairn/blob/main/cairn/items/0098-write-down-what-the-configuration-does-not-promise.md) Write down what the configuration does not promise <sup>docs · p2</sup>
 - [x] [`0103`](https://github.com/oddurs/cairn/blob/main/cairn/items/0103-say-what-make-check-proves-and-add-the-target-that-proves-the-rest.md) Say what make check proves, and add the target that proves the rest <sup>chore · p1 · s10</sup>
+- [x] [`0112`](https://github.com/oddurs/cairn/blob/main/cairn/items/0112-write-down-what-an-agent-is-and-is-not-to-cairn.md) Write down what an agent is, and is not, to cairn <sup>docs · p2 · s11</sup>
 
 ## later — Someday
 

@@ -391,11 +391,17 @@ pub fn permitted_for_agent(cfg: &Config, field: &str, value: Option<&str>) -> Re
             Agent::ReadOnly => bail!(
                 "`{agent}` may read `{field}` but not set it, by this project's \
                  cairn.toml. Say what you believe in a note on the item instead, \
-                 and a person can make the change."
+                 or `cairn propose <ID> {field}=... --why \"...\"`, and a person \
+                 can make the change."
             ),
+            // Naming the command matters: the permission used to end in advice
+            // to write a note, and the proposal then became prose a person had
+            // to find by reading every body in the backlog.
             Agent::Propose => bail!(
-                "`{agent}` may propose `{field}` but not set it. Add a note \
-                 saying what it should be and why, and a person will decide."
+                "`{agent}` may propose `{field}` but not set it:\n  \
+                 cairn propose <ID> {field}={} --why \"...\"\n\
+                 a person reviews it with `cairn proposals`.",
+                value.unwrap_or("<value>")
             ),
         }
     }
@@ -414,8 +420,9 @@ pub fn permitted_for_agent(cfg: &Config, field: &str, value: Option<&str>) -> Re
                  cairn.toml."
             ),
             Agent::Propose => bail!(
-                "`{agent}` may not move an item to `{name}` directly. Add a note \
-                 saying why it belongs there, and a person will decide."
+                "`{agent}` may not move an item to `{name}` directly:\n  \
+                 cairn propose <ID> status={name} --why \"...\"\n\
+                 a person reviews it with `cairn proposals`."
             ),
         }
     }

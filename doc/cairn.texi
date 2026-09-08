@@ -1799,6 +1799,81 @@ finished writes down why, and a person moves it.
 @command{cairn agent} carries these restrictions into the instruction block, so
 a model reads them rather than discovering them by being refused.
 
+@section What an agent is, and is not, to cairn
+
+@cindex agents
+cairn treats an agent as @emph{a user who happens to be a program}. That premise
+produced most of what is here: the schema first, @command{next} as the
+primitive, claims against duplicate work, permissions that are enforced, notes
+that append rather than replace, and this very block generated from the real
+schema so it cannot drift.
+
+The premise is right about writing and wrong in three specific ways. They are
+written down because every decision about agents turns on one of them, and
+because the refusals they imply are each individually tempting.
+
+@subsection A person's memory outlives the session; an agent's does not
+
+The backlog is not the agent's record. It is its memory.
+
+That is why filing a duplicate is not an unlucky mistake but the characteristic
+failure of an agent using this tool, and why @command{cairn new} reports a near
+duplicate rather than staying silent. It is why a reason for handing work back
+has to be @emph{in the item} --- a person who releases something says so in
+passing, in a message or at a standup; an agent has no passing. And it is why
+@option{--since} exists, because a returning caller had one option, which was to
+read everything again.
+
+@subsection A person's attention is free; an agent's is metered
+
+Every character returned is charged to the caller. A person skimming a table
+pays nothing for the columns they ignore.
+
+That is why a read path returning everything is not a minor inefficiency but a
+design error, and why @code{fields} exists on the read tools. Twenty-two keys
+and six hundred characters an item, for a question that needed five of them.
+
+@subsection A person notices they have stopped; an agent ceases to exist
+
+Every operation that takes a lock on @emph{intent} assumes the holder comes
+back. A session is killed or hits a limit, and it does not.
+
+That is why a claim records @code{claimed}, and why stale means visible and
+never revoked.
+
+@section What follows from this, including what is refused
+
+@cindex refusals
+The same three say what @emph{not} to build, which is the more useful half.
+
+@table @strong
+@item No parallel agent API
+The value is that agents and people share one backlog. The moment there is an
+agent-shaped view and a human-shaped view they drift, and the shared artefact
+stops being shared. Every tool the protocol server offers is a command a person
+also has.
+
+@item No memory or scratchpad store
+The items are the memory. Anything else is the @file{TODO} file this very block
+tells an agent not to write.
+
+@item No leases and no heartbeats
+That is a distributed-systems answer to a filesystem problem. It would put state
+in the repository a person cannot read, and it would require something to be
+running --- which is precisely what cannot be assumed about the thing that
+stopped.
+
+@item Nothing that calls a model
+cairn is read and written by programs that think. It does not think. A tool that
+summarised a backlog would be wrong occasionally and unfalsifiably, and the
+whole value here is that the file says what it says.
+@end table
+
+@noindent
+None of this is in the specification, and it should not be: §7 is right that a
+reader of items needs to know nothing about any of it. This is the tool's
+posture, not the format.
+
 @section What this is, exactly
 
 @cindex guard rail
@@ -1824,6 +1899,46 @@ comparison is a git hook: useful, conventional, and not a lock.
 What it buys is worth having regardless. A project that can say @emph{agents may
 set status and add notes, and may not change priority or acceptance criteria} is
 one somebody will point an agent at, and that is worth more than any feature.
+
+@section Proposing a change somebody else decides
+
+@cindex propose
+@cindex proposals
+@vindex agent
+A field or status declared @code{agent = "propose"} refuses an agent's write.
+For a long time the refusal ended in advice to write a note --- and then the
+proposal was prose in a body, and a person wanting to review proposals had to
+read every note in the backlog to find them. The hard half was built; the place
+for the answer to go was missing.
+
+@example
+$ cairn propose 12 priority=p0 --why "It blocks 0067, which blocks the release."
+proposed 0012  priority: p2 -> p0
+a person decides --- `cairn proposals` lists what is waiting
+
+$ cairn proposals
+0012  priority: p2 -> p0   claude, 2026-09-08
+      It blocks 0067, which blocks the release.
+
+$ cairn proposals --accept 12
+accepted 0012  priority = p0
+@end example
+
+A proposal is a note with structure: the field, the value asked for, the value
+now, who asked, when, and why. It is in the body because that is where every
+other reason in this project lives, and because several proposals on one field
+is a conversation rather than a value --- one @code{proposed_priority} would be
+overwritten by the second argument. Accepting records that it was accepted,
+rather than letting the change look as though it was always so.
+
+The value is checked against the schema; the @emph{permission} is not, since
+being refused the write is the reason the command exists.
+
+@quotation
+This is not an approval workflow. Nothing queues, nothing blocks, nothing
+notifies. A proposal is a note somebody can find, and accepting one is a normal
+write with a record of where it came from.
+@end quotation
 
 @section A claim is a promise somebody might not keep
 
