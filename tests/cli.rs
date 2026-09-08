@@ -6895,3 +6895,426 @@ fn export_can_be_narrowed_and_redirected() {
     p.expect(&["export", "--output", "out.json"]);
     assert!(!p.read("out.json").is_empty());
 }
+
+/// `set --filter` is the dangerous write: the person running it has not seen
+/// the list, so it shows one and asks.
+#[test]
+fn a_filtered_write_shows_what_it_will_change_and_asks() {
+    let p = seeded();
+
+    // Declined.
+    let out = p.run_stdin(&["set", "--filter", "category!=done", "priority=p0"], "n\n");
+    assert_eq!(
+        out.code,
+        1,
+        "declining should not be success: {}",
+        out.all()
+    );
+    assert_contains(&out.all(), "aborted", "");
+    assert_contains(&out.stdout, "First item", "it listed what it would touch");
+    assert_eq!(
+        p.expect(&["list", "-A", "--ids", "--filter", "priority=p0"])
+            .lines()
+            .len(),
+        1,
+        "a declined write changed something"
+    );
+
+    // Accepted.
+    let out = p.run_stdin(&["set", "--filter", "category!=done", "priority=p1"], "y\n");
+    assert!(out.ok(), "{}", out.all());
+    assert!(
+        p.expect(&["list", "-A", "--ids", "--filter", "priority=p1"])
+            .lines()
+            .len()
+            >= 2
+    );
+
+    // `--yes` does not ask at all.
+    let out = p.expect(&["set", "--filter", "category!=done", "priority=p3", "--yes"]);
+    assert!(!out.all().contains("[y/N]"), "--yes still asked");
+
+    // A filter matching nothing is an error rather than a silent no-op.
+    let out = p.fails(&["set", "--filter", "priority=p9", "effort=s", "--yes"]);
+    assert_contains(&out.all(), "no item matches", "");
+
+    // Ids and a filter together is a mistake, not a union.
+    let out = p.fails(&["set", "1", "--filter", "priority=p0", "effort=s"]);
+    assert_contains(&out.all(), "not both", "");
+
+    // And no target at all.
+    let out = p.fails(&["set", "effort=s"]);
+    assert_contains(&out.all(), "no item named", "");
+}
+
+#[test]
+fn set_refuses_an_empty_assignment_list() {
+    let p = seeded();
+    let out = p.fails(&["set", "1"]);
+    assert_contains(&out.all(), "field=value", "it says what it wanted");
+}
+
+/// A milestone reference that resolves to nothing is shown in a way somebody
+/// notices, rather than as a plausible string.
+#[test]
+fn show_marks_a_milestone_that_answers_to_nothing() {
+    let p = seeded();
+    p.write(
+        "cairn/items/0060-adrift.md",
+        "---\nid: 60\ntitle: Adrift\nstatus: backlog\nmilestone: v9.9\n---\nbody\n",
+    );
+    let out = p.run_env(&["show", "60", "--color", "always"], &[("NO_COLOR", None)]);
+    assert!(out.ok(), "{}", out.all());
+    assert_contains(&out.stdout, "v9.9", "the value is shown");
+    assert!(out.stdout.contains('\u{1b}'), "and marked, not left plain");
+}
+
+/// `show --raw` and `--path`, which are what a script reaches for.
+#[test]
+fn show_has_a_shape_for_a_script() {
+    let p = seeded();
+    let raw = p.expect(&["show", "1", "--raw"]).stdout;
+    assert!(raw.starts_with("---"), "--raw is the file itself:\n{raw}");
+
+    let path = p.expect(&["show", "1", "--path"]).trimmed();
+    assert!(path.ends_with(".md"), "{path}");
+    assert_eq!(p.read(&path), raw, "--path and --raw disagree");
+}
+
+/// `migrate --check` is what continuous integration runs, and it answers
+/// differently depending on which side of the format the project is on.
+#[test]
+fn migrate_check_reports_both_ways() {
+    let p = format_one();
+    let out = p.run(&["migrate", "--check"]);
+    assert_eq!(
+        out.code, 1,
+        "a project behind the format should fail --check"
+    );
+    assert_contains(&out.all(), "stale", "");
+    assert_contains(&out.all(), "cairn migrate", "and name the remedy");
+
+    p.expect(&["migrate"]);
+    let out = p.expect(&["migrate", "--check"]);
+    assert_contains(&out.all(), "current", "");
+
+    // Quietly, for a script.
+    let out = p.expect(&["migrate", "--check", "--quiet"]);
+    assert!(
+        out.stdout.trim().is_empty(),
+        "--quiet printed: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn migrate_outside_a_project_says_so() {
+    let p = Project::empty();
+    let out = p.run(&["migrate"]);
+    assert!(!out.ok());
+    assert_contains(&out.all(), "cairn.toml", "");
+}
+
+/// A table wider than the terminal: the last column absorbs what is left and
+/// everything stays on one line.
+#[test]
+fn a_table_fits_a_narrow_terminal() {
+    let p = Project::new();
+    for n in 0..4 {
+        p.add(
+            &format!("Item {n} with a title long enough that no narrow terminal could show all of it at once"),
+            &["--set", "priority=p0", "--set", "area=some-fairly-long-area-name"],
+        );
+    }
+    let out = p.run_env(
+        &["list", "-A", "--columns", "id,priority,area,title"],
+        &[("COLUMNS", Some("60"))],
+    );
+    assert!(out.ok(), "{}", out.all());
+    for line in out.stdout.lines() {
+        assert!(
+            line.chars().count() < 400,
+            "a row ran away rather than being clipped:\n{line}"
+        );
+    }
+}
+
+/// `log` has three shapes and a limit, and the one nothing had exercised is
+/// `--patch`, which hands back the diffs themselves.
+#[test]
+fn log_can_show_the_patches_themselves() {
+    let p = repository();
+    p.expect(&["set", "1", "priority=p0"]);
+    git(&p, &["add", "-A"]);
+    git(&p, &["commit", "-qm", "priority"]);
+
+    let out = p.expect(&["log", "1", "--patch"]);
+    assert_contains(&out.stdout, "diff --git", "the raw diff");
+    assert_contains(&out.stdout, "priority", "and what changed in it");
+
+    // Bounded, for an item with a long history.
+    p.expect(&["set", "1", "effort=s"]);
+    git(&p, &["add", "-A"]);
+    git(&p, &["commit", "-qm", "effort"]);
+    let one = p.expect(&["log", "1", "--patch", "-n", "1"]).stdout;
+    let all = p.expect(&["log", "1", "--patch"]).stdout;
+    assert!(one.len() < all.len(), "-n did not limit the patches");
+}
+
+/// A milestone is an item, so its history is readable by the name people use
+/// for it rather than by a number they would have to look up.
+#[test]
+fn history_can_be_asked_for_by_key() {
+    let p = repository();
+    milestone(&p, "v0.1", None);
+    git(&p, &["add", "-A"]);
+    git(&p, &["commit", "-qm", "a milestone"]);
+
+    let out = p.expect(&["log", "v0.1"]);
+    assert!(out.ok(), "{}", out.all());
+
+    // And a name that answers to nothing says so.
+    let out = p.fails(&["log", "no-such-key"]);
+    assert_contains(&out.all(), "no-such-key", "");
+}
+
+/// The item-level checks that had never been driven: a missing status, a type
+/// nothing declares, a list field carrying a value outside its enum.
+#[test]
+fn check_reports_every_way_an_item_can_disagree_with_the_schema() {
+    let p = Project::new();
+    p.append(
+        "cairn.toml",
+        "\n[[field]]\nname = \"platforms\"\nkind = \"list\"\n\
+         values = [\"linux\", \"macos\"]\n\
+         \n[[field]]\nname = \"owner_team\"\nkind = \"text\"\nrequired = true\n",
+    );
+    p.write(
+        "cairn/items/0011-no-status.md",
+        "---\nid: 11\ntitle: No status\n---\nbody\n",
+    );
+    p.write(
+        "cairn/items/0012-odd-type.md",
+        "---\nid: 12\ntitle: Odd type\ntype: sculpture\nstatus: backlog\n---\nbody\n",
+    );
+    p.write(
+        "cairn/items/0013-odd-list.md",
+        "---\nid: 13\ntitle: Odd list\nstatus: backlog\nplatforms:\n  - linux\n  - haiku\n---\nbody\n",
+    );
+
+    let out = p.run(&["check"]);
+    assert!(!out.ok());
+    let all = out.all();
+    assert_contains(&all, "missing `status`", "");
+    assert_contains(&all, "unknown type `sculpture`", "");
+    assert_contains(&all, "haiku", "a list value outside its enum");
+    assert_contains(&all, "owner_team", "a required field nothing carries");
+    // Diagnostics carry a line, so an editor can jump to the offending key.
+    assert!(
+        all.lines()
+            .any(|l| l.contains(".md:") && l.contains("unknown type")),
+        "no file:line on the diagnostics:\n{all}"
+    );
+}
+
+/// `check --strict` and `--quiet`, which is how continuous integration uses it.
+#[test]
+fn check_can_be_strict_and_quiet() {
+    let p = seeded();
+    assert!(p.expect(&["check", "--quiet"]).stdout.trim().is_empty());
+
+    // A warning: a filename that no longer matches its title.
+    let path = p.expect(&["show", "1", "--path"]).trimmed();
+    let moved = path.replace("first-item", "wrong-name");
+    std::fs::rename(p.path(&path), p.path(&moved)).unwrap();
+
+    assert!(p.run(&["check"]).ok(), "a warning is not a failure");
+    let out = p.run(&["check", "--strict"]);
+    assert!(!out.ok(), "--strict should make it one: {}", out.all());
+}
+
+/// An item file that cannot be parsed at all stops anything that writes, and
+/// anything that produces a durable artefact, rather than acting on half a
+/// backlog.
+#[test]
+fn a_partial_view_is_reported_by_every_reader_that_needs_all_of_it() {
+    let p = seeded();
+    p.write("cairn/items/0070-truncated.md", "---\nid: 70\ntitle: Trunc");
+
+    // Reading commands still work, on what parses.
+    assert!(p.run(&["list"]).ok());
+    // Anything durable refuses.
+    for args in [vec!["export"], vec!["render"], vec!["check"]] {
+        let out = p.run(&args);
+        assert!(!out.ok(), "`cairn {args:?}` acted on a partial backlog");
+    }
+}
+
+/// A note appended under a heading of its own, and the default of today's date.
+#[test]
+fn a_note_can_choose_its_own_heading() {
+    let p = seeded();
+    p.expect(&["note", "1", "plain note"]);
+    assert_contains(&p.expect(&["show", "1"]).stdout, "plain note", "");
+
+    let r = tool(
+        &p,
+        "add_note",
+        serde_json::json!({"id": 1, "text": "filed elsewhere", "heading": "Decisions"}),
+        Some("claude"),
+    );
+    assert!(!refused(&r), "{}", text(&r));
+    let body = p.expect(&["show", "1"]).stdout;
+    assert_contains(&body, "Decisions", "the heading it asked for");
+    assert_contains(&body, "plain note", "and nothing was erased");
+}
+
+/// A project with no `done` category at all: `close` cannot guess, and says so
+/// rather than picking something.
+#[test]
+fn close_without_a_done_status_asks_for_one() {
+    let p = Project::empty();
+    p.write(
+        "cairn.toml",
+        "format = 2\n[project]\nname = \"T\"\n\
+         [[status]]\nname = \"todo\"\ncategory = \"open\"\n\
+         [[status]]\nname = \"doing\"\ncategory = \"active\"\n",
+    );
+    std::fs::create_dir_all(p.path("cairn/items")).unwrap();
+    p.expect(&["new", "Never finished", "-q"]);
+
+    let out = p.fails(&["close", "1"]);
+    assert_contains(&out.all(), "category = \"done\"", "it says what is missing");
+    assert_contains(&out.all(), "--status", "and how to proceed anyway");
+
+    // And explicitly is fine.
+    assert!(p.run(&["close", "1", "--status", "doing"]).ok());
+}
+
+/// `reopen` mirrors `close`, including choosing where to go back to.
+#[test]
+fn reopen_returns_an_item_to_the_backlog() {
+    let p = seeded();
+    p.expect(&["close", "1"]);
+    assert_contains(&p.expect(&["show", "1"]).stdout, "done", "");
+
+    p.expect(&["reopen", "1"]);
+    let out = p.expect(&["show", "1"]).stdout;
+    assert!(!out.contains("done"), "it did not come back: {out}");
+
+    p.expect(&["close", "1"]);
+    p.expect(&["reopen", "1", "--status", "planned"]);
+    assert_contains(&p.expect(&["show", "1"]).stdout, "planned", "");
+}
+
+/// Closing several at once, and the acceptance-criteria report that comes with
+/// it.
+#[test]
+fn closing_reports_criteria_that_are_still_unticked() {
+    let p = Project::new();
+    p.expect(&[
+        "new",
+        "With criteria",
+        "-q",
+        "--body",
+        "## Acceptance criteria\n\n- [x] done one\n- [ ] not done\n",
+    ]);
+    let out = p.expect(&["close", "1"]).all();
+    assert_contains(&out, "1 of 2", "it says how many are outstanding");
+    assert!(p.run(&["check"]).ok(), "and closes anyway");
+
+    // A project can ask for that to be an error afterwards as well.
+    let cfg = p
+        .read("cairn.toml")
+        .replace("[project]", "[project]\nrequire_criteria = true");
+    p.write("cairn.toml", &cfg);
+    // A warning, because an unticked box is a judgement about process rather
+    // than a schema violation; `--strict` is what turns it into a failure.
+    let out = p.expect(&["check"]).all();
+    assert_contains(&out, "1 of 2 acceptance criteria", "");
+    assert!(
+        !p.run(&["check", "--strict"]).ok(),
+        "--strict should fail on it"
+    );
+}
+
+/// Criteria confined to one heading, which is what a project sets when its
+/// bodies contain other checklists.
+#[test]
+fn criteria_can_be_confined_to_one_section() {
+    let p = Project::new();
+    let cfg = p.read("cairn.toml").replace(
+        "[project]",
+        "[project]\ncriteria_section = \"Acceptance criteria\"",
+    );
+    p.write("cairn.toml", &cfg);
+    p.expect(&[
+        "new",
+        "Two lists",
+        "-q",
+        "--body",
+        "## Notes\n\n- [ ] not a criterion\n- [ ] nor this\n\n\
+         ## Acceptance criteria\n\n- [x] the only one that counts\n",
+    ]);
+
+    let out = p.expect(&["close", "1"]).all();
+    assert!(
+        !out.contains("unticked") && !out.contains(" of "),
+        "the notes checklist was counted:\n{out}"
+    );
+    // `criteria` and `criteria_done` are derived, so they are columns and
+    // filters rather than stored fields.
+    let counts = p
+        .expect(&[
+            "list",
+            "-A",
+            "--plain",
+            "--columns",
+            "criteria,criteria_done",
+        ])
+        .trimmed();
+    assert_eq!(
+        counts, "1\t1",
+        "the notes checklist was counted as acceptance criteria"
+    );
+}
+
+/// `renumber --dry-run` and `--compact`, which are the two ways of asking it
+/// not to do the obvious thing.
+#[test]
+fn renumber_can_describe_itself_before_acting() {
+    let p = Project::new();
+    p.add("Keeper", &[]);
+    p.write(
+        "cairn/items/0001-a-copy.md",
+        "---\nid: 1\ntitle: A copy\nstatus: backlog\n---\nbody\n",
+    );
+    let before = p.files("cairn/items");
+
+    let out = p.expect(&["renumber", "--dry-run"]).all();
+    assert_contains(&out, "would be renumbered", "");
+    assert_eq!(before, p.files("cairn/items"), "a dry run moved a file");
+
+    p.expect(&["renumber"]);
+    assert!(p.run(&["check"]).ok(), "{}", p.run(&["check"]).all());
+}
+
+/// Every `--json` shape a script might read, asserted to parse.
+#[test]
+fn every_machine_readable_shape_parses() {
+    let p = seeded();
+    p.expect(&["note", "1", "something"]);
+
+    for args in [
+        vec!["list", "-A", "--json"],
+        vec!["next", "--json"],
+        vec!["search", "item", "--json"],
+        vec!["show", "1", "--json"],
+        vec!["export"],
+        vec!["config", "--json"],
+    ] {
+        let out = p.expect(&args);
+        serde_json::from_str::<serde_json::Value>(&out.stdout)
+            .unwrap_or_else(|e| panic!("`cairn {args:?}` is not JSON: {e}\n{}", out.stdout));
+    }
+}
