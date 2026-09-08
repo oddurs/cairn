@@ -7318,3 +7318,382 @@ fn every_machine_readable_shape_parses() {
             .unwrap_or_else(|e| panic!("`cairn {args:?}` is not JSON: {e}\n{}", out.stdout));
     }
 }
+
+/// A roadmap narrowed to one milestone, which is the positional argument
+/// nothing had ever passed.
+#[test]
+fn a_roadmap_can_be_narrowed_to_one_milestone() {
+    let p = seeded();
+    milestone(&p, "v0.2", Some("2027-01-01"));
+    p.expect(&["set", "2", "milestone=v0.2"]);
+
+    let all = p.expect(&["roadmap"]).stdout;
+    assert_contains(&all, "v0.1", "");
+    assert_contains(&all, "v0.2", "");
+
+    let one = p.expect(&["roadmap", "v0.1"]).stdout;
+    assert_contains(&one, "v0.1", "");
+    assert!(
+        !one.contains("v0.2"),
+        "it showed a milestone nobody asked for:\n{one}"
+    );
+
+    let out = p.fails(&["roadmap", "v9.9"]);
+    assert_contains(&out.all(), "unknown milestone", "");
+    assert_contains(&out.all(), "v0.1", "and lists the ones there are");
+}
+
+/// A description on the project reaches both the terminal roadmap and the
+/// rendered one.
+#[test]
+fn a_project_description_is_shown_where_the_roadmap_is() {
+    let p = seeded();
+    let cfg = p.read("cairn.toml").replace(
+        "[project]",
+        "[project]\ndescription = \"A thing that does a thing.\"",
+    );
+    p.write("cairn.toml", &cfg);
+
+    assert_contains(
+        &p.expect(&["roadmap"]).stdout,
+        "A thing that does a thing.",
+        "",
+    );
+    p.expect(&["render"]);
+    assert_contains(&p.read("ROADMAP.md"), "A thing that does a thing.", "");
+}
+
+/// A format 1 project written before the milestone type and field existed:
+/// the migration has to add both, not assume them.
+#[test]
+fn migrating_adds_the_type_and_field_when_they_are_absent() {
+    let p = Project::empty();
+    p.write(
+        "cairn.toml",
+        "format = 1\n[project]\nname = \"Old\"\n\
+         [[status]]\nname = \"todo\"\ncategory = \"open\"\n\
+         [[type]]\nname = \"feature\"\n\
+         \n[[milestone]]\nname = \"v0.1\"\ntitle = \"First\"\ndue = \"2026-12-01\"\n",
+    );
+    std::fs::create_dir_all(p.path("cairn/items")).unwrap();
+    p.write(
+        "cairn/items/0001-scheduled.md",
+        "---\nid: 1\ntitle: Scheduled\nstatus: todo\nmilestone: v0.1\n---\nbody\n",
+    );
+
+    let out = p.expect(&["migrate"]).all();
+    assert_contains(&out, "milestone", "");
+
+    let cfg = p.read("cairn.toml");
+    assert!(
+        cfg.contains("name = \"milestone\""),
+        "the type was not added:\n{cfg}"
+    );
+    assert!(
+        cfg.contains("kind = \"ref\""),
+        "the field was not added:\n{cfg}"
+    );
+    assert!(
+        cfg.contains("name = \"due\""),
+        "`due` was not declared:\n{cfg}"
+    );
+    assert!(
+        !cfg.contains("[[milestone]]"),
+        "the old block survived:\n{cfg}"
+    );
+
+    assert!(p.run(&["check"]).ok(), "{}", p.run(&["check"]).all());
+    assert_contains(
+        &p.expect(&["roadmap"]).stdout,
+        "First",
+        "the roadmap survived",
+    );
+}
+
+/// Claiming has several ways to refuse, and each of them is a sentence somebody
+/// has to act on.
+#[test]
+fn claiming_refuses_for_reasons_it_names() {
+    let p = seeded();
+    p.expect(&["set", "2", "depends_on=1"]);
+
+    // Blocked.
+    let out = p.fails(&["claim", "2"]);
+    assert_contains(&out.all(), "blocked", "");
+    assert!(
+        p.run(&["claim", "2", "--force"]).ok(),
+        "--force takes it anyway"
+    );
+
+    // Held by somebody else.
+    p.expect(&["set", "3", "assignee=someone-else"]);
+    let out = p.fails(&["claim", "3"]);
+    assert_contains(&out.all(), "someone-else", "it names who has it");
+    assert!(p.run(&["claim", "3", "--force"]).ok());
+
+    // Released, and then free again.
+    p.expect(&["release", "3"]);
+    assert!(p.run(&["claim", "3"]).ok(), "release did not free it");
+
+    // Nothing left to claim.
+    p.expect(&["claim", "1"]);
+    let out = p.run(&["claim", "--next"]);
+    assert!(
+        !out.ok(),
+        "there is nothing unclaimed and ready: {}",
+        out.all()
+    );
+}
+
+/// `new` has flags for everything an item carries, and most set a field the
+/// long way round.
+#[test]
+fn new_can_set_everything_an_item_carries() {
+    let p = seeded();
+    let id = p
+        .expect(&[
+            "new",
+            "Fully specified",
+            "-q",
+            "-t",
+            "bug",
+            "-s",
+            "planned",
+            "-m",
+            "v0.1",
+            "-l",
+            "one,two",
+            "-a",
+            "somebody",
+            "-d",
+            "1",
+            "--set",
+            "priority=p0",
+            "--body",
+            "A body of its own.",
+        ])
+        .trimmed();
+
+    let json: serde_json::Value =
+        serde_json::from_str(&p.expect(&["show", &id, "--json"]).stdout).unwrap();
+    assert_eq!(json["type"], "bug");
+    assert_eq!(json["status"], "planned");
+    assert_eq!(json["milestone"], "v0.1");
+    assert_eq!(json["assignee"], "somebody");
+    assert_eq!(json["labels"], serde_json::json!(["one", "two"]));
+    assert_eq!(json["depends_on"], serde_json::json!([1]));
+    assert_eq!(json["fields"]["priority"], "p0");
+    assert_contains(json["body"].as_str().unwrap(), "A body of its own.", "");
+
+    // A body from standard input, which is how a hook or a script writes one.
+    let out = p.run_stdin(&["new", "From a pipe", "-q", "--stdin"], "piped body\n");
+    assert!(out.ok(), "{}", out.all());
+    assert_contains(
+        &p.expect(&["show", out.trimmed().as_str()]).stdout,
+        "piped body",
+        "",
+    );
+}
+
+/// Removing an item takes its references with it, and asks first.
+#[test]
+fn removing_an_item_repairs_what_pointed_at_it() {
+    let p = seeded();
+    p.expect(&["set", "2", "depends_on=1"]);
+    p.expect(&["set", "3", "milestone=v0.1"]);
+
+    // It asks, and a refusal changes nothing.
+    let out = p.run_stdin(&["remove", "1"], "n\n");
+    assert!(
+        !out.ok() || p.run(&["show", "1"]).ok(),
+        "a declined removal deleted it"
+    );
+
+    p.expect(&["remove", "1", "--force"]);
+    assert!(!p.run(&["show", "1"]).ok(), "it is gone");
+    let json: serde_json::Value =
+        serde_json::from_str(&p.expect(&["show", "2", "--json"]).stdout).unwrap();
+    assert_eq!(
+        json["depends_on"],
+        serde_json::json!([]),
+        "a dangling dependency was left behind: {json}"
+    );
+    assert!(p.run(&["check"]).ok(), "{}", p.run(&["check"]).all());
+}
+
+/// The reserved fields `set` handles by name, each with its own rule about
+/// what an empty value and a list value mean.
+#[test]
+fn every_reserved_field_has_its_own_rule() {
+    let p = seeded();
+
+    // `key`: set, cleared, and refused when it would read as an identifier.
+    p.expect(&["set", "1", "key=first"]);
+    assert_contains(&p.expect(&["show", "1"]).stdout, "first", "");
+    let out = p.fails(&["set", "1", "key=0002"]);
+    assert_contains(&out.all(), "reads as an identifier", "");
+    p.expect(&["set", "1", "key="]);
+
+    // `owner` and `created_by` are ordinary strings that can be cleared.
+    for field in ["owner", "created_by"] {
+        p.expect(&["set", "1", &format!("{field}=somebody")]);
+        assert_contains(
+            &p.expect(&["show", "1", "--json"]).stdout,
+            "somebody",
+            field,
+        );
+        p.expect(&["set", "1", &format!("{field}=")]);
+    }
+
+    // A title cannot be emptied, and is not a list.
+    let out = p.fails(&["set", "1", "title="]);
+    assert_contains(&out.all(), "cannot be empty", "");
+    let out = p.fails(&["set", "1", "title+=more"]);
+    assert_contains(&out.all(), "not a list field", "");
+
+    // `id` is identity and cannot be assigned at all.
+    let out = p.fails(&["set", "1", "id=99"]);
+    assert_contains(&out.all(), "cannot be changed", "");
+
+    // `type` cleared, and refused when it names nothing.
+    p.expect(&["set", "1", "type="]);
+    let out = p.fails(&["set", "1", "type=sculpture"]);
+    assert_contains(&out.all(), "sculpture", "");
+
+    assert!(p.run(&["check"]).ok(), "{}", p.run(&["check"]).all());
+}
+
+/// Adding to and removing from a list field, rather than replacing it.
+#[test]
+fn a_list_field_can_be_added_to_and_taken_from() {
+    let p = seeded();
+    p.expect(&["set", "1", "labels=one,two"]);
+    p.expect(&["set", "1", "labels+=three"]);
+    let json: serde_json::Value =
+        serde_json::from_str(&p.expect(&["show", "1", "--json"]).stdout).unwrap();
+    assert_eq!(json["labels"], serde_json::json!(["one", "two", "three"]));
+
+    p.expect(&["set", "1", "labels-=two"]);
+    let json: serde_json::Value =
+        serde_json::from_str(&p.expect(&["show", "1", "--json"]).stdout).unwrap();
+    assert_eq!(json["labels"], serde_json::json!(["one", "three"]));
+
+    p.expect(&["set", "1", "labels="]);
+    let json: serde_json::Value =
+        serde_json::from_str(&p.expect(&["show", "1", "--json"]).stdout).unwrap();
+    assert_eq!(json["labels"], serde_json::json!([]));
+}
+
+/// A cycle cannot be created by an ordinary command, however it is approached.
+#[test]
+fn a_dependency_cycle_is_refused_at_every_depth() {
+    let p = Project::new();
+    p.add("One", &[]);
+    p.add("Two", &["-d", "1"]);
+    p.add("Three", &["-d", "2"]);
+
+    let out = p.fails(&["set", "1", "depends_on=1"]);
+    assert_contains(&out.all(), "cycle", "an item depending on itself");
+
+    let out = p.fails(&["set", "1", "depends_on=3"]);
+    assert_contains(&out.all(), "cycle", "closing a loop three deep");
+
+    // A dependency on nothing is refused too, at creation as well as on an
+    // edit: `new` checked only for a cycle, so it accepted one and left `check`
+    // to complain afterwards.
+    let out = p.fails(&["set", "1", "depends_on=999"]);
+    assert_contains(&out.all(), "does not exist", "");
+    let out = p.fails(&["new", "Four", "-d", "999"]);
+    assert_contains(&out.all(), "does not exist", "");
+
+    assert!(p.run(&["check"]).ok(), "{}", p.run(&["check"]).all());
+}
+
+/// The render hook fires with the file it wrote and how many items went into
+/// it, which is a different shape from the item hooks.
+#[test]
+fn the_render_hook_reports_the_file_and_the_count() {
+    let p = seeded();
+    let cfg = p.read("cairn.toml").replace(
+        "[hooks]",
+        "[hooks]\nafter-render = \"printf '%s %s' \\\"$CAIRN_RENDER_TARGET\\\" \\\"$CAIRN_ITEM_COUNT\\\" > rendered.txt\"",
+    );
+    p.write("cairn.toml", &cfg);
+
+    p.expect(&["render"]);
+    let seen = p.read("rendered.txt");
+    assert_contains(&seen, "ROADMAP.md", "the file it wrote");
+    assert!(
+        seen.split_whitespace()
+            .nth(1)
+            .is_some_and(|n| n.parse::<u32>().is_ok()),
+        "the item count: {seen}"
+    );
+}
+
+/// A hook given as an argv array runs with no shell at all, which is the
+/// portable form.
+#[test]
+fn a_hook_can_be_an_argv_array() {
+    let p = seeded();
+    let cfg = p.read("cairn.toml").replace(
+        "after-create = \"cairn render -q\"",
+        "after-create = [\"cairn\", \"render\", \"-q\"]",
+    );
+    p.write("cairn.toml", &cfg);
+
+    p.expect(&["new", "Triggers the hook", "-q"]);
+    assert_contains(
+        &p.read("ROADMAP.md"),
+        "Triggers the hook",
+        "the array-form hook did not run",
+    );
+}
+
+/// A hook that fails warns and does not roll anything back, because it runs
+/// after the change is already on disk.
+#[test]
+fn a_failing_hook_warns_without_undoing_anything() {
+    let p = seeded();
+    let cfg = p.read("cairn.toml").replace(
+        "after-create = \"cairn render -q\"",
+        "after-create = \"exit 3\"",
+    );
+    p.write("cairn.toml", &cfg);
+
+    let out = p.expect(&["new", "Written anyway", "-q"]);
+    assert_contains(&out.all(), "hook", "it says the hook failed");
+    assert_contains(
+        &p.expect(&["list", "-A", "--plain"]).stdout,
+        "Written anyway",
+        "and the item is still there",
+    );
+}
+
+/// `owner` and `created_by` were writable, shown as columns, and absent from
+/// every machine-readable shape — so an export dropped them and a round trip
+/// through the interchange document lost them without a word.
+#[test]
+fn who_is_answerable_survives_a_round_trip() {
+    let p = seeded();
+    p.expect(&["set", "1", "owner=a-person"]);
+    p.expect(&["set", "1", "created_by=an-agent"]);
+
+    let json: serde_json::Value =
+        serde_json::from_str(&p.expect(&["show", "1", "--json"]).stdout).unwrap();
+    assert_eq!(json["owner"], "a-person", "{json}");
+    assert_eq!(json["created_by"], "an-agent", "{json}");
+
+    let doc = p.expect(&["export"]).stdout;
+    assert_contains(&doc, "a-person", "the export carries the owner");
+
+    let fresh = Project::new();
+    fresh.run_stdin(&["import"], &doc);
+    let json: serde_json::Value =
+        serde_json::from_str(&fresh.expect(&["show", "1", "--json"]).stdout).unwrap();
+    assert_eq!(
+        json["owner"], "a-person",
+        "the owner was lost in transit: {json}"
+    );
+    assert_eq!(json["created_by"], "an-agent", "{json}");
+}

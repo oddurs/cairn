@@ -200,6 +200,14 @@ pub fn item_json(
     );
     o.insert("milestone".into(), opt_json(item.milestone()));
     o.insert("assignee".into(), opt_json(item.meta.assignee.as_deref()));
+    // Who is answerable, and what made it. Writable and shown as columns since
+    // they arrived, and absent from here — so an export dropped them and a
+    // round trip through the interchange document lost them silently.
+    o.insert("owner".into(), opt_json(item.meta.owner.as_deref()));
+    o.insert(
+        "created_by".into(),
+        opt_json(item.meta.created_by.as_deref()),
+    );
     o.insert("labels".into(), json!(item.meta.labels));
     o.insert("depends_on".into(), json!(item.meta.depends_on));
     o.insert("created".into(), opt_json(item.meta.created.as_deref()));

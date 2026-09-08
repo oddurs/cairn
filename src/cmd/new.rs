@@ -182,6 +182,10 @@ pub fn run(args: Args) -> Result<i32> {
     if item.path.exists() {
         bail!("{} already exists", item.path.display());
     }
+    // The same rule `set` obeys: a command must not be able to leave the
+    // project in a state `check` rejects. This checked only for a cycle, so
+    // `cairn new -d 999` created an item depending on nothing.
+    crate::refs::validate_on_write(&cfg, &store, &item)?;
     if !item.meta.depends_on.is_empty() {
         crate::cmd::set::check_no_cycle(&store, &item)?;
     }
