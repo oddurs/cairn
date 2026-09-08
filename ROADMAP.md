@@ -6,13 +6,16 @@ A markdown-native roadmap and issue manager that lives in your repository.
 
 ## v0.1 — Usable in anger
 
-`##########` 93% · 25 of 27 done · due 2026-10-15
+`#########·` 83% · 25 of 30 done · due 2026-10-15
 
 Enough to run a real project's roadmap without reaching for anything else.
 
 ### backlog
 
 - [ ] [`0066`](https://github.com/oddurs/cairn/blob/main/cairn/items/0066-find-three-people-who-are-not-the-author.md) Find three people who are not the author <sup>chore · p0 · s7</sup>
+- [ ] [`0106`](https://github.com/oddurs/cairn/blob/main/cairn/items/0106-a-claim-is-a-promise-somebody-might-not-keep.md) A claim is a promise somebody might not keep <sup>feature · p0 · s11</sup>
+- [ ] [`0107`](https://github.com/oddurs/cairn/blob/main/cairn/items/0107-an-agent-cannot-tell-it-is-about-to-file-the-same-thing-twice.md) An agent cannot tell it is about to file the same thing twice <sup>feature · p1 · s11</sup>
+- [ ] [`0108`](https://github.com/oddurs/cairn/blob/main/cairn/items/0108-handing-work-back-loses-the-reason-for-handing-it-back.md) Handing work back loses the reason for handing it back <sup>feature · p1 · s11</sup>
 
 ### in progress
 
@@ -48,13 +51,16 @@ Enough to run a real project's roadmap without reaching for anything else.
 
 ## v0.2 — Comfortable
 
-`##########` 98% · 44 of 45 done · due 2026-12-01
+`##########` 92% · 44 of 48 done · due 2026-12-01
 
 The rough edges that show up after a few weeks of daily use, and the pieces that make the central claim true rather than merely stated.
 
 ### backlog
 
 - [ ] [`0056`](https://github.com/oddurs/cairn/blob/main/cairn/items/0056-collect-a-contributor-licence-agreement.md) Collect a contributor licence agreement <sup>chore · p0</sup>
+- [ ] [`0109`](https://github.com/oddurs/cairn/blob/main/cairn/items/0109-reading-costs-the-caller-and-there-is-no-way-to-ask-for-less.md) Reading costs the caller and there is no way to ask for less <sup>feature · p1 · s11</sup>
+- [ ] [`0110`](https://github.com/oddurs/cairn/blob/main/cairn/items/0110-a-proposal-should-be-a-proposal-not-prose.md) A proposal should be a proposal, not prose <sup>feature · p2 · s11</sup>
+- [ ] [`0111`](https://github.com/oddurs/cairn/blob/main/cairn/items/0111-what-changed-since-i-last-looked.md) What changed since I last looked <sup>feature · p2 · s11</sup>
 
 ### done
 
@@ -105,7 +111,7 @@ The rough edges that show up after a few weeks of daily use, and the pieces that
 
 ## v1.0 — Stable
 
-`#########·` 83% · 20 of 24 done · due 2027-03-01
+`########··` 80% · 20 of 25 done · due 2027-03-01
 
 Safe to depend on: every scriptable surface carries a promise, the command surface has been reviewed and pruned rather than accumulated, releases can be verified, and it installs from a package manager people already use.
 
@@ -114,6 +120,7 @@ Safe to depend on: every scriptable surface carries a promise, the command surfa
 - [ ] [`0052`](https://github.com/oddurs/cairn/blob/main/cairn/items/0052-sign-releases-and-ship-a-source-tarball.md) Sign releases and ship a source tarball <sup>chore · p0 · needs-a-key</sup>
 - [ ] [`0053`](https://github.com/oddurs/cairn/blob/main/cairn/items/0053-be-in-a-package-manager-people-already-use.md) Be in a package manager people already use <sup>chore · p0 · blocked-on-a-release</sup>
 - [ ] [`0067`](https://github.com/oddurs/cairn/blob/main/cairn/items/0067-decide-whether-identifiers-should-be-collision-free-by-construction.md) Decide whether identifiers should be collision-free by construction <sup>feature · p1 · s7</sup>
+- [ ] [`0112`](https://github.com/oddurs/cairn/blob/main/cairn/items/0112-write-down-what-an-agent-is-and-is-not-to-cairn.md) Write down what an agent is, and is not, to cairn <sup>docs · p2 · s11</sup>
 
 ### in progress
 
