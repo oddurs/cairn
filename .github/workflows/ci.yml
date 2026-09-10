@@ -163,5 +163,9 @@ jobs:
       - run: cargo build --release
       - run: python3 doc/demo.py
       - run: python3 doc/samples.py
-      - run: git diff --exit-code doc/demo.svg doc/samples.json
+      # AGENTS.md is generated too, and drifted two sprints before anybody
+      # noticed — a file that tells agents the schema, quietly describing an
+      # older one.
+      - run: ./target/release/cairn agent --write AGENTS.md
+      - run: git diff --exit-code doc/demo.svg doc/samples.json AGENTS.md
         # If this fails: run `make record` and commit the result.

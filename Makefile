@@ -10,7 +10,7 @@ MAKEINFO    ?= makeinfo
 CAIRN       := target/release/cairn
 
 .PHONY: all build check test soak fuzz durability coverage conformance audit dist doc info html pdf record demo install install-bin \
-        install-man install-info clean roadmap
+        install-man install-info clean
 
 all: build doc
 
@@ -82,12 +82,15 @@ durability: check soak fuzz conformance
 demo: build
 	python3 doc/demo.py --cairn $(CAIRN)
 
-# Re-capture both recordings from real command output. `record` was declared
-# phony with no rule, so it silently did nothing — while the CI job that checks
-# the recordings are current told people to run it.
+# Everything in the repository that is generated from the program: the two
+# recordings, the rendered roadmap, and the agent instructions. One target,
+# because four generated files kept by two targets is how one of them goes stale
+# — which is exactly what happened to AGENTS.md.
 record: build
 	python3 doc/demo.py --cairn $(CAIRN)
 	python3 doc/samples.py --cairn $(CAIRN)
+	$(CAIRN) render
+	$(CAIRN) agent --write AGENTS.md
 
 doc: info
 
@@ -103,11 +106,6 @@ doc/cairn.html: doc/cairn.texi
 
 doc/cairn.pdf: doc/cairn.texi
 	texi2pdf --output=$@ $<
-
-# Regenerate the project's own roadmap and agent instructions.
-roadmap: build
-	$(CAIRN) render
-	$(CAIRN) agent --write AGENTS.md
 
 install: install-bin install-man install-info
 
