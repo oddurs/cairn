@@ -1266,7 +1266,17 @@ impl Project {
     /// It belongs here: a test about what a tool *does* should not also be a
     /// test of whether somebody remembered to close standard input.
     pub fn mcp(&self, requests: &[&str]) -> Vec<serde_json::Value> {
-        let out = self.run_stdin(&["mcp"], &format!("{}\n", requests.join("\n")));
+        // `CAIRN_USER` is cleared, because over this transport the identity is
+        // supposed to come from `clientInfo.name`. A harness that forces the
+        // variable is a harness fighting the feature under test — a test asked
+        // whether a hostile client name reached the frontmatter and got
+        // `tester` back.
+        let out = self.spawn(
+            self.root(),
+            &["mcp"],
+            &[("CAIRN_USER", None)],
+            Some(&format!("{}\n", requests.join("\n"))),
+        );
         assert!(out.ok(), "cairn mcp exited {}:\n{}", out.code, out.stderr);
         out.stdout
             .lines()
@@ -1306,32 +1316,6 @@ impl Project {
         replies.last().expect("a reply")["result"].clone()
     }
 
-    /// The same, with no `CAIRN_USER` set — as a client on somebody else's
-    /// machine is, so the identity has to come from the protocol.
-    pub fn mcp_call_anonymous(
-        &self,
-        tool: &str,
-        args: serde_json::Value,
-        client: &str,
-    ) -> serde_json::Value {
-        let init = serde_json::json!({
-            "jsonrpc": "2.0", "id": 0, "method": "initialize",
-            "params": { "clientInfo": { "name": client } }
-        })
-        .to_string();
-        let call = serde_json::json!({
-            "jsonrpc": "2.0", "id": 1, "method": "tools/call",
-            "params": { "name": tool, "arguments": args }
-        })
-        .to_string();
-        let input = format!("{init}\n{call}\n");
-        let out = self.spawn(self.root(), &["mcp"], &[("CAIRN_USER", None)], Some(&input));
-        assert!(out.ok(), "cairn mcp exited {}:\n{}", out.code, out.stderr);
-        let last = out.stdout.lines().rfind(|l| !l.trim().is_empty());
-        serde_json::from_str::<serde_json::Value>(last.expect("a reply")).expect("JSON")["result"]
-            .clone()
-    }
-
     /// The tools the server advertises.
     pub fn mcp_tools(&self) -> Vec<serde_json::Value> {
         let replies = self.mcp(&[r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#]);
@@ -1354,6 +1338,219 @@ pub fn tool_text(result: &serde_json::Value) -> String {
         .as_str()
         .unwrap_or_default()
         .to_string()
+}
+
+// --- fixtures ---------------------------------------------------------------
+//
+// Projects the tests keep asking for. They lived at the top of one eight
+// thousand line file; splitting that file by subject left every piece wanting
+// the same half dozen, which is the definition of something that belongs here.
+
+pub fn seeded() -> Project {
+    let p = Project::new();
+    seed(&p);
+    p
+}
+
+/// The three items and one milestone every test below names by identifier.
+/// Split from `seeded` so a project built from a `Schema` can have the same
+/// contents without also having the shipped template.
+pub fn seed(p: &Project) {
+    p.add("First item", &["--type", "feature", "--set", "priority=p0"]);
+    p.add("Second item", &["-t", "bug"]);
+    p.add("Third item", &["-t", "chore"]);
+    // The milestone comes last so the three items keep the identifiers every
+    // test below names. A milestone is an item in format 2, so it has to exist
+    // before anything can point at it — the same as a dependency.
+    p.milestone("v0.1", Some("2026-12-01"));
+    p.expect(&["set", "1", "milestone=v0.1", "-q"]);
+}
+
+/// A milestone to point at. In format 2 a milestone is an item, so it has to
+/// exist before anything can name it — the same as a dependency.
+pub fn milestone(p: &Project, key: &str, due: Option<&str>) -> String {
+    let id = p.expect(&["new", key, "-t", "milestone", "-q"]).trimmed();
+    p.expect(&["set", &id, &format!("key={key}")]);
+    if let Some(d) = due {
+        p.expect(&["set", &id, &format!("due={d}")]);
+    }
+    id
+}
+
+/// A project may declare how its identifiers are written. `id` in the
+/// frontmatter is an unsigned integer regardless — the key is a *rendering*,
+/// which is what makes adopting one a display change rather than a format
+/// change.
+pub fn keyed(template: &str, start: Option<u32>) -> Project {
+    let p = Project::new();
+    // Both settings go into the existing [project] table; a second one would
+    // be a duplicate key, which is how this helper was wrong the first time.
+    let mut replacement = format!("id_format = \"{template}\"");
+    if let Some(n) = start {
+        replacement.push_str(&format!("\nid_start = {n}"));
+    }
+    let cfg = p.read("cairn.toml").replace("id_width = 4", &replacement);
+    p.write("cairn.toml", &cfg);
+    p
+}
+
+/// A repository with cairn set up and one committed item.
+pub fn repository() -> Project {
+    let p = Project::empty();
+    git(&p, &["init", "-q", "-b", "main", "."]);
+    p.expect(&["init", "--bare", "--name", "Merged", "--git"]);
+    p.add("Base", &[]);
+    git(&p, &["add", "-A"]);
+    git(&p, &["commit", "-qm", "base"]);
+    p
+}
+
+/// Run git in the project, requiring success.
+pub fn git(p: &Project, args: &[&str]) -> String {
+    let out = Command::new("git")
+        .args(args)
+        .current_dir(p.root())
+        .env("GIT_AUTHOR_NAME", "test")
+        .env("GIT_AUTHOR_EMAIL", "test@example.invalid")
+        .env("GIT_COMMITTER_NAME", "test")
+        .env("GIT_COMMITTER_EMAIL", "test@example.invalid")
+        .env("PATH", path_with_binary())
+        .output()
+        .unwrap_or_else(|e| panic!("git {args:?}: {e}"));
+    assert!(
+        out.status.success(),
+        "git {args:?} failed:\n{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    String::from_utf8_lossy(&out.stdout).into_owned()
+}
+
+pub fn on_branch(p: &Project, name: &str, from: &str, work: &[&str]) {
+    git(p, &["checkout", "-q", from]);
+    git(p, &["checkout", "-qb", name]);
+    p.expect(work);
+    git(p, &["add", "-A"]);
+    git(p, &["commit", "-qm", name]);
+}
+
+/// Run a merge that is expected to conflict, without asserting it succeeded.
+pub fn merge(p: &Project, branch: &str) -> Out {
+    let out = Command::new("git")
+        .args(["merge", "--no-edit", branch])
+        .current_dir(p.root())
+        .env("GIT_AUTHOR_NAME", "test")
+        .env("GIT_AUTHOR_EMAIL", "test@example.invalid")
+        .env("GIT_COMMITTER_NAME", "test")
+        .env("GIT_COMMITTER_EMAIL", "test@example.invalid")
+        .env("PATH", path_with_binary())
+        .output()
+        .expect("git merge");
+    Out {
+        code: out.status.code().unwrap_or(-1),
+        stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
+        stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
+    }
+}
+
+/// A project as format 1 wrote it: milestones in the configuration, and items
+/// naming them by the same string they use today.
+pub fn format_one() -> Project {
+    let p = Project::new();
+    let cfg = p.read("cairn.toml").replace("format = 2", "format = 1")
+        + "\n[[milestone]]\nname = \"v0.1\"\ntitle = \"First\"\ndue = \"2026-12-01\"\n\
+           description = \"The first one.\"\n\n[[milestone]]\nname = \"later\"\n\
+           title = \"Someday\"\n";
+    p.write("cairn.toml", &cfg);
+    p.write(
+        "cairn/items/0001-scheduled.md",
+        "---\nid: 1\ntitle: Scheduled\nstatus: backlog\nmilestone: v0.1\n---\nbody\n",
+    );
+    p.write(
+        "cairn/items/0002-unscheduled.md",
+        "---\nid: 2\ntitle: Unscheduled\nstatus: backlog\n---\nbody\n",
+    );
+    p
+}
+
+#[cfg(unix)]
+pub fn import_github(p: &Project, script: &str, args: &[&str]) -> Out {
+    let path = with_fake_gh(p, script);
+    let path = path.to_string_lossy().to_string();
+    let mut all = vec!["import", "--from", "github", "--repo", "owner/name"];
+    all.extend_from_slice(args);
+    p.run_env(&all, &[("PATH", Some(path.as_str()))])
+}
+
+/// A `gh` on PATH that answers with whatever is given here.
+///
+/// The seam was already there: cairn runs `gh` by name, so PATH is the
+/// injection point and no flag has to be invented to make the path testable.
+/// The whole real code path runs — argument construction included.
+#[cfg(unix)]
+pub fn with_fake_gh(p: &Project, script: &str) -> std::ffi::OsString {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = p.path("fake-bin");
+    std::fs::create_dir_all(&dir).unwrap();
+    let gh = dir.join("gh");
+    std::fs::write(&gh, format!("#!/bin/sh\n{script}\n")).unwrap();
+    std::fs::set_permissions(&gh, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    let mut paths = vec![dir];
+    paths.extend(std::env::split_paths(&path_with_binary()));
+    std::env::join_paths(paths).expect("PATH")
+}
+
+pub fn restricted() -> Project {
+    let p = Project::new();
+    let cfg = p
+        .read("cairn.toml")
+        .replacen(
+            "name = \"priority\"",
+            "name = \"priority\"\nagent = \"read-only\"",
+            1,
+        )
+        .replacen("name = \"done\"", "name = \"done\"\nagent = \"propose\"", 1);
+    p.write("cairn.toml", &cfg);
+    p
+}
+
+/// A project that restricts what an agent may touch, in both of the ways the
+/// schema allows: a field it may only read, and a status it may only propose.
+pub fn restricted_for_agents() -> Project {
+    let p = Project::with(
+        Schema::standard()
+            .field(Field::text("risk").agent(Agent::ReadOnly))
+            .amend_status("done", |s| s.agent(Agent::Propose)),
+    );
+    seed(&p);
+    p
+}
+
+/// A project where an agent may ask for a priority but not set one.
+pub fn proposing() -> Project {
+    let p = Project::with(
+        Schema::standard()
+            .amend("priority", |f| f.agent(Agent::Propose))
+            .amend_status("done", |s| s.agent(Agent::Propose)),
+    );
+    seed(&p);
+    p
+}
+
+/// A project that says how long a claim may go untouched.
+pub fn with_stale_after(days: u32) -> Project {
+    let p = Project::with(Schema::standard().claim_stale_after(days));
+    seed(&p);
+    p
+}
+
+pub fn today() -> String {
+    let out = std::process::Command::new("date")
+        .args(["+%Y-%m-%d"])
+        .output()
+        .expect("date");
+    String::from_utf8_lossy(&out.stdout).trim().to_string()
 }
 
 // --- the harness, checked against the program -------------------------------

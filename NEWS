@@ -6,28 +6,7 @@ See the end of the file for copying conditions.
 Please send bug reports and suggestions through the project's issue tracker.
 
 
-* Noteworthy changes in release 0.1.0-rc.2 (unreleased)
-
-** The promise
-
-PROMISE.md states what cairn will always do and where its boundary falls: every
-capability a single repository has is part of cairn and is free, and cairn will
-never grow accounts, authentication or remotes.  The same words appear in the
-README, the manual and the website, and `cargo test --test rules` fails if any
-copy drifts from another.
-
-It is written now, while cairn has no users and nothing to sell, because that
-is the only moment at which making the promise costs nothing.
-
-** Integrating
-
-A new manual chapter, "Integrating", documents the two supported ways to build
-on cairn: read the specified file format, or run the binary and parse its JSON.
-There is deliberately no library target, because linking cairn makes the caller
-a derivative work and reading its files does not.  A test fails if a [lib]
-appears in Cargo.toml.
-
-* Noteworthy changes in release 0.2.0-rc.1 (unreleased)
+* Noteworthy changes in release 0.2.0 (unreleased)
 
 ** Format 2: milestones are items
 
@@ -428,6 +407,25 @@ and a poor reason to spend a line of help output on it; it remains documented
 in the manual, and the test says to unhide it as soon as there is genuinely a
 format to migrate from.
 
+** The promise
+
+PROMISE.md states what cairn will always do and where its boundary falls: every
+capability a single repository has is part of cairn and is free, and cairn will
+never grow accounts, authentication or remotes.  The same words appear in the
+README, the manual and the website, and `cargo test --test rules` fails if any
+copy drifts from another.
+
+It is written now, while cairn has no users and nothing to sell, because that
+is the only moment at which making the promise costs nothing.
+
+** Integrating
+
+A new manual chapter, "Integrating", documents the two supported ways to build
+on cairn: read the specified file format, or run the binary and parse its JSON.
+There is deliberately no library target.  The specification is a better
+contract than a Rust API: it is versioned, it has a conformance corpus, and a
+second independent reader checks it.  A test fails if a [lib] appears in
+Cargo.toml.
 
 * Noteworthy changes in release 0.1.0-rc.1 (2026-09-05)
 
@@ -470,13 +468,8 @@ three.  See "Platforms" in the manual.
 
 
 ----------------------------------------------------------------------
-Copying and distribution of this file, with or without modification, are
-permitted in any medium without royalty provided the copyright notice and this
-notice are preserved.
+Copyright (C) 2026 Oddur Sigurdsson.
 
-This file is part of cairn.
-
-cairn is free software: you can redistribute it and/or modify it under the
-terms of the GNU General Public License as published by the Free Software
-Foundation, either version 3 of the License, or (at your option) any later
-version.
+cairn is free software under the MIT licence.  Copying and distribution of this
+file, with or without modification, are permitted in any medium without royalty
+provided the copyright notice and this notice are preserved.

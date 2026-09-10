@@ -218,6 +218,11 @@ the seed it used, so a failure is reproducible.
 The suite is not decoration. It encodes decisions that are easy to undo by
 accident:
 
+The end-to-end tests are split by subject rather than kept in one file:
+`basics`, `schema`, `workflow`, `agents`, `repository`, `format`,
+`presentation`, `durability`. Somebody looking for how milestones are tested
+should not have to scroll eight thousand lines to find out.
+
 - `tests/golden/` pins how item files parse. Changing an expectation there is a
   format change and needs a format number and a migration. See "Compatibility"
   in the manual.
