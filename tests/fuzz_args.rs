@@ -1,11 +1,6 @@
 // cairn — the command line, fed arbitrary input.
 //
-// Copyright (C) 2026 Oddur Sigurdsson
-//
-// This program is free software: you can redistribute it and/or modify it under
-// the terms of the GNU General Public License as published by the Free Software
-// Foundation, either version 3 of the License, or (at your option) any later
-// version.  See COPYING for details.
+// Copyright (c) 2026 Oddur Sigurdsson. MIT licensed; see LICENSE.
 //
 // Every argument surface takes text from a person or from a model, and a model
 // gets them wrong in ways a person would not think to try. This drives the real

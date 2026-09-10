@@ -1,9 +1,9 @@
 <!--
 Thank you for contributing.
 
-If this is your first pull request here, a check will ask you to agree to the
-contributor licence agreement. It is short, you keep the copyright in what you
-wrote, and CONTRIBUTING.md explains why it exists.
+cairn is MIT licensed and there is no agreement to sign — the licence already
+permits everything one would have unlocked. You keep the copyright in what you
+wrote; CONTRIBUTING.md explains why there is nothing to sign.
 -->
 
 ## What this changes

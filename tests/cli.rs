@@ -1,11 +1,6 @@
 // cairn — end-to-end tests.
 //
-// Copyright (C) 2026 Oddur Sigurdsson
-//
-// This program is free software: you can redistribute it and/or modify it under
-// the terms of the GNU General Public License as published by the Free Software
-// Foundation, either version 3 of the License, or (at your option) any later
-// version.  See LICENSE for details.
+// Copyright (c) 2026 Oddur Sigurdsson. MIT licensed; see LICENSE.
 //
 // These drive the real binary, so they cover argument parsing, exit codes and
 // stderr the way a user meets them. They deliberately avoid a shell: the suite
@@ -1209,7 +1204,7 @@ fn mcp_config_names_this_project() {
 fn version_carries_the_licence_notice() {
     let p = Project::empty();
     let long = p.expect(&["--version"]).stdout;
-    assert_contains(&long, "GNU GPL version 3", "the licence");
+    assert_contains(&long, "License MIT", "the licence");
     assert_contains(&long, "NO WARRANTY", "the disclaimer");
     assert_contains(&long, "Copyright", "the copyright line");
     assert_eq!(

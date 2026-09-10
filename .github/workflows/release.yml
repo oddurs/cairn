@@ -69,10 +69,7 @@ jobs:
           else
             cp "target/${{ matrix.target }}/release/cairn" "dist/${name}/"
           fi
-          # COPYING, not LICENSE: the file was renamed when the repository was
-          # laid out the GNU way, and this step still asked for the old name —
-          # which `set -e` turned into four failed builds on the first tag.
-          cp README.md COPYING "dist/${name}/"
+          cp README.md LICENSE "dist/${name}/"
           cp doc/cairn.texi "dist/${name}/" 2>/dev/null || true
           # Under its own name: copying spec/README.md into the directory would
           # land it on top of the project's README.

@@ -1,11 +1,6 @@
 // cairn — fields that name other items.
 //
-// Copyright (C) 2026 Oddur Sigurdsson
-//
-// This program is free software: you can redistribute it and/or modify it under
-// the terms of the GNU General Public License as published by the Free Software
-// Foundation, either version 3 of the License, or (at your option) any later
-// version.  See COPYING for details.
+// Copyright (c) 2026 Oddur Sigurdsson. MIT licensed; see LICENSE.
 //
 // A ref is a field whose value names another item rather than describing this
 // one. The difference from an enum is that the value has its own existence: a

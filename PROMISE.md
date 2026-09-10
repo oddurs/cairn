@@ -13,7 +13,7 @@ This text is reproduced word for word in the README and in the manual, and a
 test fails if the three ever disagree.
 
 <!-- promise:begin -->
-cairn is free software under the GNU General Public Licence, and will remain so.
+cairn is free software under the MIT licence, and will remain so.
 
 Everything a single repository can do is part of cairn, and is free: items, the
 schema, the board, the roadmap, agents, merging, import and export. No

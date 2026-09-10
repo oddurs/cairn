@@ -128,11 +128,24 @@ disagree with it cheaply.
 
 > `Cargo.toml` has a `[[bin]]` and no `[lib]`, and that is a decision.
 
-A program that links cairn is a derivative work and inherits the GPL. A program
-that reads cairn's documented file format is not. That difference is the entire
-reason the specification exists — it is what lets other people build on cairn's
-conventions without adopting cairn's licence, and the specification is this
-project's strongest asset.
+This rule used to rest on the licence: linking cairn made you a derivative work
+and inherited the GPL, reading its documented format did not, and pointing
+people at the format was how they avoided that. Under MIT the legal half of that
+argument is gone — linking cairn now costs you nothing.
+
+The rule stays, and the honest reason is a different one.
+
+**A Rust API would be a second contract, and a worse one.** The specification is
+this project's strongest asset: it is versioned, it has a conformance corpus, a
+second independent reader checks it, and every format that has ever existed is
+still tested against the current build. A `[lib]` would be a parallel promise
+with none of that — semver on every internal type, breakage on every refactor,
+and a standing temptation to keep a bad shape because something depends on it.
+
+**And a linkable cairn makes the specification decorative.** If the easy path is
+`use cairn::…`, nobody reads the format, the format stops being exercised by
+anything but cairn's own tests, and the thing that lets this outlive the
+implementation quietly rots.
 
 So when a second program wants to read items, the answer is the format, or the
 binary's JSON output and exit codes. Both are documented under "Integrating" in
@@ -254,31 +267,28 @@ spends that hour again.
 
 ## Copyright, and the agreement
 
-cairn is distributed under the GNU General Public Licence, version 3 or later,
-and that is not changing.
+cairn is distributed under the MIT licence.
 
-Before your first pull request is merged you will be asked to agree to a
-[contributor licence agreement](CLA.md). It is short. **You keep the copyright
-in everything you write** — it is a licence, not an assignment, and nothing in
-it stops you using your own work however you like, including elsewhere.
+**You keep the copyright in everything you write.** Contributing does not
+transfer it, and nothing stops you using your own work however you like,
+including elsewhere.
 
 Add yourself to `AUTHORS` with your first accepted change.
 
-### Why there is an agreement
+### Why there is no agreement to sign
 
-Because you are entitled to know what you are signing.
+There used to be one, and the reason was the GPL. A copyleft project that might
+one day want to offer other terms has to be able to relicense, which means every
+contributor must have granted permission in advance — otherwise changing terms
+means finding everybody and asking, and one refusal or one unreachable person
+settles it for good.
 
-Today the maintainer is the sole copyright holder, and can therefore offer cairn
-under terms other than the GPL — for instance a commercial licence alongside it,
-if a hosted version for teams ever makes sense. The moment a contribution lands
-without an agreement in place, that stops being possible: changing terms would
-require finding every contributor and asking permission, and one refusal or one
-unreachable person settles it for good.
+Under MIT that problem does not arise. The licence already permits everything a
+relicence would have been for: anybody may use, modify, sublicense and sell,
+including inside proprietary software. There is nothing left for an agreement to
+unlock, so asking you to sign one would be asking for a signature that buys
+nobody anything.
 
-The agreement keeps that option open. It does not commit anyone to exercising
-it, and it does not affect the GPL you receive cairn under: that licence, once
-given, cannot be withdrawn from you or from anybody else.
-
-If you would rather not sign, say so on the pull request. Small fixes can often
-be reimplemented independently, and a bug report costs you nothing and is worth
-a great deal.
+What is asked instead is the ordinary thing: that you have the right to
+contribute what you are contributing, and that you are content for it to go out
+under MIT along with the rest.

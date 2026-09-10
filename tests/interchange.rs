@@ -1,11 +1,6 @@
 // cairn — the interchange document, stated as a property.
 //
-// Copyright (C) 2026 Oddur Sigurdsson
-//
-// This program is free software: you can redistribute it and/or modify it under
-// the terms of the GNU General Public License as published by the Free Software
-// Foundation, either version 3 of the License, or (at your option) any later
-// version.  See COPYING for details.
+// Copyright (c) 2026 Oddur Sigurdsson. MIT licensed; see LICENSE.
 //
 // `cairn export` and `cairn import` are the two halves of a promise: a backlog
 // can leave this program and come back. The example tests check that promise on

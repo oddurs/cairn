@@ -1,11 +1,6 @@
 // cairn — every command the manual shows, run against the real program.
 //
-// Copyright (C) 2026 Oddur Sigurdsson
-//
-// This program is free software: you can redistribute it and/or modify it under
-// the terms of the GNU General Public License as published by the Free Software
-// Foundation, either version 3 of the License, or (at your option) any later
-// version.  See COPYING for details.
+// Copyright (c) 2026 Oddur Sigurdsson. MIT licensed; see LICENSE.
 //
 // Documentation is the least-tested surface in most projects, and it was in this
 // one: a chapter shipped claiming `cairn export --json`, `cairn check --json`
