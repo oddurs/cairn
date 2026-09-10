@@ -753,7 +753,7 @@ the project, written down now — while cairn has no users and nothing to sell,
 which is the only moment at which making it costs nothing.
 
 <!-- promise:begin -->
-cairn is free software under the GNU General Public Licence, and will remain so.
+cairn is free software under the MIT licence, and will remain so.
 
 Everything a single repository can do is part of cairn, and is free: items, the
 schema, the board, the roadmap, agents, merging, import and export. No
@@ -801,7 +801,7 @@ Laid out the way a GNU project is, so the files are where you expect:
 
 | | |
 | --- | --- |
-| `COPYING` | The GNU General Public License, version 3 |
+| `LICENSE` | The MIT licence |
 | `PROMISE.md` | What cairn will always do, and where its boundary is |
 | `AUTHORS` | Who has contributed |
 | `NEWS` | User-visible changes, newest first |
@@ -812,7 +812,6 @@ Laid out the way a GNU project is, so the files are where you expect:
 | `CONTRIBUTING.md` | How to get started; the backlog is the guide |
 | `SECURITY.md` | How to report a vulnerability |
 | `doc/RELEASING.md` | The release checklist |
-| `CLA.md` | The contributor licence agreement, and why it exists |
 | `cairn/items/` | The project's own roadmap, in cairn |
 | `ROADMAP.md` | Generated from it by `cairn render` |
 
@@ -836,5 +835,5 @@ reasoning that produced it. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-GNU General Public License v3.0 or later. See [COPYING](COPYING), and
+MIT. See [LICENSE](LICENSE), and
 [PROMISE.md](PROMISE.md) for what that is intended to mean in practice.

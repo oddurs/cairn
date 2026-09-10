@@ -28,9 +28,8 @@ OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
 TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 
-(This file is permissive, unlike cairn itself, which is GPL. The format is meant
-to be built on — including by proprietary tools — and a GPL reference reader
-would discourage precisely the thing it exists to encourage.)
+(cairn itself is MIT, so this reader carries no obligation the tool does not.
+The format is meant to be built on, including by proprietary tools.)
 """
 
 import json

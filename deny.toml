@@ -17,8 +17,9 @@ yanked = "deny"
 ignore = []
 
 [licenses]
-# cairn is GPL-3.0-or-later. Permissive dependencies are compatible with that;
-# the reverse would not be, which is why nothing copyleft is listed here.
+# cairn is MIT. Every dependency here is permissive; nothing copyleft is listed,
+# because a copyleft dependency would place obligations on everybody who links
+# cairn and quietly undo the reason for being MIT in the first place.
 allow = [
     "MIT",
     "Apache-2.0",
@@ -32,14 +33,6 @@ allow = [
     "Zlib",
 ]
 confidence-threshold = 0.9
-
-# cairn's own licence, and only cairn's. Scoping it as an exception rather than
-# adding GPL to the list above says the thing precisely: this project is
-# copyleft, and a dependency that became copyleft would still be a decision
-# somebody has to make deliberately.
-[[licenses.exceptions]]
-crate = "cairn-md"
-allow = ["GPL-3.0-or-later"]
 
 # `option-ext`, reached through `dirs`, is MIT OR Apache-2.0 OR
 # LGPL-2.1-or-later. The permissive halves are what we take.

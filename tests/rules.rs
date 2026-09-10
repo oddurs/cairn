@@ -77,9 +77,11 @@ fn the_promise_is_stated_identically_everywhere() {
     }
 }
 
-/// A program that links cairn inherits the GPL; a program that reads cairn's
-/// documented format does not. The absence of a library is what makes the
-/// specification, rather than this code, the thing to build against.
+/// The specification is a better contract than a Rust API: it is versioned, it
+/// has a conformance corpus, a second reader checks it, and every format that
+/// has ever existed is still tested. A `[lib]` would be a parallel promise with
+/// none of that — and if `use cairn::…` were the easy path, nobody would read
+/// the format and the thing that outlives this code would rot.
 #[test]
 fn there_is_no_library_target() {
     let manifest = repo("Cargo.toml");

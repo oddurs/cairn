@@ -1,11 +1,6 @@
 // cairn — an item's history, read from the repository it lives in.
 //
-// Copyright (C) 2026 Oddur Sigurdsson
-//
-// This program is free software: you can redistribute it and/or modify it under
-// the terms of the GNU General Public License as published by the Free Software
-// Foundation, either version 3 of the License, or (at your option) any later
-// version.  See COPYING for details.
+// Copyright (c) 2026 Oddur Sigurdsson. MIT licensed; see LICENSE.
 //
 // The claim cairn makes is that the repository is the database. A repository
 // offers one thing a database does not — history — and until this command

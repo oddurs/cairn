@@ -2,10 +2,10 @@
 id: 56
 title: Collect a contributor licence agreement
 type: chore
-status: backlog
+status: dropped
 milestone: v0.2
 created: 2026-09-05
-updated: 2026-09-05
+updated: 2026-09-09
 priority: p0
 effort: s
 ---
@@ -79,3 +79,7 @@ they would rather not.
 Still open: a lawyer has not read it. The adaptation is from a standard
 template, but "adapted from something standard" is not the same as reviewed, and
 the file says so.
+
+## 2026-09-09
+
+Overtaken by the move to MIT. A contributor licence agreement exists so a copyleft project can relicense later — every contributor must have granted permission in advance, or changing terms means finding everybody and one refusal settles it. Under MIT there is nothing left to unlock: the licence already permits use, modification, sublicensing and sale, including inside proprietary software. Asking somebody to sign would be asking for a signature that buys nobody anything. CLA.md and the cla workflow are removed; CONTRIBUTING.md now has a section saying why there is nothing to sign.

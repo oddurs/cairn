@@ -1,11 +1,6 @@
 // cairn — the promises in the Stability chapter, asserted.
 //
-// Copyright (C) 2026 Oddur Sigurdsson
-//
-// This program is free software: you can redistribute it and/or modify it under
-// the terms of the GNU General Public License as published by the Free Software
-// Foundation, either version 3 of the License, or (at your option) any later
-// version.  See COPYING for details.
+// Copyright (c) 2026 Oddur Sigurdsson. MIT licensed; see LICENSE.
 //
 // A promise nothing checks is a wish. Every field named in the manual as stable
 // is listed here, so removing or renaming one fails the build rather than

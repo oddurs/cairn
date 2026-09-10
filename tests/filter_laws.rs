@@ -1,11 +1,6 @@
 // cairn — laws the filter grammar has to obey.
 //
-// Copyright (C) 2026 Oddur Sigurdsson
-//
-// This program is free software: you can redistribute it and/or modify it under
-// the terms of the GNU General Public License as published by the Free Software
-// Foundation, either version 3 of the License, or (at your option) any later
-// version.  See COPYING for details.
+// Copyright (c) 2026 Oddur Sigurdsson. MIT licensed; see LICENSE.
 //
 // The parser already has property tests: it may reject anything, and it may not
 // panic. Those say nothing about what an accepted filter *means*.

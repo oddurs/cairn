@@ -1,11 +1,6 @@
 // cairn — soak test.
 //
-// Copyright (C) 2026 Oddur Sigurdsson
-//
-// This program is free software: you can redistribute it and/or modify it under
-// the terms of the GNU General Public License as published by the Free Software
-// Foundation, either version 3 of the License, or (at your option) any later
-// version.  See COPYING for details.
+// Copyright (c) 2026 Oddur Sigurdsson. MIT licensed; see LICENSE.
 //
 // The other tests check situations somebody thought of. This one drives cairn
 // the way a project actually gets used — a long, arbitrary sequence of ordinary
