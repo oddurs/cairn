@@ -6,7 +6,93 @@ See the end of the file for copying conditions.
 Please send bug reports and suggestions through the project's issue tracker.
 
 
-* Noteworthy changes in release 0.2.0 (unreleased)
+* Noteworthy changes in release 0.2.0 (2026-09-11)
+
+** cairn is MIT
+
+Relicensed from GPL-3.0-or-later.  Nothing in the previous release is withdrawn:
+a licence once given cannot be, and 0.1.0-rc.1 remains available under the GPL
+to anybody who has it.  Everything from this release forward is MIT.
+
+There is no longer a contributor licence agreement.  One exists so that a
+copyleft project can change terms later; MIT already permits everything such a
+change would have been for, so a signature would buy nobody anything.
+
+** Format 3: a type declares that it groups work
+
+Some types are not kinds of work.  A milestone is what work is filed *under* —
+absent from `cairn next`, from the board, from an ordinary listing, carrying the
+progress of everything beneath it.  Saying so used to take eleven lines of
+`[[field]]`, and the fact lived at the wrong end: a type was a container because
+something pointed at it.
+
+    [[type]]
+    name = "milestone"
+    groups = "one"
+    inverse = "scheduled"
+
+That creates the field, addressed by key, with rollup and acyclicity implied.
+`groups = "many"` gives a type whose field takes several — an epic, a theme.
+
+**No item file changes.**  `cairn migrate` rewrites cairn.toml and touches
+nothing in the item directory; run `cairn migrate --dry-run` first.  Verified
+byte-identical across four real projects, 408 items.
+
+A consequence worth knowing: nothing is looked up by the word `milestone` any
+more.  Call the type `release` and the roadmap, the board, `next` and `check` all
+work with no configuration beyond the type.
+
+** Agents
+
+The permission model is enforced.  A field or status declared
+`agent = "read-only"` or `agent = "propose"` was refused on the command line and
+allowed over the protocol — the exact inverse of what was documented.  Arriving
+over that transport is now what makes a caller an agent, so skipping the
+handshake no longer escapes the restrictions.
+
+`cairn propose 12 priority=p0 --why "..."` records a change somebody else
+decides, and `cairn proposals` lists what is waiting.  `--accept` applies one.
+
+A claim records when it was taken.  With `claim_stale_after` set, a claim nobody
+has honoured is offered back by `cairn next`, with who holds it and for how long.
+Nothing is ever released automatically.
+
+`cairn release --reason` passes on what the last person learned, and `cairn
+claim` shows it to whoever takes the item next.
+
+`cairn new` reports when a title looks like one already filed.
+
+Over the protocol: a `fields` argument returns only the keys asked for — 78%
+smaller for a typical query — and `--since` answers what changed without
+re-reading the backlog.
+
+** The configuration describes itself
+
+`cairn check` validates the schema before it looks at an item: a status that
+declares no category, a `render.group_by` or saved view naming a field nothing
+declares, a filter that does not parse, a missing header, `link_items` with no
+`project.url`.
+
+`cairn init --from PATH` starts a project from another one's schema.
+
+** Compatibility
+
+A project written by an older cairn is read, not refused.  Every command that
+only reads works against it; writing asks for `cairn migrate`.
+
+`owner` and `created_by` were being written to disk and dropped by `cairn
+export`, so a round trip lost them.  Both are now carried, and both are
+documented in the specification, which had never described either.
+
+** Fixes
+
+`cairn board --group-by milestone` silently dropped every item that had a
+milestone.  The merge driver could leave `ours` in the working tree with no
+conflict markers when two branches created the same file.  `cairn show` with a
+non-ASCII argument aborted the process.  An imported timestamp that was not a
+date was written into `created` verbatim.  `cairn new -d 999` created an item
+depending on nothing.
+
 
 ** Format 2: milestones are items
 
