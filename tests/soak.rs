@@ -196,19 +196,33 @@ fn a_long_sequence_of_ordinary_use_leaves_the_backlog_intact() {
                 "note"
             }
             (100, Some(id)) => {
-                // A milestone is an item in format 2, so this exercises the
-                // container path: creating one, giving it a key, and scheduling
-                // work against it by that key.
-                let name = format!("v0.{}", s.rng.below(3));
-                let existing = s.expect(&["list", "-A", "-t", "milestone", "--json"]);
-                if !existing.stdout.contains(&format!("\"{name}\"")) {
-                    let out = s.expect(&["new", &name, "-t", "milestone", "-q"]);
-                    let m: u32 = out.stdout.trim().parse().expect("an id");
-                    s.expect(&["set", &m.to_string(), &format!("key={name}"), "-q"]);
-                    s.expected.insert(m, "backlog".into());
+                // A milestone is an item, so this exercises the container path:
+                // creating one, giving it a key, and scheduling work against it
+                // by that key.
+                //
+                // Work only. Filing a milestone under a milestone is what the
+                // acyclic rule exists to refuse, and it used to be allowed —
+                // the old declaration set `rollup` and not `acyclic`, so an
+                // item could be its own milestone. `groups` implies both, and
+                // this loop had been quietly relying on the hole.
+                let kind = s.expect(&["show", &id.to_string(), "--json"]).json()["type"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_string();
+                if kind == "milestone" {
+                    "skipped"
+                } else {
+                    let name = format!("v0.{}", s.rng.below(3));
+                    let existing = s.expect(&["list", "-A", "-t", "milestone", "--json"]);
+                    if !existing.stdout.contains(&format!("\"{name}\"")) {
+                        let out = s.expect(&["new", &name, "-t", "milestone", "-q"]);
+                        let m: u32 = out.stdout.trim().parse().expect("an id");
+                        s.expect(&["set", &m.to_string(), &format!("key={name}"), "-q"]);
+                        s.expected.insert(m, "backlog".into());
+                    }
+                    s.expect(&["set", &id.to_string(), &format!("milestone={name}"), "-q"]);
+                    "milestone"
                 }
-                s.expect(&["set", &id.to_string(), &format!("milestone={name}"), "-q"]);
-                "milestone"
             }
             (101, _) => {
                 // Every read, run for its exit status: a view that panics on a
