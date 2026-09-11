@@ -90,11 +90,20 @@ pub fn config(args: ConfigArgs) -> Result<i32> {
     section(
         "types",
         cfg.types.iter().map(|t| {
-            let mut s = t.name.clone();
+            // Which types work is filed *under* is the most consequential thing
+            // about a schema and used to be invisible here: a milestone is
+            // absent from `next`, the board and an ordinary listing, and
+            // nothing in this output said so.
+            let mut s = format!("{:<12}", t.name);
+            s.push_str(&match t.groups {
+                Some(crate::config::Groups::One) => style::dim("groups work — one per item"),
+                Some(crate::config::Groups::Many) => style::dim("groups work — several per item"),
+                None => String::new(),
+            });
             if let Some(d) = &t.description {
                 s.push_str(&format!("  {}", style::dim(d)));
             }
-            s
+            s.trim_end().to_string()
         }),
     );
     section(
@@ -214,7 +223,13 @@ pub fn schema_json(cfg: &Config, milestones: &crate::refs::Milestones) -> serde_
             "git_integrated": crate::cmd::git::is_configured(cfg),
         },
         "types": cfg.types.iter().map(|t| json!({
-            "name": t.name, "label": t.label, "description": t.description
+            "name": t.name, "label": t.label, "description": t.description,
+            "groups": match t.groups {
+                Some(crate::config::Groups::One) => Some("one"),
+                Some(crate::config::Groups::Many) => Some("many"),
+                None => None,
+            },
+            "inverse": t.inverse
         })).collect::<Vec<_>>(),
         "statuses": cfg.statuses.iter().map(|s| json!({
             "name": s.name, "label": s.label, "category": s.category().as_str(),

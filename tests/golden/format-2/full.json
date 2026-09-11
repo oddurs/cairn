@@ -1,0 +1,27 @@
+{
+  "assignee": "someone",
+  "body": "## Problem\n\nText.\n",
+  "category": "active",
+  "created": "2026-01-02",
+  "created_by": null,
+  "depends_on": [
+    1
+  ],
+  "fields": {
+    "priority": "p0"
+  },
+  "id": 2,
+  "key": null,
+  "labels": [
+    "auth",
+    "backend"
+  ],
+  "milestone": "v0.1",
+  "owner": null,
+  "ref": "0002",
+  "source": "github:owner/repo#42",
+  "status": "doing",
+  "title": "Every documented key at once",
+  "type": "feature",
+  "updated": "2026-03-04"
+}

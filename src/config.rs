@@ -37,7 +37,7 @@ pub const CONFIG_FILE: &str = "cairn.toml";
 ///   needs a new format number, a major release, and a migration.
 /// * A project recording a format this build does not know is refused with an
 ///   explanation, rather than misread.
-pub const CURRENT_FORMAT: u32 = 2;
+pub const CURRENT_FORMAT: u32 = 3;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -151,10 +151,44 @@ pub struct Project {
     pub filename_max: usize,
 }
 
+/// How many of a grouping type one item may belong to.
+///
+/// Declared on the type rather than on a field, because it is a fact about the
+/// type: an item ships in exactly one release and may serve several efforts.
+/// That was two relations — `milestone` and `part_of` — until it was noticed
+/// they differ only in this.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Groups {
+    One,
+    Many,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ItemType {
     pub name: String,
+
+    /// Whether items of this type are what work is filed *under* rather than
+    /// work itself.
+    ///
+    /// Declaring it creates the field that names one: a type called `milestone`
+    /// gives items a `milestone:` key, addressed by the target's `key`, rolling
+    /// up progress, refusing a cycle. Eleven lines of `[[field]]` said the same
+    /// thing and said "milestone" four times.
+    ///
+    /// It used to be derived — a type was a container because some ref field
+    /// named it as a `target` — which meant you could not read it off the type,
+    /// and adding a field silently changed another type's behaviour. Deriving
+    /// it from the wrong end is also how `board --group-by milestone` came to
+    /// drop every scheduled item off the board.
+    #[serde(default)]
+    pub groups: Option<Groups>,
+
+    /// What the grouping reads as backwards: `scheduled`, `contains`.
+    #[serde(default)]
+    pub inverse: Option<String>,
+
     #[serde(default)]
     pub label: Option<String>,
     #[serde(default)]
@@ -910,8 +944,8 @@ impl Config {
         // commands that contradicted each other with nothing to do about it.
         if !self.milestones.is_empty() && self.format() >= CURRENT_FORMAT {
             let names: Vec<&str> = self.milestones.iter().map(|m| m.name.as_str()).collect();
-            let has_type = self.item_type(crate::refs::MILESTONE_TYPE).is_some();
-            let has_field = self.field(crate::refs::MILESTONE_FIELD).is_some();
+            let has_type = self.schedule_type().is_some();
+            let has_field = has_type;
             bail!(
                 "{CONFIG_FILE}: [[milestone]] blocks are format 1 and are no longer read.\n\
                  a milestone is an item now, so delete the block{} ({}) and write {} instead:\n\

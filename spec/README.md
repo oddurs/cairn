@@ -218,6 +218,16 @@ items does not require it. One property of it is:
 A status belongs to exactly one **category**: `open`, `active`, `done`, or
 `dropped`.
 
+A type may **group** work: items of that type are what other items are filed
+under rather than work in their own right. A grouping type gives every item a
+key of the type's own name, whose value names one such item by its `key` (§4.3).
+Whether an item may be filed under one or several is a property of the grouping
+type.
+
+A reader that ignores grouping still reads every item correctly: the key is an
+ordinary string in the frontmatter, and §4.3 already says a reference that names
+nothing is simply a reference that names nothing.
+
 Status *names* are chosen per project and carry no meaning across a boundary:
 one project's `shipped` is another's `done` is another's `closed`. Categories
 are fixed, and are therefore what a consumer reasons about — whether an item is
@@ -237,8 +247,9 @@ configuration **must not** reorder such a sequence.
 
 ## 8. Versioning and compatibility
 
-A project records the format version it uses. Versions 1 and 2 are both
-described by this document: no key in it changed meaning between them.
+A project records the format version it uses. Versions 1, 2 and 3 are all
+described by this document: no key in it has changed meaning between them. Each
+bump changed only how the configuration says what it says.
 
 The version covers the on-disk shape of a **project**, not only of an item. A
 project is its configuration and its items (§7), so a change to the shape of the

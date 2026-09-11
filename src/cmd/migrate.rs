@@ -109,6 +109,7 @@ fn plan(from: u32, to: u32) -> Vec<(u32, u32)> {
 fn apply(cfg: &Config, items: &[crate::item::Item], from: u32, to: u32) -> Result<()> {
     match (from, to) {
         (1, 2) => milestones_become_items(cfg, items),
+        (2, 3) => types_declare_that_they_group(cfg),
         _ => anyhow::bail!("no migration is defined from format {from} to {to}"),
     }
 }
@@ -328,11 +329,107 @@ fn effect_of(from: u32, to: u32, cfg: &Config, _items: &[crate::item::Item]) -> 
             modified: Vec::new(),
             summary: "milestones move from cairn.toml into items".into(),
         },
+        (2, 3) => Effect {
+            rewritten: vec![CONFIG_FILE.to_string()],
+            created: 0,
+            modified: Vec::new(),
+            summary: "a type declares that it groups work".into(),
+        },
         _ => Effect {
             summary: "unknown step".into(),
             ..Default::default()
         },
     }
+}
+
+/// Format 2 to 3: container-ness moves from a field's `target` onto the type.
+///
+/// A `[[field]]` of `kind = "ref"` naming a specific type was the only way to
+/// say that a type groups work, which meant the fact lived at the wrong end —
+/// unreadable from the type, and changed by editing an unrelated field. Now the
+/// type says it, and the field it implies is deleted.
+///
+/// **No item file changes.** `milestone: v0.1` means exactly what it meant, for
+/// the same reason format 2 could move milestones into items without touching
+/// one: what the key names did not change, only how the schema says so.
+fn types_declare_that_they_group(cfg: &Config) -> Result<()> {
+    let path = cfg.root.join(CONFIG_FILE);
+    let text = std::fs::read_to_string(&path)?;
+    let mut doc: toml_edit::DocumentMut = text.parse()?;
+
+    // Which types some ref field pointed at, and how.
+    let mut grouping: Vec<(String, &'static str, Option<String>)> = Vec::new();
+    if let Some(fields) = doc.get("field").and_then(|f| f.as_array_of_tables()) {
+        for f in fields {
+            if f.get("kind").and_then(|v| v.as_str()) != Some("ref") {
+                continue;
+            }
+            let Some(target) = f.get("target").and_then(|v| v.as_str()) else {
+                continue;
+            };
+            if target == "*" {
+                continue; // a general reference, which stays a field
+            }
+            let many = f.get("cardinality").and_then(|v| v.as_str()) == Some("many");
+            let inverse = f
+                .get("inverse")
+                .and_then(|v| v.as_str())
+                .map(str::to_string);
+            grouping.push((
+                target.to_string(),
+                if many { "many" } else { "one" },
+                inverse,
+            ));
+        }
+    }
+
+    // Say it on the type.
+    if let Some(types) = doc.get_mut("type").and_then(|t| t.as_array_of_tables_mut()) {
+        for table in types.iter_mut() {
+            let Some(name) = table
+                .get("name")
+                .and_then(|v| v.as_str())
+                .map(str::to_string)
+            else {
+                continue;
+            };
+            if let Some((_, how, inverse)) = grouping.iter().find(|(t, _, _)| *t == name) {
+                table["groups"] = toml_edit::value(*how);
+                if let Some(i) = inverse {
+                    table["inverse"] = toml_edit::value(i.as_str());
+                }
+                println!(
+                    "  {} {name} groups work — {how} per item",
+                    style::dim("type")
+                );
+            }
+        }
+    }
+
+    // And delete the field that said it, since the type now does.
+    if let Some(fields) = doc
+        .get_mut("field")
+        .and_then(|f| f.as_array_of_tables_mut())
+    {
+        let named: Vec<String> = grouping.iter().map(|(t, _, _)| t.clone()).collect();
+        fields.retain(|f| {
+            let is_grouping_ref = f.get("kind").and_then(|v| v.as_str()) == Some("ref")
+                && f.get("target")
+                    .and_then(|v| v.as_str())
+                    .is_some_and(|t| named.iter().any(|n| n == t));
+            if is_grouping_ref && let Some(n) = f.get("name").and_then(|v| v.as_str()) {
+                println!(
+                    "  {} [[field]] {n}, now implied by its type",
+                    style::dim("removed")
+                );
+            }
+            !is_grouping_ref
+        });
+    }
+
+    crate::store::write_atomic(&path, doc.to_string().as_bytes())?;
+    println!("  {} {CONFIG_FILE}", style::dim("rewritten"));
+    Ok(())
 }
 
 #[cfg(test)]

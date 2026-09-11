@@ -1946,6 +1946,59 @@ notifies. A proposal is a note somebody can find, and accepting one is a normal
 write with a record of where it came from.
 @end quotation
 
+@section Types that group work
+
+@cindex groups
+@cindex container
+@vindex groups
+Some types are not kinds of work. A milestone is what work is filed @emph{under}:
+absent from @command{cairn next}, absent from the board, absent from an ordinary
+listing, and carrying the progress of everything filed under it rather than any
+of its own.
+
+A type says so:
+
+@example
+[[type]]
+name = "milestone"
+groups = "one"              # work belongs to at most one of these
+inverse = "scheduled"
+@end example
+
+@noindent
+That declaration is the whole of it. It creates the field that names one --- a
+type called @code{milestone} gives items a @code{milestone:} key --- addressed
+by the target's @code{key}, rolling up progress, refusing a cycle. There is
+nothing else to declare and so nothing to get wrong.
+
+@code{groups = "many"} gives a type whose field takes several: an epic, a theme,
+a workstream. Work ships in exactly one release and may serve several efforts,
+and that difference is a fact about the type rather than a second kind of
+relationship.
+
+@subsection Why it is on the type
+
+@cindex format 3
+Until format 3 this was derived, and derived from the wrong end: a type was a
+container because some @code{[[field]]} named it as a @code{target}. You could
+not read it off the type; adding a field changed another type's behaviour; and
+saying it took eleven lines that said "milestone" four times.
+
+It also produced a defect worth remembering. @command{cairn board --group-by
+milestone} silently dropped every scheduled item, because the code computing
+@emph{is this a container} ran against a list the containers had already been
+removed from. A declared flag cannot be computed wrongly.
+
+@subsection What is left of ref fields
+
+@code{kind = "ref"} remains, for a genuine general reference --- a @code{related}
+field pointing at anything at all. It keeps @code{target}, @code{by},
+@code{cardinality}, @code{acyclic}, @code{rollup} and @code{inverse}, and it is
+now rare rather than the way the commonest thing in the schema was spelled.
+
+@code{depends_on} is unchanged and undeclarable: sequencing is universal, and
+asking every project to declare it would be asking for a decision nobody has.
+
 @section A claim is a promise somebody might not keep
 
 @cindex claim

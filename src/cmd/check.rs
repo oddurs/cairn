@@ -142,7 +142,15 @@ fn collect_inner(
     }
 
     let known_ids: HashSet<u32> = items.iter().map(|i| i.id).collect();
-    let declared: HashSet<&str> = cfg.fields.iter().map(|f| f.name.as_str()).collect();
+    // Declared fields, plus the one each grouping type implies — a type that
+    // says `groups` gives items a key of its own name without a [[field]].
+    let implied: Vec<String> = cfg.grouping_types().map(|t| t.name.clone()).collect();
+    let declared: HashSet<&str> = cfg
+        .fields
+        .iter()
+        .map(|f| f.name.as_str())
+        .chain(implied.iter().map(String::as_str))
+        .collect();
 
     for item in items {
         let at = store.rel(&item.path);
@@ -291,7 +299,7 @@ fn collect_inner(
             );
         }
 
-        for def in cfg.ref_fields() {
+        for def in &cfg.all_ref_fields() {
             for value in crate::refs::values(item, def) {
                 if crate::refs::resolve(&universe, def, &value).is_none() {
                     let known = crate::refs::permitted(&universe, cfg, def);
@@ -453,11 +461,9 @@ fn schema(cfg: &Config, r: &mut Report) {
         .map(|s| (*s).to_string())
         .collect();
     known.extend(cfg.fields.iter().map(|f| f.name.clone()));
-    known.extend(
-        cfg.ref_fields()
-            .filter_map(|f| f.inverse.clone())
-            .collect::<Vec<_>>(),
-    );
+    known.extend(cfg.all_ref_fields().into_iter().filter_map(|f| f.inverse));
+    // A grouping type gives items a field of its own name.
+    known.extend(cfg.grouping_types().map(|t| t.name.clone()));
 
     let check_keys = |r: &mut Report, where_: &str, what: &str, keys: &[String]| {
         for key in keys {
@@ -489,14 +495,17 @@ fn schema(cfg: &Config, r: &mut Report) {
     // own. The name only means something if the field is declared, and
     // `render.group_by` defaults to it — which is how renaming the field
     // silently empties the roadmap.
-    if cfg.render.group_by == crate::refs::MILESTONE_FIELD
-        && cfg.field(crate::refs::MILESTONE_FIELD).is_none()
-    {
+    // `group_by` naming a type that does not group is the same defect as
+    // naming a field that does not exist, and it is the one that emptied the
+    // board.
+    if cfg.grouping_types().next().is_none() && cfg.render.group_by != "status" {
         r.warn(
             &render_at,
-            "render.group_by is `milestone`, but no [[field]] named `milestone` is \
-             declared, so the roadmap has nothing to group by"
-                .to_string(),
+            format!(
+                "render.group_by is `{}`, but no [[type]] declares `groups`, so the \
+                 roadmap has nothing to group by",
+                cfg.render.group_by
+            ),
         );
     }
 
