@@ -236,7 +236,7 @@ fn resolve_columns(args: &Args, view: Option<&crate::config::View>, cfg: &Config
     }
     // The column is offered when the project has the field at all; empty ones
     // are dropped once the rows are known.
-    if cfg.field(crate::refs::MILESTONE_FIELD).is_some() {
+    if cfg.schedule_type().is_some() {
         cols.push("milestone".into());
     }
     for f in cfg.fields.iter().filter(|f| f.column) {

@@ -477,14 +477,24 @@ pub fn apply(item: &mut Item, cfg: &Config, key: &str, assign: Assign) -> Result
 }
 
 fn apply_custom(item: &mut Item, cfg: &Config, key: &str, assign: Assign) -> Result<()> {
-    let Some(def) = cfg.field(key) else {
-        let known: Vec<&str> = crate::config::RESERVED_FIELDS
+    // A grouping type implies a field of its own name, so the declared list is
+    // not the whole vocabulary.
+    let implied = cfg.all_ref_fields();
+    let Some(def) = cfg
+        .field(key)
+        .or_else(|| implied.iter().find(|f| f.name == key))
+    else {
+        let mut known: Vec<String> = crate::config::RESERVED_FIELDS
             .iter()
-            .copied()
-            .chain(cfg.fields.iter().map(|f| f.name.as_str()))
+            .map(|s| (*s).to_string())
+            .chain(cfg.fields.iter().map(|f| f.name.clone()))
+            .chain(cfg.grouping_types().map(|t| t.name.clone()))
             .collect();
+        known.sort();
+        known.dedup();
         bail!(
-            "unknown field `{key}`\nknown fields: {}\ndefine it with a [[field]] block in cairn.toml",
+            "unknown field `{key}`\nknown fields: {}\ndefine it with a [[field]] block, or a \
+             [[type]] with `groups`, in cairn.toml",
             known.join(", ")
         );
     };

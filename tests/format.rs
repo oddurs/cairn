@@ -303,7 +303,7 @@ fn the_golden_corpus_is_valid_against_a_default_schema() {
 #[test]
 fn a_project_from_a_newer_cairn_is_refused_not_misread() {
     let p = Project::new();
-    let toml = p.read("cairn.toml").replace("format = 2", "format = 99");
+    let toml = p.read("cairn.toml").replace("format = 3", "format = 99");
     p.write("cairn.toml", &toml);
     let out = p.fails(&["list"]);
     assert_contains(&out.all(), "format 99", "the format it found");
@@ -413,7 +413,7 @@ fn plain_output_reports_names_and_the_table_reports_labels() {
 /// naming them by the same string they use today.
 fn format_one() -> Project {
     let p = Project::new();
-    let cfg = p.read("cairn.toml").replace("format = 2", "format = 1")
+    let cfg = p.read("cairn.toml").replace("format = 3", "format = 1")
         + "\n[[milestone]]\nname = \"v0.1\"\ntitle = \"First\"\ndue = \"2026-12-01\"\n\
            description = \"The first one.\"\n\n[[milestone]]\nname = \"later\"\n\
            title = \"Someday\"\n";
@@ -535,7 +535,7 @@ fn a_newer_project_is_still_refused_outright() {
     let p = Project::new();
     p.write(
         "cairn.toml",
-        &p.read("cairn.toml").replace("format = 2", "format = 99"),
+        &p.read("cairn.toml").replace("format = 3", "format = 99"),
     );
 
     let out = p.fails(&["list"]);
@@ -631,7 +631,10 @@ fn the_frozen_corpora_have_not_been_edited() {
     }
 
     // Each format, with the digest taken when it stopped being current.
-    let recorded = [("format-1", 0x453d_19cd_d0fa_398a_u64)];
+    let recorded = [
+        ("format-1", 0x453d_19cd_d0fa_398a_u64),
+        ("format-2", 0x0504_26ce_0b59_ae48_u64),
+    ];
 
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden");
     let mut corpora: Vec<String> = std::fs::read_dir(&root)

@@ -226,6 +226,66 @@ impl Agent {
     }
 }
 
+/// A type, and whether work is filed under it.
+#[derive(Debug, Clone)]
+pub struct ItemType {
+    name: String,
+    description: Option<String>,
+    groups: Option<&'static str>,
+    inverse: Option<String>,
+}
+
+impl ItemType {
+    pub fn new(name: &str) -> ItemType {
+        ItemType {
+            name: name.into(),
+            description: None,
+            groups: None,
+            inverse: None,
+        }
+    }
+    /// Work belongs to at most one of these. A release; a sprint.
+    pub fn groups_one(mut self) -> ItemType {
+        self.groups = Some("one");
+        self
+    }
+    /// Work may belong to several. An epic; a theme.
+    pub fn groups_many(mut self) -> ItemType {
+        self.groups = Some("many");
+        self
+    }
+    /// An ordinary type again — for a schema that has nothing work is filed
+    /// under, which is a real project and a thing the tool must explain rather
+    /// than draw a blank page for.
+    pub fn groups_none(mut self) -> ItemType {
+        self.groups = None;
+        self.inverse = None;
+        self
+    }
+    pub fn inverse(mut self, name: &str) -> ItemType {
+        self.inverse = Some(name.into());
+        self
+    }
+    pub fn describe(mut self, d: &str) -> ItemType {
+        self.description = Some(d.into());
+        self
+    }
+
+    fn to_toml(&self) -> String {
+        let mut s = format!("[[type]]\nname = {:?}\n", self.name);
+        if let Some(g) = self.groups {
+            s += &format!("groups = {g:?}\n");
+        }
+        if let Some(i) = &self.inverse {
+            s += &format!("inverse = {i:?}\n");
+        }
+        if let Some(d) = &self.description {
+            s += &format!("description = {d:?}\n");
+        }
+        s
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Status {
     name: String,
@@ -564,7 +624,7 @@ pub struct Schema {
     criteria_section: Option<String>,
     require_criteria: bool,
     claim_stale_after: Option<u32>,
-    types: Vec<(String, Option<String>)>,
+    types: Vec<ItemType>,
     statuses: Vec<Status>,
     fields: Vec<Field>,
     views: Vec<(String, String, Option<String>)>,
@@ -578,7 +638,7 @@ impl Schema {
     /// status.
     pub fn bare() -> Schema {
         Schema {
-            format: Some(2),
+            format: Some(3),
             name: "Testbed".into(),
             description: None,
             dir: "cairn/items".into(),
@@ -609,14 +669,14 @@ impl Schema {
             default_type: Some("feature".into()),
             default_status: Some("backlog".into()),
             types: vec![
-                ("feature".into(), None),
-                ("bug".into(), None),
-                ("chore".into(), None),
-                ("docs".into(), None),
-                (
-                    "milestone".into(),
-                    Some("a release, or whatever this ships".into()),
-                ),
+                ItemType::new("feature"),
+                ItemType::new("bug"),
+                ItemType::new("chore"),
+                ItemType::new("docs"),
+                ItemType::new("milestone")
+                    .groups_one()
+                    .inverse("scheduled")
+                    .describe("a release, or whatever this ships"),
             ],
             statuses: vec![
                 Status::new("backlog", Category::Open),
@@ -635,10 +695,6 @@ impl Schema {
                 Field::choice("effort", ["s", "m", "l", "xl"]),
                 Field::text("area"),
                 Field::date("due"),
-                Field::reference("milestone", "milestone")
-                    .by_key()
-                    .rollup()
-                    .inverse("scheduled"),
             ],
             render: Some(Render::default()),
             ..Schema::bare()
@@ -699,12 +755,13 @@ impl Schema {
         self
     }
     #[track_caller]
-    pub fn item_type(mut self, name: &str) -> Schema {
+    pub fn item_type(mut self, t: ItemType) -> Schema {
         assert!(
-            !self.types.iter().any(|(n, _)| n == name),
-            "type `{name}` is already declared"
+            !self.types.iter().any(|x| x.name == t.name),
+            "type `{}` is already declared",
+            t.name
         );
-        self.types.push((name.into(), None));
+        self.types.push(t);
         self
     }
     #[track_caller]
@@ -752,6 +809,19 @@ impl Schema {
         self
     }
     /// The same, for a status.
+    /// Change a type already declared, by name.
+    #[track_caller]
+    pub fn amend_type(mut self, name: &str, f: impl FnOnce(ItemType) -> ItemType) -> Schema {
+        let at = self
+            .types
+            .iter()
+            .position(|x| x.name == name)
+            .unwrap_or_else(|| panic!("no type named `{name}` to amend"));
+        let existing = self.types.remove(at);
+        self.types.insert(at, f(existing));
+        self
+    }
+
     #[track_caller]
     pub fn amend_status(mut self, name: &str, f: impl FnOnce(Status) -> Status) -> Schema {
         let at = self
@@ -831,11 +901,9 @@ impl Schema {
         if let Some(d) = self.claim_stale_after {
             s += &format!("claim_stale_after = {d}\n");
         }
-        for (name, description) in &self.types {
-            s += &format!("\n[[type]]\nname = {name:?}\n");
-            if let Some(d) = description {
-                s += &format!("description = {d:?}\n");
-            }
+        for ty in &self.types {
+            s.push('\n');
+            s += &ty.to_toml();
         }
         for st in &self.statuses {
             s.push('\n');
@@ -1457,7 +1525,7 @@ pub fn merge(p: &Project, branch: &str) -> Out {
 /// naming them by the same string they use today.
 pub fn format_one() -> Project {
     let p = Project::new();
-    let cfg = p.read("cairn.toml").replace("format = 2", "format = 1")
+    let cfg = p.read("cairn.toml").replace("format = 3", "format = 1")
         + "\n[[milestone]]\nname = \"v0.1\"\ntitle = \"First\"\ndue = \"2026-12-01\"\n\
            description = \"The first one.\"\n\n[[milestone]]\nname = \"later\"\n\
            title = \"Someday\"\n";
@@ -1578,7 +1646,7 @@ mod harness {
                     .filename_max(120)
                     .criteria_section("Acceptance criteria")
                     .require_criteria()
-                    .item_type("epic")
+                    .item_type(ItemType::new("epic").groups_many())
                     .status(Status::new("shipped", Category::Done).color("green"))
                     .status(Status::undeclared("vague"))
                     .amend("area", |f| f.column())

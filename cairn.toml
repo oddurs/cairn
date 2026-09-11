@@ -8,7 +8,7 @@
 #   cairn check           validate every item against it
 #   man cairn             full reference
 
-format = 2
+format = 3
 
 [project]
 name = "cairn"
@@ -64,6 +64,8 @@ color = "blue"
 [[type]]
 name = "milestone"
 description = "a release, or whatever this project ships"
+groups = "one"
+inverse = "scheduled"
 
 # ─── Statuses ────────────────────────────────────────────────────────────────
 # Order matters: it is the column order on the board and the sort order in
@@ -124,7 +126,7 @@ description = "Rough size, not an estimate"
 [[field]]
 name = "sprint"
 kind = "enum"
-values = ["s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10", "s11"]
+values = ["s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10", "s11", "s12"]
 column = true
 description = "Durability sprint; see ROADMAP.md"
 
@@ -137,15 +139,6 @@ description = "Subsystem this touches"
 name = "due"
 kind = "date"
 description = "when a milestone is meant to land"
-
-[[field]]
-name = "milestone"
-kind = "ref"
-target = "milestone"
-by = "key"
-rollup = true
-inverse = "scheduled"
-description = "what this ships in"
 
 # ─── Saved views ─────────────────────────────────────────────────────────────
 # `cairn list --view next`, `cairn board --view triage`

@@ -45,7 +45,7 @@ impl<'a> Ctx<'a> {
         // second mechanism for each.
         let mut contains: HashMap<u32, Vec<u32>> = HashMap::new();
         let mut above: HashMap<u32, Vec<u32>> = HashMap::new();
-        for def in cfg.ref_fields().filter(|f| f.rollup) {
+        for def in cfg.all_ref_fields().iter().filter(|f| f.rollup) {
             for item in items {
                 for parent in crate::refs::targets(items, item, def) {
                     contains.entry(parent.id).or_default().push(item.id);

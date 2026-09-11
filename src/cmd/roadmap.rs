@@ -41,7 +41,7 @@ pub fn run(args: Args) -> Result<i32> {
         .collect();
     let mut milestones: Vec<Option<&Item>> = ctx.milestones.iter().map(Some).collect();
     // A trailing pseudo-milestone for anything not scheduled yet.
-    if work.iter().any(|i| i.milestone().is_none()) {
+    if work.iter().any(|i| cfg.schedule_of(i).is_none()) {
         milestones.push(None);
     }
     if let Some(want) = &args.milestone {
@@ -65,12 +65,12 @@ pub fn run(args: Args) -> Result<i32> {
     // either a schema that has no milestones in it or a project that has not
     // written one yet, and those want different sentences.
     if milestones.is_empty() {
-        match cfg.field(crate::refs::MILESTONE_FIELD) {
+        match cfg.schedule_type() {
             None => println!(
                 "{}",
                 style::dim(
-                    "no [[field]] named `milestone`, so there is nothing to group a roadmap by.\n\
-                     cairn looks that name up literally — see \"Milestones\" in the manual."
+                    "no type declares `groups`, so there is nothing to group a roadmap by.\n\
+                     add `groups = \"one\"` to the type work is scheduled into."
                 )
             ),
             Some(_) => println!(
@@ -85,10 +85,10 @@ pub fn run(args: Args) -> Result<i32> {
         let members: Vec<&Item> = work
             .iter()
             .filter(|i| match m {
-                Some(ms) => i
-                    .milestone()
+                Some(ms) => cfg
+                    .schedule_of(i)
                     .is_some_and(|v| ms.key().is_some_and(|k| k.eq_ignore_ascii_case(v))),
-                None => i.milestone().is_none(),
+                None => cfg.schedule_of(i).is_none(),
             })
             .collect();
         let (done, total) = progress(&cfg, &members);

@@ -1273,29 +1273,18 @@ fn render_settings_that_cannot_work_are_reported() {
 /// `roadmap` printing the project name over silence.
 #[test]
 fn a_roadmap_with_nothing_to_group_by_says_so() {
-    let p = Project::new();
-    let cfg = p.read("cairn.toml").replace(
-        "[[field]]\nname = \"milestone\"",
-        "[[field]]\nname = \"release\"",
-    );
-    p.write("cairn.toml", &cfg);
+    // A schema where nothing declares `groups`: internally consistent, every
+    // reference resolving, and no roadmap to draw.
+    let p = Project::with(Schema::standard().amend_type("milestone", |t| t.groups_none()));
 
     let out = p.expect(&["roadmap"]).all();
-    assert_contains(
-        &out,
-        "no [[field]] named `milestone`",
-        "it says what is missing",
-    );
-    assert_contains(
-        &out,
-        "looks that name up literally",
-        "and that the name is the reason",
-    );
+    assert_contains(&out, "no type declares `groups`", "it says what is missing");
+    assert_contains(&out, "groups = \"one\"", "and what to write instead");
 
     // The same defect arriving by the other road.
     assert_contains(
         &p.expect(&["check"]).all(),
-        "render.group_by is `milestone`",
+        "no [[type]] declares `groups`",
         "`check` reports it too",
     );
 }
@@ -1421,7 +1410,7 @@ fn adopting_refuses_what_it_cannot_copy() {
     // A schema from an older format would be copied forward silently, and the
     // migration that does it properly already exists.
     let old = Project::new();
-    let cfg = old.read("cairn.toml").replace("format = 2", "format = 1");
+    let cfg = old.read("cairn.toml").replace("format = 3", "format = 1");
     old.write("cairn.toml", &cfg);
     let out = p.run(&["init", "--from", &old.root().display().to_string()]);
     assert!(!out.ok());
@@ -1445,4 +1434,166 @@ fn a_saved_view_using_an_alias_is_not_called_a_typo() {
         !out.contains("not a declared field"),
         "an alias `get` answers is a legitimate key: {out}"
     );
+}
+
+// --- types that group work --------------------------------------------------
+
+/// The whole point: one declaration, and the field it implies exists.
+#[test]
+fn declaring_that_a_type_groups_work_creates_its_field() {
+    let p = Project::with(
+        Schema::bare()
+            .item_type(ItemType::new("task"))
+            .item_type(ItemType::new("release").groups_one().inverse("scheduled"))
+            .item_type(ItemType::new("epic").groups_many().inverse("contains")),
+    );
+    p.expect(&["new", "First release", "-t", "release", "-q"]);
+    p.expect(&["set", "1", "key=v1"]);
+    p.expect(&["new", "Auth rework", "-t", "epic", "-q"]);
+    p.expect(&["set", "2", "key=auth"]);
+    p.expect(&["new", "Login page", "-t", "task", "-q"]);
+
+    // No `[[field]]` declares either of these.
+    p.expect(&["set", "3", "release=v1", "epic=auth"]);
+
+    let file = p.item_file("3");
+    assert_contains(&file, "release: v1", "single-valued, so a scalar");
+    assert_contains(&file, "epic:\n- auth", "many-valued, so a sequence");
+    assert!(p.run(&["check"]).ok(), "{}", p.run(&["check"]).all());
+}
+
+/// Grouping types are what work is filed under, so they are not work.
+#[test]
+fn a_grouping_type_is_absent_from_what_can_be_started() {
+    let p = Project::with(
+        Schema::bare()
+            .item_type(ItemType::new("task"))
+            .item_type(ItemType::new("release").groups_one()),
+    );
+    p.expect(&["new", "v1", "-t", "release", "-q"]);
+    p.expect(&["set", "1", "key=v1"]);
+    p.expect(&["new", "Real work", "-t", "task", "-q"]);
+
+    assert_eq!(
+        p.expect(&["next", "--ids"]).lines(),
+        vec!["0002".to_string()]
+    );
+    assert!(
+        !p.expect(&["board"]).stdout.contains("v1"),
+        "a container is a column heading, not a card"
+    );
+}
+
+/// The name is not the mechanism. A project may call it whatever it likes and
+/// everything keeps working, because cairn looks for the structural fact.
+#[test]
+fn the_schedule_type_need_not_be_called_milestone() {
+    let p = Project::with(
+        Schema::bare()
+            .item_type(ItemType::new("task"))
+            .item_type(ItemType::new("release").groups_one())
+            .render(|r| r.group_by("release")),
+    );
+    p.expect(&["new", "Version one", "-t", "release", "-q"]);
+    p.expect(&["set", "1", "key=v1"]);
+    p.expect(&["new", "Some work", "-t", "task", "-q"]);
+    p.expect(&["set", "2", "release=v1"]);
+
+    let out = p.expect(&["roadmap"]).stdout;
+    assert_contains(&out, "v1", "the roadmap found the schedule type");
+    assert_contains(&out, "0/1", "and counted what is filed under it");
+
+    assert_contains(
+        &p.expect(&["board", "--group-by", "release"]).stdout,
+        "v1",
+        "",
+    );
+    assert!(p.run(&["check"]).ok(), "{}", p.run(&["check"]).all());
+}
+
+/// `cairn config` used to show nothing about the most consequential fact in a
+/// schema.
+#[test]
+fn config_says_which_types_group_work() {
+    let p = Project::with(
+        Schema::bare()
+            .item_type(ItemType::new("task"))
+            .item_type(ItemType::new("release").groups_one())
+            .item_type(ItemType::new("epic").groups_many()),
+    );
+    let shown = p.expect(&["config"]).stdout;
+    assert_contains(&shown, "one per item", "the single-valued one says so");
+    assert_contains(&shown, "several per item", "and the many-valued one");
+
+    let json = p.json(&["config", "--json"]);
+    let types = json["types"].as_array().expect("types");
+    let release = types
+        .iter()
+        .find(|t| t["name"] == "release")
+        .expect("release");
+    assert_json(release, "groups", serde_json::json!("one"));
+    let task = types.iter().find(|t| t["name"] == "task").expect("task");
+    assert_json(task, "groups", serde_json::json!(null));
+}
+
+/// A general reference is still a `[[field]]`, and still points anywhere.
+#[test]
+fn a_general_reference_is_still_a_field() {
+    let p =
+        Project::with(Schema::standard().field(Field::reference("related", "*").by_id().many()));
+    seed(&p);
+    p.expect(&["set", "2", "related=1,3"]);
+    assert_contains(&p.item_file("2"), "- 1", "");
+    assert!(p.run(&["check"]).ok(), "{}", p.run(&["check"]).all());
+
+    // And pointing at nothing is still refused.
+    let out = p.fails(&["set", "2", "related=999"]);
+    assert_contains(&out.all(), "does not exist", "");
+}
+
+/// Format 3 moves the declaration and touches no item.
+#[test]
+fn migrating_to_format_three_changes_no_item_file() {
+    // Seeded at the current format, then the schema is rewritten to the way
+    // format 2 said it — because a format 2 project cannot be written to, which
+    // is the point of the version.
+    let p = Project::with(Schema::standard());
+    seed(&p);
+    p.set_schema(
+        Schema::standard()
+            .format(2)
+            .amend_type("milestone", |t| t.groups_none())
+            .field(
+                Field::reference("milestone", "milestone")
+                    .by_key()
+                    .rollup()
+                    .inverse("scheduled"),
+            ),
+    );
+    let before: Vec<String> = p
+        .files("cairn/items")
+        .iter()
+        .map(|f| p.read(&format!("cairn/items/{f}")))
+        .collect();
+
+    let out = p.expect(&["migrate"]).all();
+    assert_contains(&out, "groups work", "it says what it did");
+
+    let after: Vec<String> = p
+        .files("cairn/items")
+        .iter()
+        .map(|f| p.read(&format!("cairn/items/{f}")))
+        .collect();
+    assert_eq!(before, after, "an item file changed");
+
+    let cfg = p.read("cairn.toml");
+    assert_contains(&cfg, "groups = \"one\"", "the type says it now");
+    assert!(
+        !cfg.contains("target = \"milestone\""),
+        "the field that used to say it is gone:\n{cfg}"
+    );
+    assert!(p.run(&["check"]).ok(), "{}", p.run(&["check"]).all());
+
+    // And the roadmap still reads the same backlog.
+    assert_contains(&p.expect(&["roadmap"]).stdout, "v0.1", "");
 }

@@ -683,8 +683,8 @@ fn create_milestones(cfg: &Config, store: &Store, names: &[&String]) -> Result<(
         item.meta.key = Some((*name).clone());
         // Only when the project declares it: writing a type nobody declared
         // would make `check` reject the items this just created.
-        if cfg.item_type(crate::refs::MILESTONE_TYPE).is_some() {
-            item.meta.kind = Some(crate::refs::MILESTONE_TYPE.to_string());
+        if let Some(t) = cfg.schedule_type() {
+            item.meta.kind = Some(t.name.clone());
         }
         item.meta.status = Some(cfg.initial_status().to_string());
         item.meta.created = Some(today());

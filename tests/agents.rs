@@ -1114,7 +1114,7 @@ fn a_configuration_with_no_project_block_works() {
     let p = Project::empty();
     p.write(
         "cairn.toml",
-        "format = 2\n[[status]]\nname = \"todo\"\ncategory = \"open\"\n",
+        "format = 3\n[[status]]\nname = \"todo\"\ncategory = \"open\"\n",
     );
     std::fs::create_dir_all(p.path("cairn/items")).unwrap();
 
@@ -1546,7 +1546,7 @@ fn close_without_a_done_status_asks_for_one() {
     let p = Project::empty();
     p.write(
         "cairn.toml",
-        "format = 2\n[project]\nname = \"T\"\n\
+        "format = 3\n[project]\nname = \"T\"\n\
          [[status]]\nname = \"todo\"\ncategory = \"open\"\n\
          [[status]]\nname = \"doing\"\ncategory = \"active\"\n",
     );
@@ -1759,9 +1759,16 @@ fn migrating_adds_the_type_and_field_when_they_are_absent() {
         cfg.contains("name = \"milestone\""),
         "the type was not added:\n{cfg}"
     );
+    // Format 2 added a `[[field]]` to say the type groups work; format 3 says it
+    // on the type, and a project coming from 1 lands at 3 having never seen the
+    // intermediate shape.
     assert!(
-        cfg.contains("kind = \"ref\""),
-        "the field was not added:\n{cfg}"
+        cfg.contains("groups = \"one\""),
+        "the type does not declare that it groups:\n{cfg}"
+    );
+    assert!(
+        !cfg.contains("target = \"milestone\""),
+        "the field that used to say it survived:\n{cfg}"
     );
     assert!(
         cfg.contains("name = \"due\""),

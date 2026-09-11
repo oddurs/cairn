@@ -197,7 +197,7 @@ pub fn remove(args: RemoveArgs) -> Result<i32> {
     // declared reference. Only `depends_on` was repaired before, which was
     // right when it was the only relationship there was — and left a milestone
     // named by twenty items dangling the moment milestones became items.
-    let refs: Vec<&crate::config::FieldDef> = cfg.ref_fields().collect();
+    let refs = cfg.all_ref_fields();
     let names_doomed = |i: &Item| {
         i.meta.depends_on.iter().any(|d| doomed.contains(d))
             || refs.iter().any(|def| {
@@ -277,7 +277,7 @@ pub fn remove(args: RemoveArgs) -> Result<i32> {
         // fields, so clearing it is separate — the same arrangement
         // `depends_on` has.
         if let Some(m) = dep.meta.milestone.clone()
-            && let Some(def) = cfg.field(crate::refs::MILESTONE_FIELD)
+            && let Some(def) = refs.iter().find(|d| d.name == "milestone")
             && crate::refs::resolve(&all, def, &m).is_some_and(|f| doomed.contains(&f.id))
         {
             dep.meta.milestone = None;

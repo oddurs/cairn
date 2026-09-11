@@ -115,6 +115,22 @@ impl Config {
         self.fields.iter().filter(|f| f.kind == FieldKind::Ref)
     }
 
+    /// Every ref field: what the project declared, and what the schema implies.
+    ///
+    /// One accessor, because there used to be two and half the callers used the
+    /// one that meant *declared* — which is how `depends_on` escaped the rule
+    /// its own comment claimed it enforced. A project that redeclares a name
+    /// gets its own definition and not both.
+    pub fn all_ref_fields(&self) -> Vec<FieldDef> {
+        let mut out: Vec<FieldDef> = self.ref_fields().cloned().collect();
+        for f in self.builtin_ref_fields() {
+            if !out.iter().any(|x| x.name == f.name) {
+                out.push(f);
+            }
+        }
+        out
+    }
+
     /// `depends_on`, described the way every other ref is described.
     ///
     /// Synthesised rather than stored: the key is documented in the
@@ -122,8 +138,15 @@ impl Config {
     /// declares. What matters is that a reader of the schema — a person or a
     /// model — meets one vocabulary rather than a general mechanism plus one
     /// special case that predates it.
+    /// The ref fields cairn provides without being asked.
+    ///
+    /// `depends_on`, which is universal, plus one per grouping type — a type
+    /// that declares `groups` gets a field of its own name, and that field is
+    /// entirely implied: addressed by the target's key, rolling up progress,
+    /// refusing a cycle. There is nothing to declare and so nothing to get
+    /// wrong.
     pub fn builtin_ref_fields(&self) -> Vec<FieldDef> {
-        vec![FieldDef {
+        let mut out = vec![FieldDef {
             name: "depends_on".into(),
             kind: FieldKind::Ref,
             target: Some("*".into()),
@@ -138,7 +161,74 @@ impl Config {
             description: Some("what this item is waiting on".into()),
             column: false,
             agent: crate::config::Agent::Write,
-        }]
+        }];
+        out.extend(self.grouping_types().map(|t| {
+            FieldDef {
+                name: t.name.clone(),
+                kind: FieldKind::Ref,
+                target: Some(t.name.clone()),
+                cardinality: match t.groups {
+                    Some(crate::config::Groups::Many) => Cardinality::Many,
+                    _ => Cardinality::One,
+                },
+                by: Addressing::Key,
+                acyclic: true,
+                rollup: true,
+                inverse: t.inverse.clone(),
+                values: Vec::new(),
+                required: false,
+                default: None,
+                description: t
+                    .description
+                    .clone()
+                    .or_else(|| Some(format!("what this is part of, by `{}` key", t.name))),
+                column: false,
+                agent: crate::config::Agent::Write,
+            }
+        }));
+        out
+    }
+
+    /// Types that work is filed under rather than types of work.
+    pub fn grouping_types(&self) -> impl Iterator<Item = &crate::config::ItemType> {
+        self.types.iter().filter(|t| t.groups.is_some())
+    }
+
+    /// What an item is scheduled into, whatever the schedule type is called.
+    ///
+    /// `Item::milestone()` reads the typed `milestone` key and nothing else,
+    /// which is right for a project that uses that word and blind to one that
+    /// does not. This asks the schema which type work is scheduled into and
+    /// reads the field of that name.
+    pub fn schedule_of<'a>(&self, item: &'a Item) -> Option<&'a str> {
+        match self.schedule_type() {
+            Some(t) => match item.get(&t.name) {
+                crate::item::Field::Text(_) | crate::item::Field::List(_) => {
+                    // `get` returns owned values; the typed key is the common
+                    // case and borrows, so prefer it when the names agree.
+                    if t.name == MILESTONE_FIELD {
+                        item.milestone()
+                    } else {
+                        item.meta
+                            .extra
+                            .get(serde_yaml_ng::Value::String(t.name.clone()))
+                            .and_then(|v| v.as_str())
+                    }
+                }
+                _ => None,
+            },
+            None => item.milestone(),
+        }
+    }
+
+    /// The one type work is scheduled into: the single-valued grouping type.
+    ///
+    /// This is what a roadmap is drawn from. Not the word `milestone` — a
+    /// project may call it `release` and everything keeps working, because what
+    /// cairn looks for is the structural fact rather than the name.
+    pub fn schedule_type(&self) -> Option<&crate::config::ItemType> {
+        self.grouping_types()
+            .find(|t| t.groups == Some(crate::config::Groups::One))
     }
 
     /// Whether items of this type are containers — the thing work belongs to
@@ -149,8 +239,13 @@ impl Config {
     /// container, which is why `depends_on` does not empty `cairn next`.
     pub fn is_container(&self, kind: Option<&str>) -> bool {
         let Some(kind) = kind else { return false };
-        self.ref_fields()
-            .any(|f| f.target.as_deref().is_some_and(|t| t != "*" && t == kind))
+        self.item_type(kind).is_some_and(|t| t.groups.is_some())
+            // A project still on format 2 says it the old way: a type is a
+            // container because a ref field names it. Read both until the
+            // migration has run.
+            || self
+                .ref_fields()
+                .any(|f| f.target.as_deref().is_some_and(|t| t != "*" && t == kind))
     }
 }
 
@@ -174,25 +269,8 @@ pub fn validate_on_write(cfg: &Config, store: &crate::store::Store, item: &Item)
         None => items.push(item.clone()),
     }
 
-    // The built-ins as well as the declared fields. This iterated
-    // `cfg.ref_fields()` alone, which is the *declared* ones — so the comment
-    // above claiming the rule "already applied to `depends_on`" was false, and
-    // `set 1 depends_on=999` was accepted for `check` to complain about later.
-    let builtin = cfg.builtin_ref_fields();
-    let declared: Vec<&FieldDef> = cfg.ref_fields().collect();
-    let every = declared
-        .into_iter()
-        .chain(builtin.iter())
-        // A project that redeclares `depends_on` gets its own definition, not
-        // both.
-        .fold(Vec::new(), |mut acc: Vec<&FieldDef>, f| {
-            if !acc.iter().any(|x| x.name == f.name) {
-                acc.push(f);
-            }
-            acc
-        });
-
-    for def in every {
+    for def in cfg.all_ref_fields() {
+        let def = &def;
         for value in values(item, def) {
             if resolve(&items, def, &value).is_none() {
                 let known = permitted(&items, cfg, def);
@@ -270,8 +348,9 @@ pub fn rename_key(
     old: &str,
     new: &str,
 ) -> Result<Vec<u32>> {
-    let fields: Vec<&FieldDef> = cfg
-        .ref_fields()
+    let every = cfg.all_ref_fields();
+    let fields: Vec<&FieldDef> = every
+        .iter()
         .filter(|f| f.by == Addressing::Key)
         .filter(|f| match f.target.as_deref() {
             None | Some("*") => true,
@@ -329,7 +408,8 @@ pub fn rename_key(
 /// a taxonomy where a plan was wanted, and that is a judgement cairn is
 /// entitled to voice without enforcing.
 pub fn depth(items: &[Item], cfg: &Config, item: &Item) -> usize {
-    let composing: Vec<&FieldDef> = cfg.ref_fields().filter(|f| f.rollup).collect();
+    let all = cfg.all_ref_fields();
+    let composing: Vec<&FieldDef> = all.iter().filter(|f| f.rollup).collect();
     if composing.is_empty() {
         return 0;
     }
@@ -468,12 +548,25 @@ impl Milestones {
             };
         }
 
-        let Some(def) = cfg.field(MILESTONE_FIELD) else {
+        // The type work is *scheduled into*, whatever the project calls it —
+        // not a field named `milestone`. A project may call it `release` and
+        // everything here keeps working, because what is being looked for is
+        // the structural fact rather than the word.
+        let Some(target) = cfg
+            .schedule_type()
+            .map(|t| t.name.clone())
+            // A project still on format 2 says it with a ref field.
+            .or_else(|| {
+                cfg.field(MILESTONE_FIELD)
+                    .and_then(|d| d.target.clone())
+                    .or_else(|| cfg.field(MILESTONE_FIELD).map(|_| MILESTONE_TYPE.into()))
+            })
+        else {
             return Milestones {
                 ordered: Vec::new(),
             };
         };
-        let target = def.target.as_deref().unwrap_or(MILESTONE_TYPE);
+        let target = target.as_str();
         let mut found: Vec<Item> = items
             .iter()
             .filter(|i| i.kind() == Some(target))

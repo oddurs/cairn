@@ -131,8 +131,7 @@ pub fn run(args: Args) -> Result<i32> {
     // An adopted schema need not have milestones in it at all, and writing
     // items of a type it does not declare would hand somebody a new project
     // that fails its own `cairn check`.
-    let has_milestones = cfg.item_type(crate::refs::MILESTONE_TYPE).is_some()
-        && cfg.field(crate::refs::MILESTONE_FIELD).is_some();
+    let has_milestones = cfg.schedule_type().is_some();
     if !args.bare && has_milestones {
         for (n, (key, title, due, why)) in [
             (
@@ -257,7 +256,7 @@ const STANDARD: &str = r####"# cairn.toml — the schema for this project's road
 
 # On-disk format version. cairn refuses to open a project written in a format it
 # does not know, rather than misreading it. See "Compatibility" in the manual.
-format = 2
+format = 3
 
 [project]
 name = "{{name}}"
@@ -360,18 +359,17 @@ board = false             # hide this column on `cairn board`
 # added afterwards: `cairn set 12 part_of=7`.
 [[type]]
 name = "milestone"
-description = "a release, or whatever this project ships"
-
-# A milestone is an item, so `milestone: v0.1` names one by its key. The key is
-# a handle rather than an identity: `id` is still the number.
-[[field]]
-name = "milestone"
-kind = "ref"
-target = "milestone"
-by = "key"
-rollup = true
+# `groups` is what makes a type the thing work is filed *under* rather than work
+# itself: absent from `cairn next`, absent from the board, and accumulating the
+# progress of everything filed under it. Declaring it also creates the field, so
+# `milestone: v0.1` names one by its key — a handle, not an identity, since `id`
+# is still the number.
+#
+# `one` because work ships in exactly one release. A type that groups work
+# several ways at once — an epic, a theme — says `many`.
+groups = "one"
 inverse = "scheduled"
-description = "what this ships in"
+description = "a release, or whatever this project ships"
 
 [[field]]
 name = "due"
@@ -483,7 +481,7 @@ const MINIMAL: &str = r####"# cairn.toml — roadmap and issue schema.
 # Start here and add types, fields, milestones and views as you need them.
 # See `cairn init --preset standard` for a fully commented example.
 
-format = 2
+format = 3
 
 [project]
 name = "{{name}}"
@@ -505,16 +503,11 @@ name = "done"
 category = "done"
 color = "green"
 
-# A milestone is an item, and `milestone: v0.1` names one by its key.
+# `groups` makes this the thing work is filed under, and creates the field that
+# names one: `milestone: v0.1`.
 [[type]]
 name = "milestone"
-
-[[field]]
-name = "milestone"
-kind = "ref"
-target = "milestone"
-by = "key"
-rollup = true
+groups = "one"
 
 [[field]]
 name = "due"
@@ -552,7 +545,11 @@ fn write_milestone(
     };
     item.meta.title = Some(title.to_string());
     item.meta.key = Some(key.to_string());
-    item.meta.kind = Some(crate::refs::MILESTONE_TYPE.to_string());
+    item.meta.kind = Some(
+        cfg.schedule_type()
+            .map(|t| t.name.clone())
+            .unwrap_or_else(|| "milestone".into()),
+    );
     item.meta.status = Some(cfg.initial_status().to_string());
     item.meta.created = Some(crate::store::today());
     if id > 1 {

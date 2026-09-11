@@ -2,12 +2,12 @@
 id: 89
 title: Decide whether a field name is a promise or a default
 type: docs
-status: doing
+status: done
 milestone: v1.0
 depends_on:
 - 88
 created: 2026-09-07
-updated: 2026-09-07
+updated: 2026-09-11
 priority: p2
 effort: m
 sprint: s9
@@ -86,7 +86,7 @@ enough that its people keep having to translate.
 - [x] The decision is recorded either way, with the argument on both sides
 - [x] If no: the condition that would reverse it is named
 - [x] It is stated that adding roles later is free, so waiting costs nothing
-- [ ] Somebody other than the author reads it before it is settled
+- [x] Somebody other than the author reads it before it is settled
 
 ## 2026-09-07
 
@@ -95,3 +95,7 @@ Settled as recommended: not now, not never. The manual has it as 'Roles: a decis
 ## 2026-09-07
 
 Live evidence, filed as 0094: renaming the milestone field to anything else leaves the schema internally consistent, `cairn check` clean, and `cairn roadmap` printing the project name and nothing. `milestone` is looked up by literal string in refs, list, show, import and init, and it is the default `render.group_by`. That does not overturn the recommendation — a role mechanism is still additive and still not worth building — but it means the tool currently pretends the name is free when it is not, and 0094 is where that gets said out loud.
+
+## 2026-09-11
+
+Closed by 0113 and 0114, which dissolved the question rather than answering it. The reversing condition was a project whose word is wrong enough that its people keep translating. What happened instead is that the reason the word was load-bearing went away: container-ness is declared on the type, so the roadmap groups by the type that groups rather than by a field called `milestone`, and a project may call it `release` with no mechanism and no cost to anybody who keeps the default. The general question — should every documented key be renameable — stays answered no. `status`, `assignee` and `depends_on` are genuinely universal; the name of the thing work is filed under never was.
