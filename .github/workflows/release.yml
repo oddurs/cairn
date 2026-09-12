@@ -19,7 +19,30 @@ permissions:
   attestations: write
 
 jobs:
+  # Nothing is built until the tag, Cargo.toml, NEWS and Cargo.lock agree.
+  #
+  # These were checkboxes in RELEASING.md, and the first of them is the one the
+  # whole document exists for: the binaries are named from the tag and the
+  # source tarball from Cargo.toml, so a tag that disagrees ships one release
+  # holding two version numbers, with a binary whose --version contradicts the
+  # file it arrived in. `make release-check` is the same check a person runs
+  # before tagging, so there is one implementation and not two.
+  preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Refuse anything that is not a release tag
+        if: github.ref_type != 'tag'
+        run: |
+          echo "This workflow releases a tag. Dispatched on a branch it would" >&2
+          echo "name every artefact after the branch and publish a release for" >&2
+          echo "it. Re-run it with a tag selected as the ref." >&2
+          exit 1
+      - run: make release-check TAG=${{ github.ref_name }}
+
   build:
+    needs: preflight
     name: ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -96,6 +119,7 @@ jobs:
     # release without depending on the forge staying up. `git archive` is
     # deterministic, so `make dist` on your own machine produces these same
     # bytes — which is the only version of that claim worth making.
+    needs: preflight
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -161,13 +185,24 @@ jobs:
           done
           gpg --list-keys --with-colons | awk -F: '/^fpr:/ {print $10; exit}'
 
+      # The release body is what somebody deciding whether to upgrade reads, and
+      # NEWS is where this project writes that down in terms of what a user
+      # would notice. A generated list of commit subjects is not that, so it is
+      # kept underneath rather than instead.
+      - name: Release notes, from NEWS
+        run: make release-notes > NOTES.md && cat NOTES.md
+
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/*
+          body_path: NOTES.md
           generate_release_notes: true
 
   crate:
-    needs: build
+    # After the GitHub release, not beside it. crates.io cannot be unpublished,
+    # so it is the last thing that should happen and the first thing that would
+    # be irreversible if the release turned out wrong.
+    needs: [build, source, publish]
     runs-on: ubuntu-latest
     # Skipped silently when the token is absent, so forks can tag without failing.
     if: startsWith(github.ref, 'refs/tags/v')

@@ -114,6 +114,32 @@ jobs:
         with:
           command: check
 
+  packaging:
+    # What `cargo publish` will make of this, checked continuously rather than
+    # at tag time. Packaging failures — a file the manifest excludes that the
+    # build needs, a crate over the size limit, a path dependency — are
+    # invisible to `cargo build` and surface only on publish, which in this
+    # workflow happens after the binaries are already out. Better here.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo publish --dry-run --locked
+      # The tarball a packager gets has to be buildable on its own. `git
+      # archive` is a different file list from `cargo package`, and nothing was
+      # checking that one of them still compiles.
+      - run: make dist
+      - name: Build the source tarball the way a packager would
+        run: |
+          set -eu
+          f=$(ls cairn-*.tar.gz)
+          mkdir -p /tmp/from-tarball
+          tar xzf "$f" -C /tmp/from-tarball
+          cd /tmp/from-tarball/cairn-*/
+          cargo build --release --locked
+          ./target/release/cairn --version
+
   site:
     # The site restates nothing — it renders the specification and the recorded
     # demo from the repository — so a change to either can break it. This

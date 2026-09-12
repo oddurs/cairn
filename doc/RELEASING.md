@@ -13,12 +13,30 @@ make conformance      # the second reader against the golden corpus
 make dist             # the source tarball, built the way CI will build it
 ```
 
-Then, by hand:
+Then the checks that used to be checkboxes here:
 
-- [ ] `NEWS` has a section for this version, and it describes what a *user*
-      would notice rather than what changed in the code.
-- [ ] The version in `Cargo.toml` matches the tag you are about to make.
-- [ ] `cairn --version` prints it, and the copyright year is current.
+```sh
+make release-check TAG=v0.2.1
+```
+
+That refuses the tag unless it matches `Cargo.toml`, `NEWS` has a dated section
+for that version, `Cargo.lock` is in step, and the working tree is clean. The
+release workflow runs the same target before it builds anything, so a tag that
+would have produced a broken release never gets that far — but running it
+yourself first means finding out in a second rather than after pushing a tag you
+cannot move.
+
+The first of those checks is the one this document exists for. Binaries are
+named from the tag and the source tarball from `Cargo.toml`, so a tag that
+disagrees ships one release holding two version numbers, with a binary whose
+`--version` contradicts the file it arrived in.
+
+What is left is judgement, and stays by hand:
+
+- [ ] `NEWS` describes what a *user* would notice rather than what changed in
+      the code. That it exists and is dated is checked; that it is worth reading
+      is not.
+- [ ] The copyright year is current.
 - [ ] `AUTHORS` includes everyone who contributed since the last release.
 - [ ] If anything the README demo shows has changed, `make demo` was re-run and
       the SVG committed. CI checks this, so a surprise here means CI has not run.
@@ -34,11 +52,19 @@ git tag -s v0.1.0 -m 'cairn 0.1.0'      # -s once there is a signing key
 git push origin v0.1.0
 ```
 
-That is the whole of it. The release workflow builds a binary for every
+That is the whole of it. The release workflow runs `make release-check` first
+and stops there if anything disagrees; then it builds a binary for every
 supported platform, builds the source tarball, attests build provenance, signs
 everything if `GPG_PRIVATE_KEY` is set, and publishes to crates.io if
 `CARGO_REGISTRY_TOKEN` is set. Both are skipped silently when absent, so a fork
 can tag without the workflow failing.
+
+The release body is the `NEWS` section for that version, with GitHub's generated
+commit list underneath it. crates.io is published last, after the GitHub release
+has succeeded, because it is the step that cannot be undone.
+
+Dispatching the workflow by hand on a *branch* is refused. It would name every
+artefact after the branch and publish a release for it.
 
 ## After the release
 
@@ -66,6 +92,14 @@ that was fixed months ago.
 None of these is done yet, and `0053` tracks them. They are listed here now
 because the checklist is the thing that stops the list existing only in
 somebody's memory.
+
+## What CI already proved
+
+Before the tag, on every push to `main`, CI has already run `cargo publish
+--dry-run` and built the source tarball from scratch in a clean directory,
+including running `cairn --version` from it. Those are the two failures that
+used to be discoverable only at tag time, after the binaries were out: the crate
+not packaging, and the tarball a packager receives not compiling on its own.
 
 ## If a release goes wrong
 
