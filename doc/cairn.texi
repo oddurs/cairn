@@ -1177,19 +1177,34 @@ table and to the tags in the rendered roadmap.
 
 @section milestone
 
+@cindex milestone, as an item
+There is no @code{[[milestone]]} block. A milestone is an item, declared by
+saying that its type groups work:
+
 @example
-[[milestone]]
-name = "v0.1"
-title = "Usable in anger"
-due = "2026-10-15"
-description = "Enough to run a real project."
-status = "planned"
+[[type]]
+name = "milestone"
+groups = "one"
+inverse = "scheduled"
 @end example
 
-Milestones are sections of the rendered roadmap, ordered by @code{due}; those
-without a date come last. They are edited from the command line with
-@command{cairn milestone}, which rewrites @file{cairn.toml} while preserving
-comments and formatting.
+@noindent
+and created like any other item, which gives it a key from its title:
+
+@example
+cairn new "Usable in anger" -t milestone --set key=v0.1 --set due=2026-10-15
+cairn list -t milestone
+@end example
+
+Milestones are still the sections of the rendered roadmap, ordered by
+@code{due}, those without a date last. What changed is that they are items ---
+so one has a body, a history, dependencies on other milestones, and everything
+else an item has. The mechanism is described under ``Types that group work'',
+and what the implied field does under @ref{Fields that name items}.
+
+@code{[[milestone]]} blocks were format 1. They are no longer read, and a
+project that still has one is told so by name rather than having it ignored;
+@command{cairn migrate} converts them.
 
 @section view
 
@@ -1976,6 +1991,37 @@ a workstream. Work ships in exactly one release and may serve several efforts,
 and that difference is a fact about the type rather than a second kind of
 relationship.
 
+@subsection The key comes from the title
+
+@cindex key, derived
+The field is addressed by @code{key}, so an item of a grouping type with no key
+is a heading nothing can be filed under. @command{cairn new} therefore gives one
+a key derived from its title:
+
+@example
+cairn new "v1.0" -t milestone     # key: v1.0
+cairn new "Usable in anger" -t milestone
+                                  # key: usable-in-anger
+@end example
+
+@noindent
+Deliberately not the filename slug. A filename may lose whatever punctuation it
+likes because nobody types it; a key is exactly what somebody types, so
+@code{v1.0} has to survive the trip from the title.
+
+Two titles cannot become a key, and both are refused rather than quietly
+skipped, since an item of a grouping type without one is useless. A title that
+reads as an identifier --- @code{0042} --- would make a reference to it
+ambiguous. A title yielding a key another item of that type already answers to
+would make two items answer to one name. In either case pass @option{--set
+key=@dots{}}.
+
+@command{cairn check} reports an item of a grouping type carrying no key, which
+is how one that predates this, or that arrived through @command{cairn import},
+gets found. Until it did, the only symptom was every attempt to file work under
+it failing --- and the message said the milestone did not exist, which was the
+opposite of what was wrong.
+
 @subsection Why it is on the type
 
 @cindex format 3
@@ -2426,8 +2472,14 @@ An item's body may state how you will know it is finished:
 - [ ] Works in a shallow clone, and says what it could not see
 @end example
 
-cairn reads those boxes. It does not write them --- ticking one is a judgement,
-and a judgement belongs to a person or to whatever is answering for the work.
+cairn reads those boxes, and writes one when you say so. Ticking a criterion is
+a judgement, and the judgement stays with the person or the agent answering for
+the work --- but recording it is clerical, and for a while cairn offered no way
+to do the clerical part. @command{set} takes fields, @command{note} appends to
+the body, @command{edit} wants a terminal. So the most-touched part of an item
+in a working loop was the one part with no command, and what people did instead
+was rewrite the Markdown from outside cairn. One of them truncated an item to
+zero bytes doing it.
 
 @section What reads them
 
@@ -2440,6 +2492,8 @@ to tick boxes rather than to say what is true.
 
 @item @command{cairn show}
 Reports the count, and marks it when every box is ticked.
+@option{--criteria} prints them in full, numbered the way @command{cairn tick}
+numbers them; with @option{--json} the same list comes out machine-readable.
 
 @item Filters
 @code{criteria}, @code{criteria_done} and @code{criteria_met} are derived from
@@ -2457,6 +2511,39 @@ is always against a literal.
 @code{close_item} reports what remains, so an agent closing something is told
 what it said done would mean. Again without refusing --- the agent may be right
 and the criteria stale.
+@end table
+
+@section What writes them
+
+@cindex ticking criteria
+@table @asis
+@item @command{cairn tick}, @command{cairn untick}
+@example
+cairn show 12 --criteria    # 2 of 5 ticked
+cairn tick 12 3             # the third
+cairn tick 12 1 2 5
+cairn tick 12 --all
+cairn untick 12 3
+@end example
+
+The numbers count from 1 and are the ones @command{cairn show --criteria}
+prints; both sides read one parser, so they cannot come to disagree about
+whether an indented box is a criterion.
+
+Only the box is rewritten. Indentation, any brackets inside the text, and
+trailing notes all survive, because the criterion is the sentence that says what
+done means and moving it is the failure the command exists to prevent.
+
+Naming a criterion that is not there refuses the whole command rather than
+applying the numbers that were valid. Ticking what is already ticked is not an
+error and writes nothing at all: that is what a retried script does, and a tool
+that failed there would make the retry the dangerous path.
+
+@item The Model Context Protocol server
+@code{tick_criteria} takes the same numbers @code{show_item} reports, for the
+same reason: an agent has no editor to fall back on, and without this the only
+way for one to record a criterion as met was to rewrite the body --- the one
+operation in the protocol that can destroy an item.
 @end table
 
 @section What is not a criterion
@@ -2503,7 +2590,14 @@ require_criteria = true
 
 @noindent
 Then @command{cairn check} warns about a closed item whose criteria are
-unticked, and @option{--strict} makes that fail.
+unticked, @option{--strict} makes that fail, and @command{cairn close} refuses
+to close one in the first place --- as does the MCP @code{close_item} tool.
+
+That refusal is the exception to the rule stated above, and it is not a
+contradiction of it. The default never blocks, because a criterion can stop
+applying. A project that writes @code{require_criteria} has already decided it
+wants the gate, and getting it only from @command{cairn check} means getting it
+after the commit that closed the item.
 
 It is off by default, and the reason is worth stating rather than assuming. An
 unticked box is not a schema violation the way an undefined status is; it is a
@@ -3012,9 +3106,43 @@ edit} and the MCP @code{update_item} tool are for; a command whose purpose is to
 add to the record should not be able to erase it. @option{--bare} omits the
 heading, and @option{--stdin} reads a note longer than a line.
 
+@section cairn tick, cairn untick
+@cindex ticking criteria
+Tick or untick the acceptance criteria an item states, by the numbers
+@command{cairn show --criteria} prints.
+
+@example
+cairn show 12 --criteria
+cairn tick 12 3
+cairn tick 12 --all
+cairn untick 12 3
+@end example
+
+@xref{Acceptance criteria}, for what counts as one, where they may live, and
+what else reads them.
+
+@section cairn propose, cairn proposals
+@cindex propose
+Ask for a change you are not permitted to make, and list what is waiting for a
+person to decide.
+
+@example
+cairn propose 12 priority=p0 --why "blocks the release"
+cairn proposals
+@end example
+
+@noindent
+Nothing queues, nothing blocks and nothing notifies: a proposal is a note
+somebody can find, and accepting one is an ordinary write with a record of where
+it came from. It is the other end of the permission that refuses an agent's
+write, which is why the refusal names this command.
+@xref{Agents and ownership}.
+
 @section cairn close, cairn reopen
 Move items to the first @code{done} status, or back to the default open
-status. @option{--status} overrides the target.
+status. @option{--status} overrides the target. Where a project sets
+@code{require_criteria}, closing an item with unticked criteria is refused;
+@pxref{Acceptance criteria}.
 
 @section cairn log
 @cindex history
@@ -3144,6 +3272,13 @@ exception is a filter that does not parse, which cannot be what anybody meant.
 
 @section cairn renumber
 Repairs duplicate ids. @xref{Identifiers}.
+
+@section cairn migrate
+Brings a project to the current on-disk format, rewriting @file{cairn.toml}.
+@option{--dry-run} reports what would change and writes nothing;
+@option{--check} exits non-zero if the project is not already current, which is
+what a continuous integration job runs. The migration to format 3 does not touch
+item files. @xref{Compatibility}.
 
 @section cairn config
 Prints the resolved schema, @option{--json} for machine use, @option{--path}

@@ -478,7 +478,7 @@ fn every_tool_accepts_what_its_schema_advertises() {
     let tools = replies[0]["result"]["tools"].as_array().expect("tools");
     assert_eq!(
         tools.len(),
-        13,
+        14,
         "a tool was added or removed without a test"
     );
 

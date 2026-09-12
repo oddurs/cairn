@@ -79,6 +79,38 @@ pub fn permitted(items: &[Item], cfg: &Config, def: &FieldDef) -> Vec<String> {
     out
 }
 
+/// Why a reference resolved to nothing, said in terms of what is actually
+/// wrong.
+///
+/// `nothing to name yet` is true only when there is nothing of the target type
+/// at all. A key-addressed field pointing at a type whose items exist but carry
+/// no key fails for the opposite reason — they are there and cannot be named —
+/// and saying the first sent people looking for a missing item for as long as
+/// `cairn new` could create a keyless milestone.
+pub fn unresolved(items: &[Item], cfg: &Config, def: &FieldDef) -> String {
+    let known = permitted(items, cfg, def);
+    if !known.is_empty() {
+        return format!("known: {}", known.join(", "));
+    }
+    let of_target = |i: &&Item| match def.target.as_deref() {
+        None | Some("*") => true,
+        Some(t) => i.kind() == Some(t),
+    };
+    let keyless: Vec<&Item> = items.iter().filter(of_target).collect();
+    match (def.by, keyless.first()) {
+        (Addressing::Key, Some(first)) => format!(
+            "{} {}{} exist{}, but none carries a `key`, which is what this \
+             field names one by — `cairn set {} key=...`",
+            keyless.len(),
+            def.target.as_deref().unwrap_or("item"),
+            if keyless.len() == 1 { "" } else { "s" },
+            if keyless.len() == 1 { "s" } else { "" },
+            cfg.format_id(first.id)
+        ),
+        _ => "nothing to name yet".to_string(),
+    }
+}
+
 /// Whether adding `value` to `item`'s ref field would close a cycle.
 ///
 /// An item cannot be part of itself, directly or at any remove. This is the
@@ -273,15 +305,10 @@ pub fn validate_on_write(cfg: &Config, store: &crate::store::Store, item: &Item)
         let def = &def;
         for value in values(item, def) {
             if resolve(&items, def, &value).is_none() {
-                let known = permitted(&items, cfg, def);
                 bail!(
                     "`{}` names `{value}`, which does not exist\n{}",
                     def.name,
-                    if known.is_empty() {
-                        "nothing to name yet".to_string()
-                    } else {
-                        format!("known: {}", known.join(", "))
-                    }
+                    unresolved(&items, cfg, def)
                 );
             }
             if def.acyclic && would_cycle(&items, def, item.id, &value) {

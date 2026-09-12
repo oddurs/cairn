@@ -697,6 +697,273 @@ fn closing_over_mcp_reports_unticked_criteria_without_refusing() {
         "and is not refused"
     );
 }
+
+// --- ticking them -----------------------------------------------------------
+
+/// The criteria are the most-touched part of an item in a working loop, and
+/// were the one thing with no command: `set` takes fields, `note` appends,
+/// `edit` wants a terminal. What people did instead was rewrite the Markdown
+/// from outside cairn, which is how an item gets truncated to zero bytes.
+#[test]
+fn criteria_can_be_ticked_by_number() {
+    let p = Project::new();
+    let id = with_criteria(&p, "Three of them", 0, 3);
+
+    p.expect(&["tick", &id, "1", "3"]);
+    let listed = p.expect(&["show", &id, "--criteria"]).stdout;
+    assert_contains(&listed, "[x] todo 0", "the first");
+    assert_contains(&listed, "[ ] todo 1", "not the second");
+    assert_contains(&listed, "[x] todo 2", "the third");
+    assert_contains(&listed, "2 of 3 ticked", "and the count agrees");
+
+    // The numbers `show --criteria` prints are the numbers `tick` takes; both
+    // read one parser, because there is no version of this where they may
+    // disagree.
+    let json = p.json(&["show", &id, "--criteria", "--json"]);
+    assert_json(&json, "done", serde_json::json!(2));
+    assert_json(&json, "items.1.n", serde_json::json!(2));
+    assert_json(&json, "items.1.ticked", serde_json::json!(false));
+    assert_json(&json, "items.1.text", serde_json::json!("todo 1"));
+
+    p.expect(&["untick", &id, "1"]);
+    assert_contains(
+        &p.expect(&["show", &id, "--criteria"]).stdout,
+        "1 of 3 ticked",
+        "untick is the inverse",
+    );
+
+    p.expect(&["tick", &id, "--all"]);
+    assert_contains(
+        &p.expect(&["show", &id]).stdout,
+        "3/3",
+        "and --all reaches every one",
+    );
+}
+
+/// Nothing else on the line may move. The criteria carry the sentence that says
+/// what done means, and rewriting it is the failure this command exists to
+/// prevent.
+#[test]
+fn ticking_changes_the_box_and_nothing_else() {
+    let p = Project::new();
+    let id = set_body(
+        &p,
+        "Careful",
+        "\n## Acceptance criteria\n\n  - [ ] Indented, with a [bracket] and trailing spaces  \n\
+         - [ ] Plain\n\nA closing paragraph.\n",
+    );
+    let before = p.read(&p.expect(&["show", &id, "--path"]).trimmed());
+    p.expect(&["tick", &id, "1"]);
+    let after = p.read(&p.expect(&["show", &id, "--path"]).trimmed());
+
+    assert_contains(
+        &after,
+        "  - [x] Indented, with a [bracket] and trailing spaces  ",
+        "indentation, the inner bracket and the trailing spaces all survive",
+    );
+    assert_contains(&after, "A closing paragraph.", "and the rest of the body");
+    assert_eq!(
+        before.lines().count(),
+        after.lines().count(),
+        "no line was added or lost"
+    );
+}
+
+/// A retried script ticks what it ticked. Failing there would make the retry the
+/// dangerous path, so it is a no-op — and `updated` must not move either, or
+/// every retry would be a diff.
+#[test]
+fn ticking_what_is_already_ticked_writes_nothing() {
+    let p = Project::new();
+    let id = with_criteria(&p, "Half", 1, 1);
+    let before = p.item_file(&id);
+
+    let out = p.expect(&["tick", &id, "1"]);
+    assert_contains(&out.all(), "already", "it says so");
+    assert_eq!(before, p.item_file(&id), "and the file is byte-identical");
+}
+
+/// Resolved before anything is written, so a command naming one criterion that
+/// is not there changes none of the ones that are.
+#[test]
+fn a_criterion_that_is_not_there_is_refused_whole() {
+    let p = Project::new();
+    let id = with_criteria(&p, "Two", 0, 2);
+
+    let out = p.fails(&["tick", &id, "1", "9"]);
+    assert_contains(&out.all(), "states 2 acceptance criteria", "says how many");
+    assert_contains(&out.all(), "--criteria", "and where to look");
+    assert_contains(
+        &p.expect(&["show", &id, "--criteria"]).stdout,
+        "0 of 2 ticked",
+        "the one that was there did not move either",
+    );
+
+    // They count from 1, which is worth saying to whoever assumed otherwise.
+    assert_contains(&p.fails(&["tick", &id, "0"]).all(), "count from 1", "");
+
+    let none = p
+        .expect(&["new", "No criteria", "--body", "Prose.", "-q"])
+        .trimmed();
+    assert_contains(
+        &p.fails(&["tick", &none, "--all"]).all(),
+        "states no acceptance criteria",
+        "",
+    );
+}
+
+/// Naming the same criterion twice is what a generated command line does. It
+/// is one criterion, ticked once, not an error.
+#[test]
+fn the_same_criterion_named_twice_is_ticked_once() {
+    let p = Project::new();
+    let id = with_criteria(&p, "Two", 0, 2);
+    p.expect(&["tick", &id, "1", "1"]);
+    assert_contains(
+        &p.expect(&["show", &id, "--criteria"]).stdout,
+        "1 of 2 ticked",
+        "",
+    );
+}
+
+/// The rendered roadmap counts criteria, so a tick that did not fire the hook
+/// would leave the roadmap disagreeing with the items it is rendered from.
+#[test]
+fn ticking_runs_the_after_change_hook() {
+    let p = Project::new();
+    p.set_hooks("after-change = \"cairn render -q\"");
+    let id = with_criteria(&p, "Rendered", 0, 1);
+    p.remove("ROADMAP.md");
+    p.expect(&["tick", &id, "--all"]);
+    assert!(p.exists("ROADMAP.md"), "the hook did not run");
+}
+
+/// `criteria_section` decides which boxes are criteria, and every one of these
+/// has to agree about it or the numbering means two different things.
+#[test]
+fn ticking_honours_the_criteria_section() {
+    let p = Project::with(Schema::standard().criteria_section("Acceptance criteria"));
+    let id = set_body(
+        &p,
+        "Two checklists",
+        "\n## Notes\n\n- [ ] not a criterion\n\n## Acceptance criteria\n\n- [ ] the only one\n",
+    );
+
+    p.expect(&["tick", &id, "--all"]);
+    let file = p.item_file(&id);
+    assert_contains(
+        &file,
+        "- [ ] not a criterion",
+        "the notes checklist is left alone",
+    );
+    assert_contains(&file, "- [x] the only one", "and the criterion is ticked");
+
+    // And an item whose boxes are all outside the section states none, which
+    // the refusal has to say in the project's own words rather than claiming
+    // the item has no checkboxes at all.
+    let outside = set_body(
+        &p,
+        "Boxes elsewhere",
+        "\n## Notes\n\n- [ ] not a criterion\n",
+    );
+    let out = p.fails(&["tick", &outside, "--all"]);
+    assert_contains(&out.all(), "states no acceptance criteria", "");
+    assert_contains(
+        &out.all(),
+        "Acceptance criteria",
+        "under the heading it wants",
+    );
+}
+
+/// The gate the default deliberately does not impose. `require_criteria` is a
+/// project saying it wants one, and getting it only from `cairn check`
+/// afterwards means getting it after the commit that closed the item.
+#[test]
+fn require_criteria_makes_close_refuse() {
+    let p = Project::with(Schema::standard().require_criteria());
+    let id = with_criteria(&p, "Half done", 1, 2);
+
+    let out = p.fails(&["close", &id]);
+    assert_contains(&out.all(), "2 of 3", "it says what remains");
+    assert_contains(&out.all(), "require_criteria", "and why it is refusing");
+    assert_contains(&out.all(), "cairn tick", "and what would resolve it");
+    assert_contains(
+        &p.expect(&["show", &id]).stdout,
+        "backlog",
+        "and the item did not close",
+    );
+
+    p.expect(&["tick", &id, "--all"]);
+    assert!(p.run(&["close", &id]).ok(), "and then it closes");
+
+    // Every id is checked before any of them is written, so a refusal on the
+    // third does not leave the first two closed.
+    let ok = with_criteria(&p, "Met", 1, 0);
+    let bad = with_criteria(&p, "Not met", 0, 1);
+    assert!(!p.run(&["close", &ok, &bad]).ok());
+    assert_contains(
+        &p.expect(&["show", &ok]).stdout,
+        "backlog",
+        "the one that would have passed was not written either",
+    );
+}
+
+/// An agent has no editor to fall back on, so the write matters more there than
+/// anywhere: without it the only way to record a criterion as met was to
+/// rewrite the body, which is the one operation that can destroy an item.
+#[test]
+fn an_agent_can_tick_a_criterion() {
+    let p = Project::new();
+    let id = with_criteria(&p, "Agent work", 0, 2);
+    let n: u32 = id.trim_start_matches('0').parse().unwrap();
+
+    let r = p.mcp_call(
+        "tick_criteria",
+        serde_json::json!({"id": n, "which": [2]}),
+        Some("claude"),
+    );
+    assert!(!refused(&r), "{}", tool_text(&r));
+    let out: serde_json::Value = serde_json::from_str(&tool_text(&r)).expect("json");
+    assert_json(&out, "done", serde_json::json!(1));
+    assert_json(&out, "criteria.1.ticked", serde_json::json!(true));
+
+    // A model that has seen `"n": 3` in a result may well send `"3"`, the way it
+    // sends `"0001"` for an id.
+    let r = p.mcp_call(
+        "tick_criteria",
+        serde_json::json!({"id": n, "which": ["1"]}),
+        Some("claude"),
+    );
+    assert!(
+        !refused(&r),
+        "a numeric string was refused: {}",
+        tool_text(&r)
+    );
+    let out: serde_json::Value = serde_json::from_str(&tool_text(&r)).expect("json");
+    assert_json(&out, "done", serde_json::json!(2));
+
+    // And anything that is not a number fails in band, saying which.
+    let r = p.mcp_call(
+        "tick_criteria",
+        serde_json::json!({"id": n, "which": ["third"]}),
+        Some("claude"),
+    );
+    assert!(refused(&r));
+    assert_contains(&tool_text(&r), "is not one", "");
+
+    // And the same gate the CLI draws.
+    let p = Project::with(Schema::standard().require_criteria());
+    let id = with_criteria(&p, "Half done", 1, 1);
+    let n: u32 = id.trim_start_matches('0').parse().unwrap();
+    let r = p.mcp_call("close_item", serde_json::json!({"id": n}), Some("claude"));
+    assert!(
+        refused(&r),
+        "the gate the project asked for: {}",
+        tool_text(&r)
+    );
+    assert_contains(&tool_text(&r), "require_criteria", "");
+}
+
 // --- fields that name other items -------------------------------------------
 
 /// A project whose schema declares a container type and a ref field pointing at
@@ -1281,12 +1548,14 @@ fn a_roadmap_with_nothing_to_group_by_says_so() {
     assert_contains(&out, "no type declares `groups`", "it says what is missing");
     assert_contains(&out, "groups = \"one\"", "and what to write instead");
 
-    // The same defect arriving by the other road.
-    assert_contains(
-        &p.expect(&["check"]).all(),
-        "no [[type]] declares `groups`",
-        "`check` reports it too",
-    );
+    // The same defect arriving by the other road. `check` names the type that
+    // ought to group rather than reporting the absence in the abstract: the
+    // question is whether `render.group_by` resolves to something work is filed
+    // under, and grouping by a plain declared field — which has always worked —
+    // must not be reported as a defect at all.
+    let out = p.expect(&["check"]).all();
+    assert_contains(&out, "does not declare `groups`", "`check` reports it too");
+    assert_contains(&out, "groups = \"one\"", "and what to write");
 }
 
 /// A board with no columns is a schema question, not an empty backlog, and the
@@ -1596,4 +1865,201 @@ fn migrating_to_format_three_changes_no_item_file() {
 
     // And the roadmap still reads the same backlog.
     assert_contains(&p.expect(&["roadmap"]).stdout, "v0.1", "");
+}
+
+/// The gap between what `cairn init` promised and what it did.
+///
+/// The generated schema says declaring `groups` creates the field and that
+/// `milestone: v0.1` names one by its key. Nothing ever gave a milestone a key,
+/// so a pristine project could create one and then not file anything under it —
+/// and the error said `nothing to name yet`, which is the opposite of true.
+#[test]
+fn creating_a_grouping_item_gives_it_a_key() {
+    let p = Project::with(
+        Schema::bare()
+            .item_type(ItemType::new("task"))
+            .item_type(ItemType::new("release").groups_one())
+            .render(|r| r.group_by("release")),
+    );
+    p.expect(&["new", "v1.0", "-t", "release", "-q"]);
+    p.expect(&["new", "Some work", "-t", "task", "-q"]);
+
+    // The title, and not a filename slug: `v1.0` is what somebody types.
+    assert_json(
+        &p.json(&["show", "1", "--json"]),
+        "key",
+        serde_json::json!("v1.0"),
+    );
+    p.expect(&["set", "2", "release=v1.0"]);
+    assert_contains(&p.expect(&["roadmap"]).stdout, "0/1", "and it is filed");
+    assert!(p.run(&["check"]).ok(), "{}", p.run(&["check"]).all());
+
+    // An ordinary type is untouched: a key there is a handle somebody chooses,
+    // not something every item needs.
+    p.expect(&["new", "Ordinary", "-t", "task", "-q"]);
+    assert_json(
+        &p.json(&["show", "3", "--json"]),
+        "key",
+        serde_json::json!(null),
+    );
+}
+
+/// What somebody asked for beats what the title implies.
+#[test]
+fn an_explicit_key_wins_over_the_derived_one() {
+    let p = Project::with(
+        Schema::bare()
+            .item_type(ItemType::new("task"))
+            .item_type(ItemType::new("release").groups_one()),
+    );
+    p.expect(&[
+        "new",
+        "Usable in anger",
+        "-t",
+        "release",
+        "--set",
+        "key=v0.1",
+        "-q",
+    ]);
+    assert_json(
+        &p.json(&["show", "1", "--json"]),
+        "key",
+        serde_json::json!("v0.1"),
+    );
+}
+
+/// The two titles that cannot become a key. Refused rather than skipped: the
+/// bug being fixed is a grouping item arriving without one.
+#[test]
+fn a_title_that_cannot_become_a_key_is_refused() {
+    let p = Project::with(
+        Schema::bare()
+            .item_type(ItemType::new("task"))
+            .item_type(ItemType::new("release").groups_one()),
+    );
+
+    let out = p.fails(&["new", "0042", "-t", "release"]);
+    assert_contains(&out.all(), "read as an identifier", "a numeric title");
+    assert_contains(&out.all(), "--set key=", "and what to do instead");
+
+    let out = p.fails(&["new", "***", "-t", "release"]);
+    assert_contains(&out.all(), "nothing in `***`", "a title with nothing in it");
+
+    p.expect(&["new", "v1.0", "-t", "release", "-q"]);
+    let out = p.fails(&["new", "V1.0", "-t", "release"]);
+    assert_contains(&out.all(), "already", "two releases cannot share a key");
+    assert_eq!(p.count_all(), 1, "and nothing was written");
+}
+
+/// The diagnostic that sent people looking for a missing item rather than a
+/// missing key, in both places it is produced.
+#[test]
+fn a_keyless_container_is_reported_as_a_missing_key() {
+    let p = Project::with(
+        Schema::bare()
+            .item_type(ItemType::new("task"))
+            .item_type(ItemType::new("release").groups_one()),
+    );
+    p.expect(&["new", "v1.0", "-t", "release", "-q"]);
+    p.expect(&["set", "1", "key="]);
+    p.expect(&["new", "Some work", "-t", "task", "-q"]);
+
+    let out = p.fails(&["set", "2", "release=v1.0"]);
+    assert_contains(&out.all(), "none carries a `key`", "says what is wrong");
+    assert_missing(
+        &out.all(),
+        "nothing to name yet",
+        "a release exists; saying there is none sends people looking for it",
+    );
+
+    // And `check` reports the container itself, which is where the fix goes.
+    let out = p.expect(&["check"]).all();
+    assert_contains(&out, "with no `key`", "check names the keyless container");
+    assert_contains(&out, "cairn set 0001 key=", "and how to repair it");
+
+    // `cairn config` showed the milestone and not the field, in one screen.
+    assert_contains(
+        &p.expect(&["config"]).stdout,
+        "(no key)",
+        "a blank column read as a formatting quirk",
+    );
+}
+
+/// `groups` creates a field, and the resolved schema is where somebody looks to
+/// find out whether it did.
+#[test]
+fn config_lists_the_field_a_grouping_type_implies() {
+    let p = Project::with(
+        Schema::bare()
+            .item_type(ItemType::new("task"))
+            .item_type(ItemType::new("release").groups_one()),
+    );
+    let shown = p.expect(&["config"]).stdout;
+    assert_contains(&shown, "release", "the implied field is listed");
+    assert_contains(
+        &shown,
+        "(implied)",
+        "and marked as implied rather than declared",
+    );
+    assert_contains(&shown, "depends_on", "as is the one every project has");
+}
+
+/// A warning that is always wrong teaches people to skim the line a real one
+/// would appear on. This one fired on every `check` and every `render` in a
+/// project that grouped by a plain declared field — which has always worked.
+#[test]
+fn grouping_by_a_declared_field_is_not_a_defect() {
+    let p = Project::with(
+        Schema::bare()
+            .item_type(ItemType::new("task"))
+            .field(Field::choice("release", ["v1.0"]))
+            .render(|r| r.group_by("release")),
+    );
+    p.expect(&["new", "Some work", "-q"]);
+    p.expect(&["set", "1", "release=v1.0"]);
+
+    let out = p.expect(&["check"]).all();
+    assert!(out.contains("0 warning"), "check warned: {out}");
+    p.expect(&["render"]);
+    assert_contains(&p.read("ROADMAP.md"), "## v1.0", "and it grouped");
+
+    // The same for the built-in `milestone` key used as a plain label, with no
+    // type and no field declaring it.
+    let p = Project::with(
+        Schema::bare()
+            .item_type(ItemType::new("task"))
+            .render(|r| r.group_by("milestone")),
+    );
+    p.expect(&["new", "Some work", "-q"]);
+    p.expect(&["set", "1", "milestone=v1.0"]);
+    let out = p.expect(&["check"]).all();
+    assert!(out.contains("0 warning"), "check warned: {out}");
+    assert_contains(
+        &p.expect(&["board", "--group-by", "milestone"]).stdout,
+        "v1.0",
+        "and the board can group by it",
+    );
+}
+
+/// The mistake the warning was written for, which it must still catch: the
+/// schema files work under `release` and the roadmap groups by `milestone`.
+#[test]
+fn grouping_by_a_name_nothing_declares_is_reported() {
+    let p = Project::with(
+        Schema::bare()
+            .item_type(ItemType::new("task"))
+            .item_type(ItemType::new("release").groups_one())
+            .render(|r| r.group_by("milestone")),
+    );
+    let out = p.expect(&["check"]).all();
+    assert_contains(
+        &out,
+        "render.group_by is `milestone`",
+        "it names the setting",
+    );
+    assert_contains(
+        &out,
+        "`release`",
+        "and the type work is actually filed under",
+    );
 }

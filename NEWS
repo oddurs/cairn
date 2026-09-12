@@ -6,6 +6,93 @@ See the end of the file for copying conditions.
 Please send bug reports and suggestions through the project's issue tracker.
 
 
+* Noteworthy changes in release 0.2.1 (unreleased)
+
+** A milestone you create can be filed under
+
+`groups = "one"` creates a field addressed by the target's *key*, and nothing
+ever gave a grouping item a key.  So the schema `cairn init` writes described a
+feature that did not work: `cairn new "v1.0" -t milestone` followed by `cairn
+set 2 milestone=v1.0` failed, and said `nothing to name yet` while `cairn
+config` listed the milestone two lines below.
+
+`cairn new` now derives the key from the title -- `v1.0` stays `v1.0`, "Usable
+in anger" becomes `usable-in-anger` -- and refuses, rather than silently
+skipping, the two titles that cannot make one: a title that reads as an
+identifier, and one whose key another item of that type already answers to.
+
+`cairn check` reports an item of a grouping type carrying no key, which finds
+the ones that predate this.  When a reference misses, the diagnostic now
+distinguishes "there is no such item" from "the items are there and none has a
+key", which is the difference between the two searches you might start.
+
+`cairn config` lists the fields the schema implies, `milestone` and
+`depends_on`, marked as implied.  Leaving them out is how the same screen could
+show a milestone existing and its field not existing.
+
+** A warning that was always wrong
+
+`cairn check` warned that `render.group_by` had nothing to group by whenever no
+`[[type]]` declared `groups` -- including in every project that grouped by an
+ordinary `[[field]]`, which has always worked and rendered correctly from the
+same schema in the same run.  One project carried the warning through a hundred
+runs and its CI logs.
+
+The question is whether `group_by` resolves to something items carry, not
+whether any type groups.  The warning now fires only where grouping really does
+collapse: the name is undeclared while some *other* type groups it (and it says
+which), or a type of that name exists and does not declare `groups` (and it says
+to add it).  `cairn board --group-by` likewise groups by anything items carry,
+including a `milestone` kept as a plain label.
+
+** cairn tick
+
+Acceptance criteria are the most-touched part of an item in a working loop, and
+were the one part with no command: `set` takes fields, `note` appends, `edit`
+wants a terminal.  What people did instead was rewrite the Markdown from outside
+cairn.
+
+    cairn show 12 --criteria    # numbered, with state; --json for a script
+    cairn tick 12 3
+    cairn tick 12 --all
+    cairn untick 12 3
+
+Only the box is rewritten, so indentation and anything else on the line survive.
+Naming a criterion that is not there refuses the whole command; ticking what is
+already ticked writes nothing, because that is what a retried script does.  The
+MCP server gains `tick_criteria`, taking the numbers `show_item` reports.
+
+Where a project sets `require_criteria`, `cairn close` and the MCP `close_item`
+now refuse an item with unticked criteria rather than only reporting it
+afterwards from `cairn check`.  The default still never refuses, for the reason
+it always gave: a criterion can stop applying, and a tool that blocked would
+teach people to tick boxes rather than to say what is true.
+
+** A combining mark could reach a filename
+
+`slug` lowercased a character and kept whatever came out. Turkish dotted capital
+I lowercases to `i` followed by a combining dot, which is not a letter -- so
+`cairn new "İstanbul rewrite"` wrote a filename carrying an invisible mark for a
+filesystem to normalise however it liked.
+
+Characters are now filtered after lowercasing rather than before. Found by the
+property test that has asserted the opposite all along, which had simply never
+generated that input; the case is pinned now, both as a unit test and in
+`proptest-regressions/`.
+
+** Documentation that had gone stale
+
+The Configuration chapter still documented `[[milestone]]` as a block you write,
+with a `cairn milestone` command to edit it.  Neither has existed since format
+3: a milestone is an item, and the block is refused by name.  Somebody meeting
+the milestone trouble above would have found that section first.
+
+`propose`, `proposals` and `migrate` reached a release with no entry in the
+command reference, documented only in prose elsewhere.  They have one now, and a
+test fails if a future command ships without one.  The README no longer lists
+`cairn milestone` either.
+
+
 * Noteworthy changes in release 0.2.0 (2026-09-11)
 
 ** cairn is MIT

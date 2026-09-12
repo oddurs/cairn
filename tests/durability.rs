@@ -35,6 +35,27 @@ fn line_endings_are_preserved_on_rewrite() {
     );
 }
 
+/// `cairn tick` rewrites a line in the body, which is the one write path that
+/// reassembles the body from `lines()` -- and `lines()` drops the `\r` along
+/// with the `\n`. Reassembling with bare newlines would flip a CRLF item's
+/// detected ending, turning the next edit into a whole-file diff.
+#[test]
+fn ticking_preserves_line_endings() {
+    let p = Project::new();
+    p.write(
+        "cairn/items/0001-crlf.md",
+        "---\r\nid: 1\r\ntitle: CRLF\r\nstatus: backlog\r\n---\r\n\r\n         ## Acceptance criteria\r\n\r\n- [ ] one\r\n- [ ] two\r\n",
+    );
+    p.expect(&["tick", "1", "1", "-q"]);
+    let after = p.read("cairn/items/0001-crlf.md");
+    assert!(after.contains("- [x] one"), "the box moved:\n{after:?}");
+    assert!(after.contains("\r\n"), "the file is still CRLF");
+    assert!(
+        !after.replace("\r\n", "").contains('\n'),
+        "no line was left with a bare newline:\n{after:?}"
+    );
+}
+
 #[test]
 fn new_items_are_written_with_line_feeds() {
     let p = Project::new();

@@ -120,12 +120,26 @@ pub fn config(args: ConfigArgs) -> Result<i32> {
             format!("{:<12} {}", s.name, style::dim(&category))
         }),
     );
+    // Declared fields, then the ones the schema implies. Leaving the implied
+    // ones out made this output contradict itself: a project could see its
+    // milestones listed below and no `milestone` field above, and conclude the
+    // field did not exist. It does — `groups` creates it — and the resolved
+    // schema is exactly where that should be visible.
+    let declared: Vec<String> = cfg.fields.iter().map(|f| f.name.clone()).collect();
+    let implied: Vec<crate::config::FieldDef> = cfg
+        .builtin_ref_fields()
+        .into_iter()
+        .filter(|b| !declared.contains(&b.name))
+        .collect();
     section(
         "fields",
-        cfg.fields.iter().map(|f| {
+        cfg.fields.iter().chain(implied.iter()).map(|f| {
             let mut s = format!("{:<12} {}", f.name, describe_field(f));
             if f.required {
                 s.push_str(&style::yellow("  required"));
+            }
+            if !declared.contains(&f.name) {
+                s.push_str(&style::dim("  (implied)"));
             }
             s
         }),
@@ -135,7 +149,12 @@ pub fn config(args: ConfigArgs) -> Result<i32> {
         milestones.iter().map(|m| {
             format!(
                 "{:<12} {}",
-                m.key().unwrap_or_default(),
+                // A milestone with no key is one nothing can be filed under, and
+                // a blank column read as a formatting quirk rather than the
+                // defect it is.
+                m.key()
+                    .map(str::to_string)
+                    .unwrap_or_else(|| style::yellow("(no key)")),
                 style::dim(&{
                     let mut bits: Vec<String> = vec![m.title().to_string()];
                     if let Some(d) = crate::refs::due(m) {
@@ -357,8 +376,12 @@ body so you can begin immediately.\n",
 `cairn note <ID> \"<TEXT>\"` for anything that needs a sentence — why you chose something, what \
 you tried, what to watch for.\n",
     );
-    s.push_str("4. `cairn close <ID>` when it is done, or `cairn release <ID>` to hand it back.\n");
-    s.push_str("5. `cairn check` before you report finished. It must pass.\n\n");
+    s.push_str(
+        "4. `cairn tick <ID> <N>` as each acceptance criterion becomes true — `cairn show <ID> \
+--criteria` lists them numbered. Tick what is true, not what would let you close.\n",
+    );
+    s.push_str("5. `cairn close <ID>` when it is done, or `cairn release <ID>` to hand it back.\n");
+    s.push_str("6. `cairn check` before you report finished. It must pass.\n\n");
 
     s.push_str("### Commands\n\n```sh\n");
     s.push_str("cairn next --json                 # ready work, ranked\n");
@@ -370,6 +393,8 @@ you tried, what to watch for.\n",
     s.push_str("cairn new \"<TITLE>\" --type <TYPE> --milestone <MILESTONE>\n");
     s.push_str("cairn set <ID> status=<STATUS>    # also labels+=x, or any field below\n");
     s.push_str("cairn note <ID> \"<TEXT>\"          # append reasoning; never replaces\n");
+    s.push_str("cairn show <ID> --criteria        # acceptance criteria, numbered\n");
+    s.push_str("cairn tick <ID> <N>               # tick one; --all for every one\n");
     s.push_str("cairn close <ID>\n");
     s.push_str("cairn check                       # validate; run before finishing\n");
     s.push_str(&format!(
