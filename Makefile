@@ -10,7 +10,7 @@ MAKEINFO    ?= makeinfo
 CAIRN       := target/release/cairn
 
 .PHONY: all build check test soak fuzz durability coverage conformance audit dist doc info html pdf record demo install install-bin \
-        install-man install-info clean
+        install-man install-info clean release-check release-notes
 
 all: build doc
 
@@ -137,6 +137,70 @@ install-info: doc/cairn.info
 # above. `make doc` produces it.
 VERSION := $(shell sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
 DIST    := cairn-$(VERSION)
+
+# What the release promises, checked before a tag exists rather than after.
+#
+# RELEASING.md used to carry these as checkboxes, and a checkbox is a promise
+# somebody in a hurry keeps. The one that matters is the first: the binaries
+# take their version from the tag and the source tarball takes its from
+# Cargo.toml, so tagging v0.2.1 against a Cargo.toml still saying 0.2.0 ships
+# one release holding two version numbers, with a binary whose --version
+# disagrees with the file it arrived in. That is exactly the failure the rest
+# of RELEASING.md exists to prevent, and nothing was stopping it.
+#
+#     make release-check TAG=v0.2.1
+#
+# The release workflow runs this before it builds anything.
+release-check:
+	@set -eu; \
+	tag="$(TAG)"; \
+	if [ -z "$$tag" ]; then \
+	  echo "release-check: give the tag: make release-check TAG=v$(VERSION)" >&2; \
+	  exit 2; \
+	fi; \
+	case "$$tag" in \
+	  v*) ;; \
+	  *) echo "release-check: \`$$tag\` is not a release tag; they begin with \`v\`" >&2; exit 1 ;; \
+	esac; \
+	want="$${tag#v}"; \
+	if [ "$$want" != "$(VERSION)" ]; then \
+	  echo "release-check: the tag says $$want and Cargo.toml says $(VERSION)." >&2; \
+	  echo "  The binaries are named from the tag and the source tarball from" >&2; \
+	  echo "  Cargo.toml, so releasing this ships two version numbers at once" >&2; \
+	  echo "  and a binary whose --version disagrees with its own filename." >&2; \
+	  exit 1; \
+	fi; \
+	if ! grep -q "^\* Noteworthy changes in release $(VERSION) " NEWS; then \
+	  echo "release-check: NEWS has no section for $(VERSION)." >&2; \
+	  echo "  A release nobody can read the notes for is one people upgrade to" >&2; \
+	  echo "  by guessing. Write what a *user* would notice." >&2; \
+	  exit 1; \
+	fi; \
+	if grep -q "^\* Noteworthy changes in release $(VERSION) (unreleased)" NEWS; then \
+	  echo "release-check: the NEWS section for $(VERSION) still says (unreleased)." >&2; \
+	  echo "  Put the date on it: that line is what a reader dates the release by." >&2; \
+	  exit 1; \
+	fi; \
+	if ! $(CARGO) metadata --locked --format-version 1 >/dev/null 2>&1; then \
+	  echo "release-check: Cargo.lock is not in step with Cargo.toml." >&2; \
+	  echo "  Every release build passes --locked, so this fails later anyway." >&2; \
+	  echo "  Run \`cargo check\` and commit the lock file." >&2; \
+	  exit 1; \
+	fi; \
+	if [ -n "$$(git status --porcelain 2>/dev/null)" ]; then \
+	  echo "release-check: the working tree is dirty." >&2; \
+	  echo "  \`git archive\` packages HEAD, so uncommitted work does not ship" >&2; \
+	  echo "  and nothing would have said so." >&2; \
+	  git status --short >&2; \
+	  exit 1; \
+	fi; \
+	echo "release-check: $$tag, Cargo.toml, NEWS and Cargo.lock all agree."
+
+# The NEWS section for this version, for the release body. A release people can
+# read is one somebody wrote; GitHub's generated commit list is not that.
+release-notes:
+	@awk '/^\* Noteworthy changes in release $(VERSION) /{f=1;next} \
+	      /^\* Noteworthy changes in release /{f=0} f' NEWS
 
 dist:
 	@rm -f $(DIST).tar.gz
