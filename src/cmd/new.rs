@@ -145,6 +145,53 @@ pub fn run(args: Args) -> Result<i32> {
         apply(&mut item, &cfg, &key, assign)?;
     }
 
+    // A grouping type implies a field addressed by the target's *key*, so an
+    // item of one with no key is a heading nothing can be filed under: every
+    // `cairn set 12 milestone=v1.0` against it failed with `nothing to name
+    // yet`, which was the tool reporting the opposite of what was wrong.
+    //
+    // Derived rather than demanded, because the title is already the name. The
+    // schema `cairn init` writes promises that declaring `groups` creates the
+    // field and that `milestone: v0.1` names one by its key; the smallest thing
+    // that makes both true is for the milestone called v0.1 to answer to `v0.1`
+    // without anybody being told to say so twice.
+    if item.meta.key.is_none()
+        && item
+            .kind()
+            .and_then(|k| cfg.item_type(k))
+            .is_some_and(|t| t.groups.is_some())
+    {
+        let kind = item.kind().unwrap_or_default().to_string();
+        let key = crate::item::key_from_title(item.title());
+        // The three cases where guessing would be worse than asking. Each is a
+        // refusal rather than a silent omission: an item of a grouping type
+        // without a key is useless, and leaving one behind is the bug.
+        let advice = "pass `--set key=...`";
+        if key.is_empty() {
+            bail!(
+                "a `{kind}` is named by its key, and there is nothing in `{}` \
+                 to make one from — {advice}",
+                item.title()
+            );
+        }
+        if cfg.id_format().read(&key).is_ok() {
+            bail!(
+                "a `{kind}` is named by its key, and `{key}` would read as an \
+                 identifier — {advice}"
+            );
+        }
+        if let Some(other) = existing.iter().find(|i| {
+            i.kind() == Some(kind.as_str()) && i.key().is_some_and(|k| k.eq_ignore_ascii_case(&key))
+        }) {
+            bail!(
+                "the key `{key}` already belongs to {} — two `{kind}`s cannot \
+                 answer to the same name; {advice}",
+                cfg.format_id(other.id)
+            );
+        }
+        apply(&mut item, &cfg, "key", Assign::Set(key))?;
+    }
+
     for f in &cfg.fields {
         if f.required && item.get(&f.name).is_missing() {
             bail!("field `{}` is required — pass --set {}=...", f.name, f.name);

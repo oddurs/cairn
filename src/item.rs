@@ -156,6 +156,16 @@ impl Criteria {
     }
 }
 
+/// One acceptance criterion, and where it is written.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Criterion {
+    /// Zero-based index into the body's lines.
+    pub line: usize,
+    pub ticked: bool,
+    /// What the criterion says, without the list marker or the box.
+    pub text: String,
+}
+
 #[derive(Debug, Clone)]
 pub struct Item {
     pub id: u32,
@@ -298,13 +308,26 @@ impl Item {
     /// of that name. Without it every box in the body counts, because an item
     /// that puts its criteria somewhere else still meant them.
     pub fn criteria(&self, section: Option<&str>) -> Criteria {
-        let mut total = 0usize;
-        let mut done = 0usize;
+        let list = self.criteria_list(section);
+        Criteria {
+            done: list.iter().filter(|c| c.ticked).count(),
+            total: list.len(),
+        }
+    }
+
+    /// The same criteria, each with the line it is written on.
+    ///
+    /// One parser, because there is no version of this where the number
+    /// `cairn tick 12 3` takes and the count `cairn show` prints are allowed to
+    /// disagree: they would drift the first time somebody decided an indented
+    /// box was or was not a criterion.
+    pub fn criteria_list(&self, section: Option<&str>) -> Vec<Criterion> {
+        let mut out = Vec::new();
         // `None` before the first heading means "counting", so a body with no
         // headings at all still works.
         let mut counting = section.is_none();
 
-        for line in self.body.lines() {
+        for (n, line) in self.body.lines().enumerate() {
             let trimmed = line.trim();
             if let Some(heading) = trimmed.strip_prefix('#') {
                 if let Some(want) = section {
@@ -344,12 +367,54 @@ impl Item {
             if !after.starts_with(char::is_whitespace) || after.trim().is_empty() {
                 continue;
             }
-            total += 1;
-            if ticked {
-                done += 1;
+            out.push(Criterion {
+                line: n,
+                ticked,
+                text: after.trim().to_string(),
+            });
+        }
+        out
+    }
+
+    /// Set the state of the criteria at these line numbers, and say whether the
+    /// body actually changed.
+    ///
+    /// Line numbers rather than ordinals because the caller has already made
+    /// the ordinal mean something — which criteria the numbers on the command
+    /// line picked out — and re-deriving it here would be a second chance to
+    /// get it wrong. Rewriting only the box keeps everything else on the line,
+    /// including whatever indentation and trailing notes the author wrote.
+    pub fn set_criteria(&mut self, lines: &[usize], ticked: bool) -> bool {
+        let want = if ticked { "[x]" } else { "[ ]" };
+        let mut changed = false;
+        let mut out: Vec<String> = Vec::new();
+        for (n, line) in self.body.lines().enumerate() {
+            if !lines.contains(&n) {
+                out.push(line.to_string());
+                continue;
+            }
+            // The box is the first `[` after the list marker, and `criteria_list`
+            // has already established that this line has one.
+            match line.find(['[']) {
+                Some(at) if line.len() >= at + 3 => {
+                    let mut next = String::with_capacity(line.len());
+                    next.push_str(&line[..at]);
+                    next.push_str(want);
+                    next.push_str(&line[at + 3..]);
+                    changed |= next != line;
+                    out.push(next);
+                }
+                _ => out.push(line.to_string()),
             }
         }
-        Criteria { done, total }
+        if changed {
+            let trailing = self.body.ends_with('\n');
+            self.body = out.join("\n");
+            if trailing {
+                self.body.push('\n');
+            }
+        }
+        changed
     }
 
     pub fn parse(path: &Path, text: &str) -> Result<Item> {
@@ -652,6 +717,43 @@ fn id_from_filename(path: &Path) -> Option<u32> {
     digits.parse().ok()
 }
 
+/// The key an item of a grouping type gets when nobody supplies one.
+///
+/// Deliberately not `slug`. A filename may lose whatever punctuation it likes,
+/// because nobody types it; a key is exactly what somebody types — `cairn set
+/// 12 milestone=v1.0` — so `v1.0` has to survive the trip from the title. The
+/// transformation is the smallest one that still yields a single unquoted
+/// word: lowercase, runs of anything else become one dash, and the characters
+/// version numbers are made of are kept.
+///
+/// `Usable in anger` -> `usable-in-anger`, `v1.0` -> `v1.0`, `Q1 2027` ->
+/// `q1-2027`.
+pub fn key_from_title(title: &str) -> String {
+    let mut out = String::new();
+    let mut dash = false;
+    for c in title.chars() {
+        if c.is_alphanumeric() {
+            // Filtered *after* lowercasing, because lowercasing can introduce a
+            // character that is not alphanumeric: `İ` becomes `i` followed by a
+            // combining dot, and letting the mark through puts an invisible
+            // character in the middle of something somebody has to type.
+            let lowered: String = c.to_lowercase().filter(|c| c.is_alphanumeric()).collect();
+            if lowered.is_empty() {
+                continue;
+            }
+            out.push_str(&lowered);
+            dash = false;
+        } else if matches!(c, '.' | '_' | '+') && !out.is_empty() {
+            out.push(c);
+            dash = false;
+        } else if !dash && !out.is_empty() {
+            out.push('-');
+            dash = true;
+        }
+    }
+    out.trim_matches(|c| c == '-' || c == '.').to_string()
+}
+
 /// `Add OAuth login!` -> `add-oauth-login`
 ///
 /// `max_bytes` is a filesystem constraint, not a style choice: the caller
@@ -662,9 +764,15 @@ pub fn slug(title: &str, max_bytes: usize) -> String {
     let mut dash = false;
     for c in title.chars() {
         if c.is_alphanumeric() {
-            for lc in c.to_lowercase() {
-                out.push(lc);
+            // Filtered after lowercasing rather than before: `İ` is alphanumeric
+            // and lowercases to `i` plus a combining dot, which is not — so
+            // testing the original character alone let a combining mark into a
+            // filename. Found by the property test below, on `title = "İ"`.
+            let lowered: String = c.to_lowercase().filter(|c| c.is_alphanumeric()).collect();
+            if lowered.is_empty() {
+                continue;
             }
+            out.push_str(&lowered);
             dash = false;
         } else if !dash && !out.is_empty() {
             out.push('-');
@@ -734,6 +842,49 @@ mod tests {
         assert_eq!(slug("Add OAuth login!", 240), "add-oauth-login");
         assert_eq!(slug("  Trailing / slashes  ", 240), "trailing-slashes");
         assert_eq!(slug("***", 240), "item");
+    }
+
+    /// Lowercasing can lengthen a character into something that is no longer a
+    /// letter. Turkish dotted capital I becomes `i` plus a combining dot, and
+    /// the mark used to reach the filename -- invisible in a terminal, and one
+    /// more thing for a filesystem to normalise differently.
+    #[test]
+    fn lowercasing_never_smuggles_a_combining_mark_through() {
+        assert_eq!(slug("İ", 240), "i");
+        assert_eq!(slug("İstanbul rewrite", 240), "istanbul-rewrite");
+        assert_eq!(key_from_title("İstanbul"), "istanbul");
+        for s in [slug("İ", 240), key_from_title("İ")] {
+            assert!(
+                s.chars().all(char::is_alphanumeric),
+                "a mark survived: {s:?}"
+            );
+        }
+    }
+
+    /// A key is typed at the command line, so it keeps what a version number is
+    /// made of. This is the whole difference from `slug`, and getting it wrong
+    /// turns `milestone=v1.0` into `milestone=v1-0` for everybody.
+    #[test]
+    fn a_key_from_a_title_stays_typeable() {
+        assert_eq!(key_from_title("v1.0"), "v1.0");
+        assert_eq!(key_from_title("Usable in anger"), "usable-in-anger");
+        assert_eq!(key_from_title("Q1 2027"), "q1-2027");
+        assert_eq!(key_from_title("v2.0 (beta)"), "v2.0-beta");
+        assert_eq!(
+            key_from_title("  Leading and trailing  "),
+            "leading-and-trailing"
+        );
+        assert_eq!(key_from_title("release_1+2"), "release_1+2");
+    }
+
+    /// Empty is not a key. `cairn new` refuses rather than creating an item of a
+    /// grouping type with nothing to name it by, which is the bug this exists to
+    /// close.
+    #[test]
+    fn a_title_with_nothing_to_take_yields_no_key() {
+        for title in ["***", "   ", "", "...", "---"] {
+            assert_eq!(key_from_title(title), "", "{title:?}");
+        }
     }
 
     #[test]
@@ -957,6 +1108,32 @@ mod properties {
             let _ = Item::parse(Path::new("0001-x.md"), &text);
         }
 
+        /// A key goes into YAML frontmatter unquoted, into a filter expression,
+        /// and onto a command line. Every one of those breaks on whitespace, and
+        /// the frontmatter breaks on a newline in a way that silently truncates
+        /// the item -- so the guarantee is that a key is one plain word or
+        /// nothing at all.
+        #[test]
+        fn a_derived_key_is_always_one_plain_word(title in awkward_text()) {
+            let k = key_from_title(&title);
+            prop_assert!(k.chars().all(|c| !c.is_whitespace()), "whitespace in {k:?}");
+            prop_assert!(!k.contains(['\'', '"', ':', ',', '#', '=']), "needs quoting: {k:?}");
+            prop_assert!(!k.starts_with('-') && !k.ends_with('-'), "{k:?}");
+            prop_assert!(!k.starts_with('.') && !k.ends_with('.'), "{k:?}");
+            // The first character is alphanumeric or there is no key: `+` and
+            // `_` are only ever kept after something real.
+            prop_assert!(
+                k.is_empty() || k.chars().next().is_some_and(char::is_alphanumeric),
+                "{k:?}"
+            );
+            // The same invariant `slug` has, and the same reason: a combining
+            // mark is invisible in the terminal and typeable by nobody.
+            prop_assert!(
+                k.chars().all(|c| c.is_alphanumeric() || matches!(c, '-' | '.' | '_' | '+')),
+                "{k:?}"
+            );
+        }
+
         #[test]
         fn slugs_are_always_usable_as_filenames(title in awkward_text(), budget in 8usize..250) {
             let s = slug(&title, budget);
@@ -1062,6 +1239,81 @@ mod criteria_tests {
     fn a_section_is_matched_case_insensitively_and_at_any_depth() {
         let body = "### ACCEPTANCE CRITERIA\n\n- [ ] one\n";
         assert_eq!(item(body).criteria(Some("Acceptance criteria")).total, 1);
+    }
+
+    /// `criteria_list` is what gives the numbers `cairn tick` takes, so it has
+    /// to agree with `criteria` about every one of the near misses above.
+    #[test]
+    fn the_list_and_the_count_agree() {
+        let body = "- [ ] one\n- [x]\n- [ ] two\nnot a box\n- [X] three\n";
+        let i = item(body);
+        let list = i.criteria_list(None);
+        assert_eq!(list.len(), i.criteria(None).total);
+        assert_eq!(
+            list.iter().filter(|c| c.ticked).count(),
+            i.criteria(None).done
+        );
+        assert_eq!(list[0].text, "one", "the marker and box are stripped");
+        assert_eq!(list[2].text, "three");
+        // The line each one is written on, which is what the write path uses.
+        assert_eq!(
+            list.iter().map(|c| c.line).collect::<Vec<_>>(),
+            vec![0, 2, 4]
+        );
+    }
+
+    /// The criterion is the sentence that says what done means. Rewriting any
+    /// of it is the failure `cairn tick` exists to prevent, so only the three
+    /// bytes of the box may move.
+    #[test]
+    fn only_the_box_is_rewritten() {
+        let mut i = item("  - [ ] Indented, with a [bracket] and trailing  \n- [ ] plain\n");
+        assert!(i.set_criteria(&[0], true));
+        assert_eq!(
+            i.body,
+            "  - [x] Indented, with a [bracket] and trailing  \n- [ ] plain\n"
+        );
+        assert!(i.set_criteria(&[0], false));
+        assert_eq!(
+            i.body,
+            "  - [ ] Indented, with a [bracket] and trailing  \n- [ ] plain\n"
+        );
+    }
+
+    /// Writing what is already written is what a retried script does. Saying so
+    /// is how the command knows to leave `updated` alone and fire no hook.
+    #[test]
+    fn setting_a_box_to_what_it_already_is_reports_no_change() {
+        let mut i = item("- [x] done\n");
+        let before = i.body.clone();
+        assert!(!i.set_criteria(&[0], true));
+        assert_eq!(i.body, before);
+    }
+
+    /// A body that ended without a newline must not gain one, and a body that
+    /// ended with one must not lose it: either is a spurious diff on every tick.
+    #[test]
+    fn the_bodys_final_newline_survives_either_way() {
+        let mut with = item("- [ ] one\n");
+        with.set_criteria(&[0], true);
+        assert_eq!(with.body, "- [x] one\n");
+
+        let mut without = item("- [ ] one");
+        without.set_criteria(&[0], true);
+        assert_eq!(without.body, "- [x] one");
+
+        let mut blank = item("- [ ] one\n\n");
+        blank.set_criteria(&[0], true);
+        assert_eq!(blank.body, "- [x] one\n\n");
+    }
+
+    /// A line the caller did not name is not touched, and a line number past
+    /// the end is not an error -- the caller resolved the numbers already.
+    #[test]
+    fn only_the_named_lines_move() {
+        let mut i = item("- [ ] one\n- [ ] two\n- [ ] three\n");
+        assert!(i.set_criteria(&[1, 99], true));
+        assert_eq!(i.body, "- [ ] one\n- [x] two\n- [ ] three\n");
     }
 
     #[test]

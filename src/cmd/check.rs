@@ -178,6 +178,26 @@ fn collect_inner(
             }
         }
 
+        // A grouping type implies a field addressed by key, so one of its items
+        // without a key is a heading nothing can be filed under. Silent until
+        // somebody tried to file something and was told the milestone did not
+        // exist, which is the error saying the opposite of what is wrong.
+        if let Some(k) = item.kind()
+            && cfg.item_type(k).is_some_and(|t| t.groups.is_some())
+            && item.key().is_none()
+        {
+            r.warn_at(
+                &at,
+                item,
+                "title",
+                format!(
+                    "a `{k}` with no `key`, so nothing can be filed under it — \
+                     `cairn set {} key=...`",
+                    cfg.format_id(item.id)
+                ),
+            );
+        }
+
         if item.meta.id.is_none() {
             r.warn(
                 &at,
@@ -302,19 +322,14 @@ fn collect_inner(
         for def in &cfg.all_ref_fields() {
             for value in crate::refs::values(item, def) {
                 if crate::refs::resolve(&universe, def, &value).is_none() {
-                    let known = crate::refs::permitted(&universe, cfg, def);
                     r.error_at(
                         &at,
                         item,
                         &def.name,
                         format!(
-                            "`{}` names `{value}`, which does not exist{}",
+                            "`{}` names `{value}`, which does not exist ({})",
                             def.name,
-                            if known.is_empty() {
-                                String::new()
-                            } else {
-                                format!(" (known: {})", known.join(", "))
-                            }
+                            crate::refs::unresolved(&universe, cfg, def)
                         ),
                     );
                 } else if def.acyclic && crate::refs::would_cycle(items, def, item.id, &value) {
@@ -491,22 +506,47 @@ fn schema(cfg: &Config, r: &mut Report) {
         std::slice::from_ref(&cfg.render.group_by),
     );
 
-    // `milestone` is a reserved key, so the check above accepts the name on its
-    // own. The name only means something if the field is declared, and
-    // `render.group_by` defaults to it — which is how renaming the field
-    // silently empties the roadmap.
-    // `group_by` naming a type that does not group is the same defect as
-    // naming a field that does not exist, and it is the one that emptied the
-    // board.
-    if cfg.grouping_types().next().is_none() && cfg.render.group_by != "status" {
-        r.warn(
-            &render_at,
-            format!(
-                "render.group_by is `{}`, but no [[type]] declares `groups`, so the \
-                 roadmap has nothing to group by",
-                cfg.render.group_by
-            ),
-        );
+    // `milestone` is a reserved key, so the check above accepts the name even in
+    // a project that renamed the thing work is filed under — and that is the
+    // whole failure: `group_by = "milestone"` beside `[[type]] release` groups
+    // everything under one "Unscheduled" heading and says nothing.
+    //
+    // The question is whether `group_by` names something items can carry, not
+    // whether any type declares `groups`. Asking the second warned every project
+    // that grouped by a plain `[[field]]`, which has always worked — and a
+    // warning that is always wrong teaches people to skim the line a real one
+    // would appear on.
+    let group_by = &cfg.render.group_by;
+    let carried = group_by == "status"
+        || cfg.field(group_by).is_some()
+        || cfg.grouping_types().any(|t| &t.name == group_by);
+    if !carried {
+        if let Some(t) = cfg.grouping_types().next() {
+            r.warn(
+                &render_at,
+                format!(
+                    "render.group_by is `{group_by}`, but work in this schema is \
+                     filed under `{}` — the roadmap will group everything under \
+                     one heading; did you mean group_by = \"{}\"?",
+                    t.name, t.name
+                ),
+            );
+        } else if cfg.item_type(group_by).is_some() {
+            // The other road to the same place: the type work is meant to be
+            // filed under is right there and does not say so, which leaves
+            // `cairn roadmap` with nothing to draw.
+            r.warn(
+                &render_at,
+                format!(
+                    "render.group_by is `{group_by}`, and a [[type]] of that name \
+                     exists but does not declare `groups` — add `groups = \"one\"` \
+                     to it, or nothing is filed under it and `cairn roadmap` has \
+                     nothing to draw"
+                ),
+            );
+        }
+        // Otherwise the name is a plain label items carry, which groups
+        // correctly and is nothing to warn about.
     }
 
     if let Some(expr) = &cfg.render.include {

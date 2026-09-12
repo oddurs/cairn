@@ -94,7 +94,7 @@ fn a_long_sequence_of_ordinary_use_leaves_the_backlog_intact() {
         // something. At one slot in a hundred, `renumber` is missing from about
         // one run in fifty — which is a flaky test rather than a finding, and
         // was one until CI produced it.
-        let choice = s.rng.below(106);
+        let choice = s.rng.below(112);
 
         let op = match (choice, target) {
             (0..=24, _) | (_, None) => {
@@ -224,6 +224,44 @@ fn a_long_sequence_of_ordinary_use_leaves_the_backlog_intact() {
                     "milestone"
                 }
             }
+            (106..=110, _) => {
+                // The one write that takes the body apart and puts it back, so
+                // it is the one that can lose a line. Every other write edits
+                // frontmatter and leaves the body alone.
+                let body =
+                    "## Acceptance criteria\n\n- [ ] one\n  - [x] nested\n\nClosing prose.\n";
+                let out = s.expect(&[
+                    "new",
+                    &format!("Criteria at step {step}"),
+                    "-q",
+                    "--body",
+                    body,
+                ]);
+                let id: u32 = out.stdout.trim().parse().expect("an id");
+                s.expected.insert(id, "backlog".into());
+
+                s.expect(&["tick", &id.to_string(), "--all", "-q"]);
+                let shown = s.expect(&["show", &id.to_string(), "--criteria"]).stdout;
+                assert!(!shown.contains("[ ]"), "--all left a box:\n{shown}");
+
+                s.expect(&["untick", &id.to_string(), "1", "-q"]);
+                let after = s.expect(&["show", &id.to_string(), "--json"]).json();
+                let body_now = after["body"].as_str().unwrap_or_default().to_string();
+                assert!(
+                    body_now.contains("Closing prose."),
+                    "the rest of the body was lost:\n{body_now}"
+                );
+                assert!(
+                    body_now.contains("  - [x] nested"),
+                    "indentation did not survive:\n{body_now}"
+                );
+                assert_eq!(
+                    body_now.lines().count(),
+                    body.lines().count(),
+                    "a line was added or lost:\n{body_now}"
+                );
+                "tick"
+            }
             (101, _) => {
                 // Every read, run for its exit status: a view that panics on a
                 // backlog reached by an odd route is still a bug.
@@ -332,6 +370,7 @@ fn a_long_sequence_of_ordinary_use_leaves_the_backlog_intact() {
         "render",
         "renumber",
         "export/import",
+        "tick",
     ] {
         assert!(
             performed.contains_key(op),
