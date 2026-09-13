@@ -246,3 +246,162 @@ fn plain_output_carries_names_rather_than_labels() {
         );
     }
 }
+
+// --- the filter grammar -----------------------------------------------------
+
+/// Operators the Stability chapter promises. An expression that works today
+/// works in every later release of this major version.
+const FILTER_OPERATORS: &[&str] = &["=", "!=", "~", "!~", ">", ">=", "<", "<="];
+
+/// The pseudo-fields the Stability chapter names, exactly as it names them.
+///
+/// `filter::DERIVED_KEYS` is longer, and the difference is deliberate rather
+/// than an oversight: the chapter promises four, and the test below fails if
+/// the list grows without somebody deciding which side of the line the new one
+/// falls on.
+const PROMISED_PSEUDO_FIELDS: &[&str] = &["category", "blocked", "ready", "blockers"];
+
+/// Every operator still parses and still means something.
+///
+/// This was the one promise in the Stability chapter with nothing holding it to
+/// account, which matters more here than elsewhere: the grammar is what a saved
+/// view in `cairn.toml` is written in, and `cairn.toml` is read by programs that
+/// are not cairn.
+#[test]
+fn every_promised_filter_operator_still_works() {
+    let p = stable();
+    for op in FILTER_OPERATORS {
+        let expr = format!("id{op}1");
+        let out = p.run(&["list", "-A", "--filter", &expr, "--count"]);
+        assert!(
+            out.ok(),
+            "`cairn list --filter '{expr}'` was refused, and the Stability \
+             chapter promises this operator:\n{}",
+            out.all()
+        );
+        assert!(
+            out.stdout.trim().parse::<usize>().is_ok(),
+            "`--count` did not print a number for `{expr}`: {}",
+            out.stdout
+        );
+    }
+
+    // An empty value tests for absence, which the Filters chapter documents and
+    // `cairn.toml`'s own `triage` view depends on.
+    for expr in ["milestone=", "milestone!="] {
+        assert!(
+            p.run(&["list", "-A", "--filter", expr, "--count"]).ok(),
+            "`{expr}` was refused"
+        );
+    }
+
+    // Alternatives within a clause, and clauses combined with AND.
+    assert!(
+        p.run(&[
+            "list",
+            "-A",
+            "--filter",
+            "status=backlog|planned,id>0",
+            "--count"
+        ])
+        .ok()
+    );
+}
+
+/// A promised pseudo-field resolves, and is not reported as a typo.
+///
+/// The second half is what ties the promise to the diagnostic: `list` now warns
+/// about a filter naming a field the schema does not declare, and a pseudo-field
+/// the manual promises must never be what it warns about.
+#[test]
+fn a_promised_pseudo_field_is_never_called_a_typo() {
+    let p = stable();
+    for field in PROMISED_PSEUDO_FIELDS {
+        let expr = format!("{field}!=");
+        let out = p.run(&["list", "-A", "--filter", &expr, "--count"]);
+        assert!(out.ok(), "`{expr}` was refused:\n{}", out.all());
+        assert_missing(
+            &out.all(),
+            "not a declared field",
+            "a pseudo-field the Stability chapter promises",
+        );
+    }
+
+    // And `cairn check` agrees, which is where the same list used to live alone.
+    let p2 = Project::new();
+    let cfg = p2.read("cairn.toml").replace(
+        "[hooks]",
+        "[[view]]\nname = \"promised\"\nfilter = \"category=active,blocked=false\"\n\n[hooks]",
+    );
+    p2.write("cairn.toml", &cfg);
+    assert_missing(
+        &p2.expect(&["check"]).all(),
+        "not a declared field",
+        "`check` called a promised pseudo-field undeclared",
+    );
+}
+
+/// The chapter enumerates four pseudo-fields. `DERIVED_KEYS` has more, and the
+/// manual recommends scripting with some of them — `criteria_met` is how the
+/// Acceptance criteria chapter suggests building a gate.
+///
+/// This does not decide which are promised. It fails when the set of derived
+/// keys changes, so that the question is answered on purpose rather than by
+/// precedent, which is the whole reason the Stability chapter exists.
+#[test]
+fn the_derived_keys_are_the_ones_the_manual_accounts_for() {
+    // Every name `cairn` resolves without a `[[field]]` declaring it.
+    const DERIVED: &[&str] = &[
+        "category",
+        "closed",
+        "done",
+        "blocked",
+        "ready",
+        "blockers",
+        "contains",
+        "descendants",
+        "depth",
+        "leaf",
+        "progress",
+        "criteria",
+        "criteria_done",
+        "criteria_met",
+        "stale",
+        "held_days",
+    ];
+
+    let p = stable();
+    for key in DERIVED {
+        let expr = format!("{key}!=");
+        let out = p.run(&["list", "-A", "--filter", &expr, "--count"]);
+        assert!(
+            out.ok(),
+            "`{expr}` was refused, so this list and `filter::DERIVED_KEYS` \
+             disagree:\n{}",
+            out.all()
+        );
+        assert_missing(
+            &out.all(),
+            "not a declared field",
+            "a derived key reported as undeclared",
+        );
+    }
+
+    // The manual documents every one of them in the Filters chapter, whether or
+    // not the Stability chapter promises it. A key nobody documented is one
+    // people find by reading the source.
+    let manual = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("doc/cairn.texi"),
+    )
+    .expect("the manual");
+    for key in DERIVED {
+        // Either spelling the manual uses: inline, or as the entry of a
+        // `@table @code`, where the braces are the table's job.
+        let documented = manual.contains(&format!("@code{{{key}}}"))
+            || manual.lines().any(|l| l.trim() == format!("@item {key}"));
+        assert!(
+            documented,
+            "`{key}` resolves in a filter and the manual never mentions it"
+        );
+    }
+}

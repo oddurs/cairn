@@ -68,6 +68,49 @@ afterwards from `cairn check`.  The default still never refuses, for the reason
 it always gave: a criterion can stop applying, and a tool that blocked would
 teach people to tick boxes rather than to say what is true.
 
+** A filter typo is reported where it is typed
+
+`cairn check` reported a filter naming a field the schema does not declare, and
+no other command did -- so whether you found out about a typo depended on which
+command you happened to run.  `cairn list -f 'piority=p0'` said `no items
+match`, which is a true statement about an expression that does not mean what
+you typed.
+
+`list`, `board`, `next`, `search`, `export`, `set` and `render` now say the same
+thing in the same words, on standard error, with the exit status untouched and
+the results still shown.  `--json`, `--ids`, `--count` and `--plain` stay
+machine-readable.  It stays a warning rather than a refusal for the reason
+`check` always gave: an item may carry a field nothing declared, so the
+expression may be exactly right.
+
+`render` says it for a person and stays silent under `-q`, which is what the
+after-change hook passes -- a true warning repeated after every write is how
+people learn to skim the line a real one appears on.
+
+** The filter grammar is a promise about the program
+
+Saved views in `cairn.toml` are read by programs that are not cairn, which
+raises a question worth answering on purpose: is the filter grammar public
+interface, or an implementation detail?
+
+It was already answered, in two places that had never been read together.  The
+Stability chapter promises the grammar -- field names, operators, and the
+pseudo-fields -- as additive only within a major version.  Section 7 of the
+specification says the configuration format is not part of it, and a reader that
+ignores configuration conforms.  So the grammar is a promise about the *program*
+and not about the *format*.
+
+What was missing is that nothing held the promise to account -- it was the one
+item in the Stability chapter with no test -- and nobody writing a view was told
+which dialect they were writing in.  `tests/stability.rs` now pins the operators
+and the pseudo-fields, and fails if the set of derived keys changes without
+somebody deciding which side of the line the new one falls on.  The Filters
+chapter, the Integrating chapter and the `[[view]]` block `cairn init` writes
+all say it now, including the part that matters to another tool: run `cairn list
+--view NAME --json` rather than reimplement the grammar, because a narrower
+dialect does not fail on a view it cannot parse -- it returns nothing, and a
+valid view looks like an empty backlog.
+
 ** A combining mark could reach a filename
 
 `slug` lowercased a character and kept whatever came out. Turkish dotted capital

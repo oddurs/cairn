@@ -468,24 +468,12 @@ fn schema(cfg: &Config, r: &mut Report) {
         }
     }
 
-    // Anything a filter, a sort or a column may legitimately name.
-    let mut known: HashSet<String> = crate::config::RESERVED_FIELDS
-        .iter()
-        .chain(crate::filter::DERIVED_KEYS.iter())
-        .chain(Item::ALIASES.iter())
-        .map(|s| (*s).to_string())
-        .collect();
-    known.extend(cfg.fields.iter().map(|f| f.name.clone()));
-    known.extend(cfg.all_ref_fields().into_iter().filter_map(|f| f.inverse));
-    // A grouping type gives items a field of its own name.
-    known.extend(cfg.grouping_types().map(|t| t.name.clone()));
-
+    // Anything a filter, a sort or a column may legitimately name. The list
+    // lives beside the resolver in `filter`, because `list`, `board` and
+    // `render` now say the same thing at the moment the mistake is made, and
+    // two copies of it would drift into disagreeing about the same typo.
     let check_keys = |r: &mut Report, where_: &str, what: &str, keys: &[String]| {
-        for key in keys {
-            let key = key.trim().trim_start_matches('-');
-            if key.is_empty() || known.contains(key) {
-                continue;
-            }
+        for key in crate::filter::unknown_keys(cfg, keys.iter().map(String::as_str)) {
             r.warn(
                 where_,
                 format!(

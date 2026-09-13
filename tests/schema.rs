@@ -2063,3 +2063,151 @@ fn grouping_by_a_name_nothing_declares_is_reported() {
         "and the type work is actually filed under",
     );
 }
+
+// --- a filter naming a field nothing declares -------------------------------
+
+/// `check` had this diagnostic and no other command did, so whether you found
+/// out about a typo depended on which command you happened to run. Someone who
+/// never runs `check` got `no items match` — a true statement about an
+/// expression that does not mean what they typed.
+#[test]
+fn a_filter_naming_an_undeclared_field_says_so_where_it_is_typed() {
+    let p = Project::new();
+    p.add("Something", &[]);
+
+    let out = p.expect(&["list", "-f", "piority=p0"]);
+    assert_contains(&out.all(), "not a declared field", "list says so");
+    assert_contains(&out.all(), "`piority`", "and names the field");
+    assert_contains(&out.all(), "--filter names", "and where it came from");
+    assert!(out.ok(), "and still exits 0: {}", out.all());
+
+    // The same expression, the same words, from every command that takes one.
+    // `run` rather than `expect`: `search` exits 1 when nothing matches, which
+    // is its documented behaviour and not this test's business.
+    for args in [
+        vec!["board", "-f", "piority=p0"],
+        vec!["next", "--filter", "piority=p0"],
+        vec!["search", "Something", "--filter", "piority=p0"],
+        vec!["export", "--filter", "piority=p0"],
+        vec!["set", "--filter", "piority=p0", "-y", "status=doing"],
+    ] {
+        let out = p.run(&args);
+        assert_contains(
+            &out.all(),
+            "`piority`",
+            &format!("`cairn {}` stayed silent", args.join(" ")),
+        );
+    }
+}
+
+/// A saved view is where the typo survives longest, because nobody retypes it.
+#[test]
+fn a_view_whose_filter_names_nothing_is_reported_by_name() {
+    let p = Project::with(Schema::standard().view("broken", "nonsense=x,alsofake~y"));
+    p.add("Something", &[]);
+
+    let out = p.expect(&["list", "--view", "broken"]);
+    assert_contains(&out.all(), "view `broken` filter names `nonsense`", "");
+    assert_contains(&out.all(), "`alsofake`", "both of them, not just the first");
+
+    // Exactly the words `check` uses, because it is the same diagnostic.
+    assert_contains(
+        &p.expect(&["check"]).all(),
+        "view `broken` filter names `nonsense`",
+        "",
+    );
+}
+
+/// The warning must not reach a pipe. `--json`, `--plain`, `--ids` and
+/// `--count` are promised to be machine-readable, and a warning on stdout is a
+/// parse error in somebody's script.
+#[test]
+fn the_warning_never_reaches_standard_output() {
+    let p = Project::with(Schema::standard().view("broken", "nonsense=x"));
+    p.add("Something", &[]);
+
+    for args in [
+        vec!["list", "--view", "broken", "--json"],
+        vec!["list", "--view", "broken", "--ids"],
+        vec!["list", "--view", "broken", "--count"],
+        vec!["list", "--view", "broken", "--plain"],
+        vec!["export", "--filter", "nonsense=x"],
+    ] {
+        let out = p.expect(&args);
+        assert_missing(
+            &out.stdout,
+            "not a declared field",
+            &format!("`cairn {}` put the warning on stdout", args.join(" ")),
+        );
+        assert_contains(
+            &out.stderr,
+            "not a declared field",
+            &format!("`cairn {}` lost the warning entirely", args.join(" ")),
+        );
+    }
+
+    // `--count` still prints one integer and nothing else, as promised.
+    let out = p.expect(&["list", "--view", "broken", "--count"]);
+    assert!(
+        out.stdout.trim().parse::<usize>().is_ok(),
+        "stdout was not just a number: {:?}",
+        out.stdout
+    );
+}
+
+/// A declared field, a built-in and a derived key are all legitimate, and a
+/// warning that fires on them is worse than none at all — which is the lesson
+/// `render.group_by` already taught this codebase.
+#[test]
+fn a_filter_that_is_right_says_nothing() {
+    let p = Project::new();
+    p.add("Something", &[]);
+
+    for expr in [
+        "status=backlog",
+        "priority=p0|p1",
+        "category=active",
+        "blocked=false",
+        "ready=true",
+        "blockers=",
+        "criteria_met=false",
+        "labels~auth",
+        "milestone=",
+        "type=feature",
+        "kind=feature",
+        "body~thing",
+    ] {
+        let out = p.expect(&["list", "-A", "-f", expr]);
+        assert_missing(
+            &out.all(),
+            "not a declared field",
+            &format!("`{expr}` was called a typo"),
+        );
+    }
+}
+
+/// The after-change hook runs `cairn render -q` after every write. A true
+/// warning repeated on every command is how people learn to skim the line a
+/// real one appears on, so the hook stays silent and a person does not.
+#[test]
+fn render_warns_for_a_person_and_not_for_the_hook() {
+    let p = Project::with(Schema::standard().render(|r| r.include("nonsense=x")));
+    p.add("Something", &[]);
+
+    assert_contains(
+        &p.expect(&["render"]).all(),
+        "render.include names `nonsense`",
+        "a person running render hears it",
+    );
+    assert_missing(
+        &p.expect(&["render", "-q"]).all(),
+        "not a declared field",
+        "`-q` is what the hook passes",
+    );
+    // And `check` reports it with the line number, either way.
+    assert_contains(
+        &p.expect(&["check"]).all(),
+        "render.include names `nonsense`",
+        "",
+    );
+}

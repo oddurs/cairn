@@ -55,7 +55,11 @@ pub fn run(args: Args) -> Result<i32> {
             bail!("unknown view `{name}`");
         };
         if let Some(expr) = &v.filter {
-            filter = filter.and(Filter::parse(expr)?);
+            filter = filter.and(crate::filter::parse_checked(
+                &cfg,
+                expr,
+                &format!("view `{}` filter", v.name),
+            )?);
         }
         if let Some(g) = &v.group_by
             && args.group_by == "status"
@@ -64,7 +68,7 @@ pub fn run(args: Args) -> Result<i32> {
         }
     }
     if let Some(expr) = &args.filter {
-        filter = filter.and(Filter::parse(expr)?);
+        filter = filter.and(crate::filter::parse_checked(&cfg, expr, "--filter")?);
     }
     if let Some(m) = &args.milestone {
         filter.push("milestone", crate::filter::Op::Eq, vec![m.clone()]);

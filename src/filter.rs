@@ -275,6 +275,77 @@ pub const DERIVED_KEYS: &[&str] = &[
     "held_days",
 ];
 
+/// Every name a filter, a sort or a column may legitimately use.
+///
+/// Here rather than in `check` for the same reason `DERIVED_KEYS` is: the list
+/// and the resolver have to move together, and a copy kept elsewhere drifts.
+/// `check` reported an undeclared field and no other command did, so the same
+/// typo was a diagnostic in one place and an empty listing in another.
+pub fn known_keys(cfg: &Config) -> HashSet<String> {
+    let mut known: HashSet<String> = crate::config::RESERVED_FIELDS
+        .iter()
+        .chain(DERIVED_KEYS.iter())
+        .chain(Item::ALIASES.iter())
+        .map(|s| (*s).to_string())
+        .collect();
+    known.extend(cfg.fields.iter().map(|f| f.name.clone()));
+    known.extend(cfg.all_ref_fields().into_iter().filter_map(|f| f.inverse));
+    // A grouping type gives items a field of its own name.
+    known.extend(cfg.grouping_types().map(|t| t.name.clone()));
+    known
+}
+
+/// The names in `keys` that the schema does not declare.
+///
+/// A name rather than a clause, so a sort key and a column name go through the
+/// same door as a filter.
+pub fn unknown_keys<'a>(cfg: &Config, keys: impl Iterator<Item = &'a str>) -> Vec<String> {
+    let known = known_keys(cfg);
+    let mut out: Vec<String> = Vec::new();
+    for key in keys {
+        let key = key.trim().trim_start_matches('-');
+        if key.is_empty() || known.contains(key) || out.iter().any(|s| s == key) {
+            continue;
+        }
+        out.push(key.to_string());
+    }
+    out
+}
+
+/// What `cairn check` says about an undeclared field, said where the mistake is
+/// made.
+///
+/// A filter naming a field nothing declares matches nothing, and "no items
+/// match" is a true statement about an expression that does not mean what
+/// somebody typed. `check` had this diagnostic and `list` did not, so whether
+/// you found out depended on which command you happened to run.
+///
+/// A warning rather than a refusal, and the reasoning is `check`'s: an item may
+/// legitimately carry a field the schema never declared, so the expression may
+/// be exactly right. Printed to stderr, so `--json`, `--plain` and `--ids` stay
+/// machine-readable, and the exit status is untouched.
+pub fn warn_unknown_keys(cfg: &Config, what: &str, filter: &Filter) {
+    for key in unknown_keys(cfg, filter.clauses.iter().map(|c| c.key.as_str())) {
+        eprintln!(
+            "{}: {what} names `{key}`, which is not a declared field — items may \
+             still carry it, but nothing in this schema says they do",
+            crate::style::yellow("warning")
+        );
+    }
+}
+
+/// Parse an expression somebody supplied, and say so if it names a field the
+/// schema does not declare.
+///
+/// The pairing matters: every command that takes an expression from a person or
+/// from a saved view goes through here, so none of them can be the one that
+/// stays silent.
+pub fn parse_checked(cfg: &Config, expr: &str, what: &str) -> Result<Filter> {
+    let f = Filter::parse(expr)?;
+    warn_unknown_keys(cfg, what, &f);
+    Ok(f)
+}
+
 /// How many days ago the current claim was taken, if there is one.
 pub fn held_days(item: &Item) -> Option<i64> {
     let claimed = item.meta.claimed.as_deref()?;

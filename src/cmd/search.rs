@@ -61,7 +61,7 @@ pub fn run(args: Args) -> Result<i32> {
     let ctx = Ctx::new(&cfg, &items);
 
     let mut filter = match &args.filter {
-        Some(expr) => Filter::parse(expr)?,
+        Some(expr) => crate::filter::parse_checked(&cfg, expr, "--filter")?,
         None => Filter::default(),
     };
     if let Some(since) = &args.since {

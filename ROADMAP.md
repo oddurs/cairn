@@ -6,7 +6,7 @@ A markdown-native roadmap and issue manager that lives in your repository.
 
 ## v0.1 — Usable in anger
 
-`##########` 94% · 32 of 34 done · due 2026-10-15
+`##########` 94% · 33 of 35 done · due 2026-10-15
 
 Enough to run a real project's roadmap without reaching for anything else.
 
@@ -52,6 +52,7 @@ Enough to run a real project's roadmap without reaching for anything else.
 - [x] [`0116`](https://github.com/oddurs/cairn/blob/main/cairn/items/0116-render-group-by-warns-while-grouping-correctly.md) render.group_by warns while grouping correctly <sup>bug · p1</sup>
 - [x] [`0117`](https://github.com/oddurs/cairn/blob/main/cairn/items/0117-a-command-to-tick-an-acceptance-criterion.md) A command to tick an acceptance criterion <sup>feature · p1</sup>
 - [x] [`0119`](https://github.com/oddurs/cairn/blob/main/cairn/items/0119-lowercasing-could-put-a-combining-mark-in-a-filename.md) Lowercasing could put a combining mark in a filename <sup>bug · p2</sup>
+- [x] [`0121`](https://github.com/oddurs/cairn/blob/main/cairn/items/0121-a-filter-typo-is-only-reported-by-the-one-command-nobody-runs.md) A filter typo is only reported by the one command nobody runs <sup>bug · p1</sup>
 
 ## v0.2 — Comfortable
 
