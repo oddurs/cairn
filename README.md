@@ -600,6 +600,7 @@ committed `ROADMAP.md` matches the items. It exits non-zero on errors, and with
 | `cairn show` | One item in full |
 | `cairn set` | Change fields: `status=doing`, `labels+=auth`, `assignee=` |
 | `cairn note` | Append to an item's body — why something was decided |
+| `cairn tick` / `untick` | Tick an acceptance criterion: `cairn tick 12 3`, or `--all` |
 | `cairn close` / `reopen` | Move between open and done statuses |
 | `cairn edit` | Open in `$EDITOR`, re-validate afterwards |
 | `cairn remove` (`rm`) | Delete items |
@@ -609,7 +610,6 @@ committed `ROADMAP.md` matches the items. It exits non-zero on errors, and with
 | `cairn export` / `import` | Move a backlog in or out |
 | `cairn check` | Validate against the schema |
 | `cairn renumber` | Repair duplicate ids, rewriting references |
-| `cairn milestone` | List, add, edit and remove milestones |
 | `cairn config` | Show the resolved schema |
 | `cairn agent` | Instruction block for coding agents |
 | `cairn mcp` | Serve the backlog to agents over MCP |

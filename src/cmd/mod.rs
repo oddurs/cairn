@@ -23,6 +23,7 @@ pub mod roadmap;
 pub mod search;
 pub mod set;
 pub mod show;
+pub mod tick;
 
 use crate::config::{Category, Config};
 use crate::item::Item;

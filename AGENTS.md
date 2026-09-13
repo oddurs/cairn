@@ -10,8 +10,9 @@ This project tracks its roadmap and issues with `cairn`. Every item is a Markdow
 1. `cairn next` — what is ready to start. It excludes anything blocked by unfinished dependencies and puts work already in progress first.
 2. `cairn claim <ID>` — take it before you start, so no one duplicates the work. `cairn claim --next` picks and claims the top-ranked unclaimed item in one step, and prints its body so you can begin immediately.
 3. Do the work. Record what you learn: `cairn set <ID> <field>=<value>` for fields, `cairn note <ID> "<TEXT>"` for anything that needs a sentence — why you chose something, what you tried, what to watch for.
-4. `cairn close <ID>` when it is done, or `cairn release <ID>` to hand it back.
-5. `cairn check` before you report finished. It must pass.
+4. `cairn tick <ID> <N>` as each acceptance criterion becomes true — `cairn show <ID> --criteria` lists them numbered. Tick what is true, not what would let you close.
+5. `cairn close <ID>` when it is done, or `cairn release <ID>` to hand it back.
+6. `cairn check` before you report finished. It must pass.
 
 ### Commands
 
@@ -25,6 +26,8 @@ cairn show <ID> --json            # one item, including its body
 cairn new "<TITLE>" --type <TYPE> --milestone <MILESTONE>
 cairn set <ID> status=<STATUS>    # also labels+=x, or any field below
 cairn note <ID> "<TEXT>"          # append reasoning; never replaces
+cairn show <ID> --criteria        # acceptance criteria, numbered
+cairn tick <ID> <N>               # tick one; --all for every one
 cairn close <ID>
 cairn check                       # validate; run before finishing
 cairn render                      # regenerate ROADMAP.md

@@ -243,6 +243,33 @@ fn transition(cfg: &Config, ids: &[String], status: &str, quiet: bool, verb: &st
     let store = Store::new(cfg);
     let lock = Lock::acquire(cfg)?;
 
+    // Reported rather than refused, except where the project has said
+    // otherwise. The default stands on its own reasoning — a criterion can stop
+    // applying, and a tool that blocked here would teach people to tick boxes
+    // rather than to say what is true — but a project that sets
+    // `require_criteria` has already decided it wants the gate, and getting it
+    // only from `cairn check` afterwards means getting it after the commit that
+    // closed the item.
+    //
+    // Checked for every id before any of them is written, so `cairn close 1 2 3`
+    // refusing on the third does not leave the first two closed.
+    if cfg.project.require_criteria && cfg.category(status).is_closed() {
+        for raw in ids {
+            let item = store.find_ref(raw)?;
+            let c = item.criteria(cfg.project.criteria_section.as_deref());
+            if c.any() && !c.complete() {
+                let id = cfg.format_id(item.id);
+                bail!(
+                    "{id} has {} of {} acceptance criteria unticked, and this \
+                     project sets `require_criteria`\n`cairn show {id} --criteria` \
+                     lists them; `cairn tick {id} --all` if they are met",
+                    c.total - c.done,
+                    c.total,
+                );
+            }
+        }
+    }
+
     // Every write happens under the lock; the hooks for all of them run after
     // it is released, so a hook that calls cairn cannot deadlock against us.
     let mut changed = Vec::new();

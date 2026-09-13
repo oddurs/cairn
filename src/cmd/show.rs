@@ -30,6 +30,10 @@ pub struct Args {
     /// Print the file path only
     #[arg(long, action = ArgAction::SetTrue)]
     pub path: bool,
+
+    /// Print the acceptance criteria, numbered as `cairn tick` numbers them
+    #[arg(long, action = ArgAction::SetTrue)]
+    pub criteria: bool,
 }
 
 #[derive(clap::Args)]
@@ -63,6 +67,29 @@ pub fn run(args: Args) -> Result<i32> {
     }
     if args.raw {
         print!("{}", std::fs::read_to_string(&item.path)?);
+        return Ok(0);
+    }
+    // `--criteria` selects what to print and `--json` how, which keeps the
+    // criteria out of the item document: that shape is the interchange format's
+    // and is pinned by the golden corpus, and a derived count beside the body it
+    // is derived from would give a round trip two places to disagree.
+    if args.criteria {
+        let list = item.criteria_list(cfg.project.criteria_section.as_deref());
+        if args.json {
+            println!("{}", serde_json::to_string_pretty(&criteria_json(&list))?);
+            return Ok(0);
+        }
+        if list.is_empty() {
+            eprintln!("{}", style::dim("no acceptance criteria"));
+            return Ok(0);
+        }
+        crate::cmd::tick::print_criteria(&list);
+        let done = list.iter().filter(|c| c.ticked).count();
+        println!();
+        println!(
+            "{}",
+            style::dim(&format!("{done} of {} ticked", list.len()))
+        );
         return Ok(0);
     }
     if args.json {
@@ -111,6 +138,8 @@ pub fn run(args: Args) -> Result<i32> {
     }
     let criteria = item.criteria(cfg.project.criteria_section.as_deref());
     if criteria.any() {
+        // `cairn show 12 --criteria` prints them in full; the summary here is
+        // what tells somebody there is something to print.
         let text = criteria.display();
         rows.push((
             "criteria",
@@ -350,4 +379,20 @@ pub fn launch_editor(path: &Path) -> Result<()> {
         bail!("editor `{editor}` exited with {status}");
     }
     Ok(())
+}
+
+/// The criteria as `cairn show --json` carries them: the same numbering `tick`
+/// takes, so a script can read the list and act on it without parsing Markdown
+/// itself — which is the thing this whole feature exists to stop people doing.
+fn criteria_json(list: &[crate::item::Criterion]) -> serde_json::Value {
+    use serde_json::json;
+    json!({
+        "done": list.iter().filter(|c| c.ticked).count(),
+        "total": list.len(),
+        "items": list
+            .iter()
+            .enumerate()
+            .map(|(n, c)| json!({ "n": n + 1, "ticked": c.ticked, "text": c.text }))
+            .collect::<Vec<_>>(),
+    })
 }

@@ -97,8 +97,11 @@ pub fn run(args: Args) -> Result<i32> {
             } else {
                 "no status is open or active — try `cairn board --all`"
             }
-        } else if cfg.field(&group_by).is_none() {
-            "nothing to group by: no [[field]] of that name is declared"
+        } else if cfg.field(&group_by).is_none()
+            && !cfg.grouping_types().any(|t| t.name == group_by)
+        {
+            "nothing to group by: no [[field]], and no [[type]] with `groups`, \
+             carries that name"
         } else {
             "no item carries a value for that field yet"
         };
@@ -341,6 +344,17 @@ fn column_values(ctx: &Ctx, items: &[Item], key: &str, all: bool) -> Vec<String>
     }
     if key == "milestone" {
         let mut names: Vec<String> = ctx.milestones.keys();
+        // A project may keep milestones as a plain label rather than as items,
+        // which is a schema cairn accepts everywhere else: `cairn render` groups
+        // by it and the roadmap comes out right. The board drew no columns at
+        // all, because it only ever asked which milestone *items* existed.
+        for i in items {
+            if let Some(m) = i.milestone().filter(|m| !m.is_empty())
+                && !names.iter().any(|n| n == m)
+            {
+                names.push(m.to_string());
+            }
+        }
         if items.iter().any(|i| i.milestone().is_none()) {
             names.push(String::new());
         }

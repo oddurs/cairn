@@ -158,3 +158,57 @@ fn every_command_in_the_manual_is_one_cairn_accepts() {
         rejected.join("\n")
     );
 }
+
+/// Every command cairn offers has an entry in the manual's command reference.
+///
+/// The ratchet, not a survey. `cairn tick` did not exist for as long as it did
+/// partly because nothing here would have noticed its absence, and the same
+/// silence let `propose`, `proposals` and `migrate` reach a release documented
+/// only in prose. A command with no entry is one somebody has to already know
+/// about to find.
+#[test]
+fn every_command_has_a_section_in_the_manual() {
+    let text = manual();
+    let help = Command::new(env!("CARGO_BIN_EXE_cairn"))
+        .arg("--help")
+        .env("NO_COLOR", "1")
+        .output()
+        .expect("running cairn --help");
+    let help = String::from_utf8_lossy(&help.stdout);
+
+    // The command list, which clap prints one per line under `Commands:`.
+    let listed: Vec<String> = help
+        .lines()
+        .skip_while(|l| !l.starts_with("Commands:"))
+        .skip(1)
+        .take_while(|l| l.starts_with("  ") && !l.trim().is_empty())
+        .filter_map(|l| l.split_whitespace().next())
+        .map(str::to_string)
+        .collect();
+    assert!(
+        listed.len() > 20,
+        "only {} commands found; the extractor has stopped matching --help",
+        listed.len()
+    );
+
+    // `@section cairn set` and `@section cairn close, cairn reopen` both count
+    // for the commands they name: one entry may cover a pair that is genuinely
+    // one idea.
+    let sections: Vec<&str> = text
+        .lines()
+        .filter_map(|l| l.strip_prefix("@section cairn "))
+        .collect();
+    let missing: Vec<&String> = listed
+        .iter()
+        .filter(|c| {
+            !sections.iter().any(|s| {
+                s.split(", ")
+                    .any(|one| one.trim() == *c || one.trim() == format!("cairn {c}"))
+            })
+        })
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "commands with no `@section` in doc/cairn.texi: {missing:?}"
+    );
+}

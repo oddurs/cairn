@@ -207,6 +207,7 @@ fn dispatch(name: &str, a: &Value) -> Result<String> {
         "release_item" => release_item(a),
         "close_item" => close_item(a),
         "add_note" => add_note(a),
+        "tick_criteria" => tick_criteria(a),
         "check" => check(),
         other => bail!("unknown tool `{other}`"),
     }
@@ -646,6 +647,102 @@ fn add_note(a: &Value) -> Result<String> {
     pretty(&json!({ "noted": cfg.format_id(item.id), "body": item.body }))
 }
 
+/// Tick or untick acceptance criteria, by the numbers `show_item` reports.
+///
+/// The write that matches a read the model already had. Without it the only way
+/// for an agent to record a criterion as met was to rewrite the body, which is
+/// both lossy and the one operation in this protocol that can destroy an item.
+fn tick_criteria(a: &Value) -> Result<String> {
+    let cfg = Config::discover()?;
+    let store = Store::new(&cfg);
+    let lock = Lock::acquire(&cfg)?;
+    let mut item = store.find(require_id(&cfg, a)?)?;
+
+    let ticked = a.get("ticked").and_then(Value::as_bool).unwrap_or(true);
+    let section = cfg.project.criteria_section.as_deref();
+    let list = item.criteria_list(section);
+    if list.is_empty() {
+        // Naming the section matters here more than at the command line: told
+        // only that there are no criteria, a model's next move is to rewrite the
+        // body, which is the operation this tool exists to replace.
+        bail!(
+            "{} states no acceptance criteria{}",
+            cfg.format_id(item.id),
+            match section {
+                Some(s) =>
+                    format!(" under a `{s}` heading, which is where this project keeps them"),
+                None => String::new(),
+            }
+        );
+    }
+
+    // A model that has seen `"n": 3` in a result may well send `"3"`, the same
+    // way it sends `"0001"` for an id — and `require_id` has accepted both for
+    // as long as there has been a reason to.
+    let which: Vec<usize> = match a.get("which").and_then(Value::as_array) {
+        Some(v) => v
+            .iter()
+            .map(|n| match n {
+                Value::Number(num) => num
+                    .as_u64()
+                    .map(|n| n as usize)
+                    .ok_or_else(|| anyhow::anyhow!("`which` takes whole numbers, not `{num}`")),
+                Value::String(text) => text
+                    .trim()
+                    .parse::<usize>()
+                    .map_err(|_| anyhow::anyhow!("`which` takes numbers; `{text}` is not one")),
+                other => bail!("`which` takes numbers; `{other}` is not one"),
+            })
+            .collect::<Result<_>>()?,
+        None => Vec::new(),
+    };
+    let all = a.get("all").and_then(Value::as_bool).unwrap_or(false);
+    // One of the two, never both and never neither.
+    let numbered = !which.is_empty();
+    if all == numbered {
+        bail!("give `which` — the criterion numbers, counting from 1 — or `all`");
+    }
+
+    // Resolved before anything is written, so naming one criterion that is not
+    // there changes none of the ones that are.
+    let mut lines = Vec::new();
+    if all {
+        lines.extend(list.iter().map(|c| c.line));
+    } else {
+        for n in &which {
+            match n.checked_sub(1).and_then(|i| list.get(i)) {
+                Some(c) => lines.push(c.line),
+                None => bail!(
+                    "{} states {} acceptance criteria, so there is no {n}{}. \
+                     This tool returns them numbered; so does `show_item`.",
+                    cfg.format_id(item.id),
+                    list.len(),
+                    if *n == 0 { " (they count from 1)" } else { "" }
+                ),
+            }
+        }
+    }
+
+    if item.set_criteria(&lines, ticked) {
+        item.touch(&today());
+        item.save()?;
+        drop(lock);
+        hooks::item(&cfg, &store, hooks::Event::AfterChange, &item);
+    }
+
+    let now = item.criteria_list(section);
+    pretty(&json!({
+        "id": cfg.format_id(item.id),
+        "done": now.iter().filter(|c| c.ticked).count(),
+        "total": now.len(),
+        "criteria": now
+            .iter()
+            .enumerate()
+            .map(|(n, c)| json!({ "n": n + 1, "ticked": c.ticked, "text": c.text }))
+            .collect::<Vec<_>>(),
+    }))
+}
+
 /// Ask for a change you are not permitted to make.
 ///
 /// The permission that refuses the write tells the caller to come here, so this
@@ -743,6 +840,23 @@ fn close_item(a: &Value) -> Result<String> {
             None => bail!("no `done` status is defined in cairn.toml"),
         },
     };
+    // Reported, not refused — except where the project has said otherwise, in
+    // which case refusing here is the whole point of having said it. `cairn
+    // close` draws the same line for the same reason.
+    if cfg.project.require_criteria {
+        let c = item.criteria(cfg.project.criteria_section.as_deref());
+        if c.any() && !c.complete() {
+            bail!(
+                "{} has {} of {} acceptance criteria unticked, and this project \
+                 sets `require_criteria`. Tick what is done with `tick_criteria`; \
+                 if a criterion no longer applies, say so in the item and ask a \
+                 person.",
+                cfg.format_id(item.id),
+                c.total - c.done,
+                c.total
+            );
+        }
+    }
     apply_requested(&mut item, &cfg, "status", Assign::Set(status))?;
     item.touch(&today());
     item.save()?;
@@ -1089,6 +1203,22 @@ fn tools() -> Vec<Value> {
                 "text": str_prop("The note, in Markdown"),
                 "heading": str_prop("Heading to file it under (default: today's date)"),
             }), vec!["id", "text"]),
+        }),
+        json!({
+            "name": "tick_criteria",
+            "description": "Tick or untick an item's acceptance criteria, numbered as \
+        `show_item` returns them. This is the write that matches the criteria a model can already \
+        read: the alternative is rewriting the item's Markdown, which is how an item gets truncated. \
+        Tick a criterion when it is true, not to make a close succeed.",
+            "inputSchema": obj(json!({
+                "id": id_prop("Item id"),
+                "which": json!({
+                    "type": "array", "items": {"type": "integer"},
+                    "description": "Which criteria, counting from 1. Omit with `all`."
+                }),
+                "all": bool_prop("Every criterion the item states"),
+                "ticked": bool_prop("false to untick (default true)"),
+            }), vec!["id"]),
         }),
         json!({
             "name": "check",

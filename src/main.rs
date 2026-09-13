@@ -135,6 +135,12 @@ enum Command {
     /// Add to an item's body: `cairn note 12 "Dropped: too costly"`
     Note(cmd::note::Args),
 
+    /// Tick acceptance criteria: `cairn tick 12 3`, or `--all`
+    Tick(cmd::tick::Args),
+
+    /// Untick acceptance criteria: `cairn untick 12 3`, or `--all`
+    Untick(cmd::tick::Args),
+
     /// Ask for a change somebody else decides: `cairn propose 12 priority=p0 --why "..."`
     Propose(cmd::propose::Args),
 
@@ -262,6 +268,8 @@ fn run(command: Command) -> Result<i32> {
         Command::Log(a) => cmd::log::run(a),
         Command::Set(a) => cmd::set::run(a),
         Command::Note(a) => cmd::note::run(a),
+        Command::Tick(a) => cmd::tick::tick(a),
+        Command::Untick(a) => cmd::tick::untick(a),
         Command::Propose(a) => cmd::propose::run(a),
         Command::Proposals(a) => cmd::propose::list(a),
         Command::Close(a) => cmd::set::close(a),
