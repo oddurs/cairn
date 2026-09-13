@@ -948,6 +948,15 @@ When you want cairn's behaviour rather than its bytes, run the binary.
 @command{config} take @option{--json}; and every command's exit status
 distinguishes success from a project that does not validate.
 
+@cindex saved views, consuming
+This is the right way in for anything that wants what a @emph{saved view}
+selects. @samp{cairn list --view @var{name} --json} applies the view's filter,
+its sort and its columns, and hands back items in the promised shape.
+Reimplementing the filter grammar instead is possible --- it is documented and
+it is promised (@pxref{Filters}) --- but it means implementing all of it. A
+narrower dialect does not fail on a view it cannot parse; it returns nothing,
+and a view that is perfectly valid cairn looks like an empty backlog.
+
 @example
 cairn export                                  # the whole backlog, as JSON
 cairn list --json --filter 'category=open,priority=p0'
@@ -1419,6 +1428,22 @@ Every query command accepts the same expression grammar. Clauses are separated
 by commas and combined with AND; alternatives within a clause are separated by
 @samp{|}.
 
+@cindex filter grammar, status of
+This grammar is part of what cairn promises: field names, operators and the
+pseudo-fields below are additive only, so an expression that works today works
+in every later release of this major version (@pxref{Stability}). It is a
+promise about the @emph{program}, not about the file format --- the item format
+specification says in so many words that a reader of items does not need the
+configuration file, and one that ignores it conforms. A saved view is
+configuration.
+
+That distinction decides something a person writing a view would otherwise have
+to guess at. A second program that wants what a view selects should run
+@samp{cairn list --view @var{name} --json} rather than reimplement this grammar:
+the output is promised too, and reimplementing means implementing all of it,
+including the pseudo-fields, or silently returning nothing for a view that is
+perfectly valid. @xref{Integrating}.
+
 @example
 cairn list --filter 'status=doing'
 cairn list --filter 'priority=p0|p1,category!=done'
@@ -1447,6 +1472,27 @@ otherwise --- which is why ISO dates compare correctly.
 @cindex empty values
 An empty value tests for absence: @samp{milestone=} matches items with no
 milestone, and @samp{milestone!=} matches items that have one.
+
+@cindex undeclared field in a filter
+A clause naming a field the schema does not declare is reported on standard
+error, and the command carries on and exits zero:
+
+@example
+$ cairn list --filter 'piority=p0'
+warning: --filter names `piority`, which is not a declared field --- items
+may still carry it, but nothing in this schema says they do
+no items match
+@end example
+
+@noindent
+A warning rather than a refusal, because an item may legitimately carry a field
+nothing declared, so the expression may be exactly right. It goes to standard
+error so that @option{--json}, @option{--plain}, @option{--ids} and
+@option{--count} stay machine-readable. @command{check} says the same thing
+about a saved view, with the file and line; this is that diagnostic moved to
+where the mistake is actually made, since somebody who never runs
+@command{check} used to get only @samp{no items match} --- a true statement
+about an expression that does not mean what they typed.
 
 Besides the item's own fields, several pseudo-fields are available:
 @code{category} resolves through the status table, so @samp{category=active}

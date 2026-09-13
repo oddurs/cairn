@@ -29,6 +29,17 @@ pub fn run(args: Args) -> Result<i32> {
     let cfg = Config::discover()?;
     let store = Store::new(&cfg);
     let items = store.load_all()?;
+    // Said here rather than inside `roadmap_markdown`, which the after-change
+    // hook calls after every write: a true warning repeated on every command is
+    // how people learn to skim the line a real one appears on. `-q` is what the
+    // hook passes, so a person running `cairn render` hears it and the hook
+    // stays silent. `cairn check` reports it with the line number either way.
+    if !args.quiet
+        && let Some(expr) = &cfg.render.include
+        && let Ok(f) = crate::filter::Filter::parse(expr)
+    {
+        crate::filter::warn_unknown_keys(&cfg, "render.include", &f);
+    }
     let markdown = roadmap_markdown(&cfg, &store, &items)?;
 
     if args.output.as_deref() == Some("-") {

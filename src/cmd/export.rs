@@ -41,7 +41,7 @@ pub fn run(args: Args) -> Result<i32> {
     let ctx = Ctx::new(&cfg, &all);
 
     let filter = match &args.filter {
-        Some(expr) => Filter::parse(expr)?,
+        Some(expr) => crate::filter::parse_checked(&cfg, expr, "--filter")?,
         None => Filter::default(),
     };
     let mut items: Vec<Item> = all

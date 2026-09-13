@@ -224,7 +224,7 @@ pub fn select<'a>(
         filter.push("assignee", Op::Eq, vec![String::new()]);
     }
     if let Some(expr) = &args.filter {
-        filter = filter.and(Filter::parse(expr)?);
+        filter = filter.and(crate::filter::parse_checked(cfg, expr, "--filter")?);
     }
 
     let me = crate::store::whoami();

@@ -103,7 +103,7 @@ pub fn run(args: Args) -> Result<i32> {
         None => None,
     };
 
-    let filter = build_filter(&args, view)?;
+    let filter = build_filter(&cfg, &args, view)?;
     let mentions_status = filter
         .clauses
         .iter()
@@ -190,12 +190,20 @@ pub fn run(args: Args) -> Result<i32> {
     Ok(0)
 }
 
-pub fn build_filter(args: &Args, view: Option<&crate::config::View>) -> Result<Filter> {
+pub fn build_filter(
+    cfg: &Config,
+    args: &Args,
+    view: Option<&crate::config::View>,
+) -> Result<Filter> {
     let mut f = Filter::default();
     if let Some(v) = view
         && let Some(expr) = &v.filter
     {
-        f = f.and(Filter::parse(expr)?);
+        f = f.and(crate::filter::parse_checked(
+            cfg,
+            expr,
+            &format!("view `{}` filter", v.name),
+        )?);
     }
     if !args.status.is_empty() {
         f.push("status", Op::Eq, args.status.clone());
@@ -216,7 +224,7 @@ pub fn build_filter(args: &Args, view: Option<&crate::config::View>) -> Result<F
         f.push("updated", Op::Ge, vec![crate::cmd::a_date(since)?]);
     }
     if let Some(expr) = &args.filter {
-        f = f.and(Filter::parse(expr)?);
+        f = f.and(crate::filter::parse_checked(cfg, expr, "--filter")?);
     }
     Ok(f)
 }

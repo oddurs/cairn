@@ -84,7 +84,7 @@ pub fn run(args: Args) -> Result<i32> {
         Some(expr) => {
             let items = store.load_all()?;
             let ctx = crate::filter::Ctx::new(&cfg, &items);
-            let filter = crate::filter::Filter::parse(expr)?;
+            let filter = crate::filter::parse_checked(&cfg, expr, "--filter")?;
             let matched: Vec<&Item> = items.iter().filter(|i| filter.matches(i, &ctx)).collect();
             if matched.is_empty() {
                 bail!("no item matches `{expr}`");

@@ -412,6 +412,15 @@ description = "Subsystem this touches"
 
 # ─── Saved views ─────────────────────────────────────────────────────────────
 # `cairn list --view next`, `cairn board --view triage`
+#
+# `filter` is written in cairn's filter grammar — the same one `--filter` takes,
+# documented under "Filters" in the manual and promised to stay additive. It is
+# a promise about the program, not about the file format, so another tool that
+# wants what a view selects should run `cairn list --view NAME --json` rather
+# than parse the expression itself.
+#
+# `cairn check` reports a filter naming a field this schema does not declare,
+# and so do `list`, `board` and `render` at the moment you run them.
 
 [[view]]
 name = "now"
