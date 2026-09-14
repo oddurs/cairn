@@ -17,8 +17,36 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
 fn manual() -> String {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("doc/cairn.texi");
-    std::fs::read_to_string(&path)
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut text = read(&root.join("doc/cairn.texi"));
+    // The site's pages are the manual as most people meet it, and the cookbook
+    // page said in its own opening paragraph that this test covered it. It did
+    // not: the extractor read the Texinfo source and nothing else, so a recipe
+    // on the site could name a flag that was never implemented and the claim of
+    // being checked would go on being printed above it.
+    let docs = root.join("www/src/content/docs");
+    let mut pages: Vec<PathBuf> = std::fs::read_dir(&docs)
+        .unwrap_or_else(|e| panic!("reading {}: {e}", docs.display()))
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|x| x == "mdx"))
+        .collect();
+    pages.sort();
+    assert!(!pages.is_empty(), "no pages at {}", docs.display());
+    for page in pages {
+        // Fenced blocks, written as Texinfo so one extractor reads both.
+        for block in read(&page).split("```").skip(1).step_by(2) {
+            let body = block.split_once('\n').map_or("", |(_, rest)| rest);
+            text.push_str("\n@example\n");
+            text.push_str(body);
+            text.push_str("\n@end example\n");
+        }
+    }
+    text
+}
+
+fn read(path: &std::path::Path) -> String {
+    std::fs::read_to_string(path)
         .unwrap_or_else(|e| panic!("reading {}: {e}", path.display()))
         .replace("\r\n", "\n")
 }

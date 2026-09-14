@@ -263,6 +263,17 @@ impl Config {
             .find(|t| t.groups == Some(crate::config::Groups::One))
     }
 
+    /// The key work is filed under: the scheduling type's own name.
+    ///
+    /// A column header, a sort key and a filter key all have to agree with the
+    /// word the item file actually uses. Until format 3 that word was always
+    /// `milestone`, so the literal was written at each of those sites; a
+    /// project that names the type `horizon` writes `horizon:` in its items and
+    /// was invisible to every one of them.
+    pub fn schedule_field(&self) -> Option<&str> {
+        self.schedule_type().map(|t| t.name.as_str())
+    }
+
     /// Whether items of this type are containers — the thing work belongs to
     /// rather than work itself.
     ///

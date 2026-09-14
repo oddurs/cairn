@@ -56,9 +56,13 @@ Enough to run a real project's roadmap without reaching for anything else.
 
 ## v0.2 — Comfortable
 
-`##########` 100% · 49 of 49 done · due 2026-12-01
+`##########` 98% · 49 of 50 done · due 2026-12-01
 
 The rough edges that show up after a few weeks of daily use, and the pieces that make the central claim true rather than merely stated.
+
+### in progress
+
+- [ ] [`0122`](https://github.com/oddurs/cairn/blob/main/cairn/items/0122-a-grouping-type-not-named-milestone-is-invisible-to-list-next-and-sort.md) A grouping type not named milestone is invisible to list, next and sort <sup>bug · p0</sup>
 
 ### done
 

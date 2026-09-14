@@ -480,7 +480,8 @@ fn compare_by_key(a: &Item, b: &Item, key: &str, ctx: &Ctx) -> Ordering {
         "status" => cfg
             .status_index(a.status())
             .cmp(&cfg.status_index(b.status())),
-        "milestone" => milestone_rank(ctx, a.milestone()).cmp(&milestone_rank(ctx, b.milestone())),
+        _ if Some(key) == ctx.cfg.schedule_field() => milestone_rank(ctx, ctx.cfg.schedule_of(a))
+            .cmp(&milestone_rank(ctx, ctx.cfg.schedule_of(b))),
         _ => {
             let (x, y) = (resolve(a, ctx, key), resolve(b, ctx, key));
             // Empty values sort last regardless of direction of the rest.
