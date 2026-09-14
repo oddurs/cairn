@@ -96,3 +96,39 @@ Two branches that each created an item allocate the same identifier, because no
 branch can know what the other did. `renumber` repairs it, keeping the
 identifier on the side that was already published. The dry run first, always —
 this rewrites files.
+
+## Keep a personal backlog that is not a code project
+
+```sh
+cairn init --name Oddur --preset minimal --bare
+cairn new now -t horizon
+cairn new next -t horizon
+cairn new someday -t horizon
+cairn new 'Migrate the other projects' -t task --set horizon=now
+```
+
+Cairn needs a `cairn.toml` and nothing else — not a git repository, not source
+code. So a directory in your home is a tracker for the work that belongs to you
+rather than to a repository: the thing that spans four projects, the idea with
+no home yet, the decision you keep deferring.
+
+The one change worth making to the schema is what work is filed under. A
+release-numbered milestone is meaningless here, so name the grouping type after
+the question you actually ask:
+
+```toml
+[[type]]
+name = "horizon"
+groups = "one"
+```
+
+Now `now`, `next` and `someday` are what the board columns and the roadmap are
+built from, and `cairn list` heads the column `HORIZON`. Nothing else in the
+schema changes, because cairn looks for the type that says it groups work and
+never for the word `milestone`.
+
+Run it from anywhere with `-C`, which takes the directory holding the
+`cairn.toml`: `cairn -C ~/cairn next`. A shell alias is worth the ten seconds.
+
+Keep it out of a remote unless you mean it. An untracked item and a private
+repository are the same idea; the second one is honest about it.
