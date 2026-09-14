@@ -93,7 +93,7 @@ pub fn run(args: Args) -> Result<i32> {
                 cells.push(resolve(i, &ctx, &f).display());
             }
             cells.push(i.status().to_string());
-            cells.push(i.milestone().unwrap_or("").to_string());
+            cells.push(cfg.schedule_of(i).unwrap_or("").to_string());
             cells.push(
                 ctx.blockers(i)
                     .iter()
@@ -146,7 +146,9 @@ pub fn run(args: Args) -> Result<i32> {
     let mut headers: Vec<String> = vec!["id".into()];
     headers.extend(fields.iter().cloned());
     headers.push("status".into());
-    headers.push("milestone".into());
+    if let Some(f) = cfg.schedule_field() {
+        headers.push(f.to_string());
+    }
     headers.push("blocked by".into());
     headers.push("title".into());
 
@@ -164,7 +166,9 @@ pub fn run(args: Args) -> Result<i32> {
             row.push(Cell::plain(resolve(i, &ctx, f).display()));
         }
         row.push(Cell::styled(&status, paint_status(&cfg, i.status())));
-        row.push(Cell::plain(i.milestone().unwrap_or("")));
+        if cfg.schedule_field().is_some() {
+            row.push(Cell::plain(cfg.schedule_of(i).unwrap_or("")));
+        }
         let blocked_by = ctx
             .blockers(i)
             .iter()
@@ -212,7 +216,11 @@ pub fn select<'a>(
 ) -> Result<Vec<&'a Item>> {
     let mut filter = Filter::default();
     if let Some(m) = &args.milestone {
-        filter.push("milestone", Op::Eq, vec![m.clone()]);
+        filter.push(
+            cfg.schedule_field().unwrap_or("milestone"),
+            Op::Eq,
+            vec![m.clone()],
+        );
     }
     if let Some(k) = &args.kind {
         filter.push("type", Op::Eq, vec![k.clone()]);

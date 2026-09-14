@@ -112,7 +112,7 @@ pub fn run(args: Args) -> Result<i32> {
     if item.kind().is_some() {
         rows.push(("type", paint_type(&cfg, item.kind())));
     }
-    if let Some(m) = item.milestone() {
+    if let Some(m) = cfg.schedule_of(&item) {
         let label = match ctx.milestones.get(m) {
             Some(ms) => match crate::refs::due(ms) {
                 Some(due) => format!("{m}  {}", style::dim(&format!("due {due}"))),
@@ -122,7 +122,7 @@ pub fn run(args: Args) -> Result<i32> {
             // colour is so it is visible here too.
             None => style::red(m),
         };
-        rows.push(("milestone", label));
+        rows.push((cfg.schedule_field().unwrap_or("milestone"), label));
     }
     if let Some(a) = &item.meta.assignee {
         rows.push(("assignee", a.clone()));

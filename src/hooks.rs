@@ -81,7 +81,7 @@ pub fn item(cfg: &Config, store: &Store, event: Event, it: &Item) {
         ("CAIRN_ITEM_TYPE", it.kind().unwrap_or("").to_string()),
         (
             "CAIRN_ITEM_MILESTONE",
-            it.milestone().unwrap_or("").to_string(),
+            cfg.schedule_of(it).unwrap_or("").to_string(),
         ),
         (
             "CAIRN_ITEM_CATEGORY",

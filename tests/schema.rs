@@ -1780,6 +1780,60 @@ fn the_schedule_type_need_not_be_called_milestone() {
     assert!(p.run(&["check"]).ok(), "{}", p.run(&["check"]).all());
 }
 
+/// The test above asserted `roadmap` and `board`, which resolve the schedule
+/// generically, and stopped there. The commands that read the backlog every day
+/// each wrote the word `milestone` as a literal — a column header, a row cell, a
+/// default sort key — so a project that named the type anything else got a
+/// column headed MILESTONE with nothing in it, and `next` dropped the column
+/// entirely as empty. Named surfaces, because "it works" is what the earlier
+/// test already claimed.
+#[test]
+fn the_reading_commands_use_the_schedule_types_own_name() {
+    let p = Project::with(
+        Schema::bare()
+            .item_type(ItemType::new("task"))
+            .item_type(ItemType::new("horizon").groups_one())
+            .render(|r| r.group_by("horizon")),
+    );
+    p.expect(&["new", "Now", "-t", "horizon", "-q"]);
+    p.expect(&["set", "1", "key=now"]);
+    p.expect(&["new", "Some work", "-t", "task", "-q"]);
+    p.expect(&["set", "2", "horizon=now"]);
+
+    let listed = p.expect(&["list"]).stdout;
+    assert_contains(
+        &listed,
+        "HORIZON",
+        "the column is headed with the real name",
+    );
+    assert_missing(
+        &listed,
+        "MILESTONE",
+        "and not with a word this schema never uses",
+    );
+    assert_contains(&listed, "now", "and the value is actually found");
+
+    let ready = p.expect(&["next"]).stdout;
+    assert_contains(&ready, "HORIZON", "`next` offers the column");
+    assert_contains(
+        &ready,
+        "now",
+        "with the value in it, so it is not dropped as empty",
+    );
+
+    assert_contains(
+        &p.expect(&["show", "2"]).stdout,
+        "horizon",
+        "`show` names the field as the item file does",
+    );
+    assert_contains(
+        &p.expect(&["list", "--filter", "horizon=now"]).stdout,
+        "Some work",
+        "and it can be filtered on",
+    );
+    assert!(p.run(&["check"]).ok(), "{}", p.run(&["check"]).all());
+}
+
 /// `cairn config` used to show nothing about the most consequential fact in a
 /// schema.
 #[test]

@@ -140,7 +140,10 @@ pub fn run(args: Args) -> Result<i32> {
         .sort
         .clone()
         .or_else(|| view.and_then(|v| v.sort.clone()))
-        .unwrap_or_else(|| "milestone,status,id".to_string());
+        .unwrap_or_else(|| match cfg.schedule_field() {
+            Some(f) => format!("{f},status,id"),
+            None => "status,id".to_string(),
+        });
     sort_items(&mut items, &sort, &ctx);
 
     if let Some(n) = args.limit {
@@ -212,7 +215,11 @@ pub fn build_filter(
         f.push("type", Op::Eq, args.kind.clone());
     }
     if !args.milestone.is_empty() {
-        f.push("milestone", Op::Eq, args.milestone.clone());
+        f.push(
+            cfg.schedule_field().unwrap_or("milestone"),
+            Op::Eq,
+            args.milestone.clone(),
+        );
     }
     for l in &args.labels {
         f.push("labels", Op::Eq, vec![l.clone()]);
@@ -244,8 +251,8 @@ fn resolve_columns(args: &Args, view: Option<&crate::config::View>, cfg: &Config
     }
     // The column is offered when the project has the field at all; empty ones
     // are dropped once the rows are known.
-    if cfg.schedule_type().is_some() {
-        cols.push("milestone".into());
+    if let Some(f) = cfg.schedule_field() {
+        cols.push(f.to_string());
     }
     for f in cfg.fields.iter().filter(|f| f.column) {
         cols.push(f.name.clone());

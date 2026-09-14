@@ -71,7 +71,11 @@ pub fn run(args: Args) -> Result<i32> {
         filter = filter.and(crate::filter::parse_checked(&cfg, expr, "--filter")?);
     }
     if let Some(m) = &args.milestone {
-        filter.push("milestone", crate::filter::Op::Eq, vec![m.clone()]);
+        filter.push(
+            cfg.schedule_field().unwrap_or("milestone"),
+            crate::filter::Op::Eq,
+            vec![m.clone()],
+        );
     }
     // The full set builds the context, containers included. They are where the
     // milestones live, and the context has to find them whether or not they are
@@ -346,20 +350,20 @@ fn column_values(ctx: &Ctx, items: &[Item], key: &str, all: bool) -> Vec<String>
             .map(|s| s.name.clone())
             .collect();
     }
-    if key == "milestone" {
+    if Some(key) == ctx.cfg.schedule_field() {
         let mut names: Vec<String> = ctx.milestones.keys();
         // A project may keep milestones as a plain label rather than as items,
         // which is a schema cairn accepts everywhere else: `cairn render` groups
         // by it and the roadmap comes out right. The board drew no columns at
         // all, because it only ever asked which milestone *items* existed.
         for i in items {
-            if let Some(m) = i.milestone().filter(|m| !m.is_empty())
+            if let Some(m) = ctx.cfg.schedule_of(i).filter(|m| !m.is_empty())
                 && !names.iter().any(|n| n == m)
             {
                 names.push(m.to_string());
             }
         }
-        if items.iter().any(|i| i.milestone().is_none()) {
+        if items.iter().any(|i| ctx.cfg.schedule_of(i).is_none()) {
             names.push(String::new());
         }
         return names;
