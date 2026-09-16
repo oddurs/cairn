@@ -56,7 +56,7 @@ Enough to run a real project's roadmap without reaching for anything else.
 
 ## v0.2 — Comfortable
 
-`##########` 98% · 50 of 51 done · due 2026-12-01
+`##########` 98% · 51 of 52 done · due 2026-12-01
 
 The rough edges that show up after a few weeks of daily use, and the pieces that make the central claim true rather than merely stated.
 
@@ -116,6 +116,7 @@ The rough edges that show up after a few weeks of daily use, and the pieces that
 - [x] [`0113`](https://github.com/oddurs/cairn/blob/main/cairn/items/0113-a-type-declares-that-it-groups-work.md) A type declares that it groups work <sup>feature · p0 · s12</sup>
 - [x] [`0114`](https://github.com/oddurs/cairn/blob/main/cairn/items/0114-nothing-should-be-looked-up-by-the-word-milestone.md) Nothing should be looked up by the word milestone <sup>feature · p1 · s12</sup>
 - [x] [`0122`](https://github.com/oddurs/cairn/blob/main/cairn/items/0122-a-grouping-type-not-named-milestone-is-invisible-to-list-next-and-sort.md) A grouping type not named milestone is invisible to list, next and sort <sup>bug · p0</sup>
+- [x] [`0125`](https://github.com/oddurs/cairn/blob/main/cairn/items/0125-a-duplicate-key-can-be-written-and-only-check-says-so.md) A duplicate key can be written, and only check says so <sup>bug · p1</sup>
 
 ## v1.0 — Stable
 
