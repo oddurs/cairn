@@ -285,3 +285,51 @@ fn dropped_work_does_not_count_against_progress() {
         "the rendered roadmap agrees",
     );
 }
+
+/// A rename that would land on a file already there never overwrites it.
+///
+/// The filename is cosmetic — the identifier lives in the frontmatter — so a
+/// file may legitimately be named for an item that is not the one inside it.
+/// A hand-copied file, or a renumber that stopped halfway, leaves exactly that,
+/// and the next title change then has a destination that already exists.
+///
+/// What this pins is the safety property: the item in the way survives, and the
+/// change to the item being renamed is not half-applied to disk. It deliberately
+/// does not assert the exit status, because today `set` returns failure for a
+/// title change it completed — 0123, where that is argued out.
+#[test]
+fn renaming_onto_an_existing_file_never_overwrites_it() {
+    let p = Project::new();
+    p.add("Original title", &[]);
+
+    // A real item, in a file named after a different one.
+    p.write(
+        "cairn/items/0001-taken.md",
+        "---\nid: 99\ntitle: Taken\nstatus: backlog\n---\n\nkept by hand\n",
+    );
+
+    let out = p.run(&["set", "1", "title=Taken"]);
+    assert_contains(
+        &out.all(),
+        "already exists",
+        "it renamed over a file that was there, or said nothing about not doing so",
+    );
+
+    let occupant = std::fs::read_to_string(p.path("cairn/items/0001-taken.md")).unwrap();
+    assert_contains(&occupant, "id: 99", "the item in the way was overwritten");
+    assert_contains(&occupant, "kept by hand", "its body was overwritten");
+
+    // Whatever the exit status claims, the item and its file agree with each
+    // other: the title is the new one and the old file still holds it.
+    assert_contains(
+        &p.expect(&["show", "1"]).stdout,
+        "Taken",
+        "the item is in neither state",
+    );
+    assert_contains(
+        &std::fs::read_to_string(p.path("cairn/items/0001-original-title.md")).unwrap(),
+        "title: Taken",
+        "the file on disk disagrees with what cairn reports",
+    );
+    assert!(p.run(&["check"]).ok(), "the project no longer loads");
+}

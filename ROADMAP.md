@@ -115,7 +115,7 @@ The rough edges that show up after a few weeks of daily use, and the pieces that
 
 ## v1.0 — Stable
 
-`#########·` 85% · 23 of 27 done · due 2027-03-01
+`#########·` 82% · 23 of 28 done · due 2027-03-01
 
 Safe to depend on: every scriptable surface carries a promise, the command surface has been reviewed and pruned rather than accumulated, releases can be verified, and it installs from a package manager people already use.
 
@@ -125,6 +125,7 @@ Safe to depend on: every scriptable surface carries a promise, the command surfa
 - [ ] [`0053`](https://github.com/oddurs/cairn/blob/main/cairn/items/0053-be-in-a-package-manager-people-already-use.md) Be in a package manager people already use <sup>chore · p0 · blocked-on-a-release</sup>
 - [ ] [`0067`](https://github.com/oddurs/cairn/blob/main/cairn/items/0067-decide-whether-identifiers-should-be-collision-free-by-construction.md) Decide whether identifiers should be collision-free by construction <sup>feature · p1 · s7</sup>
 - [ ] [`0118`](https://github.com/oddurs/cairn/blob/main/cairn/items/0118-unquoted-yaml-1-1-booleans-disagree-across-readers.md) Unquoted YAML 1.1 booleans disagree across readers <sup>bug · p2</sup>
+- [ ] [`0123`](https://github.com/oddurs/cairn/blob/main/cairn/items/0123-a-refused-rename-reports-failure-for-a-change-that-happened.md) A refused rename reports failure for a change that happened <sup>bug · p2</sup>
 
 ### done
 
