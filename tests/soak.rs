@@ -319,7 +319,7 @@ fn a_long_sequence_of_ordinary_use_leaves_the_backlog_intact() {
                 }
                 "mcp"
             }
-            (103..=105, _) | (_, _) => {
+            (103..=105 | _, _) => {
                 let doc = s.expect(&["export"]).stdout;
                 let mirror = Soak {
                     project: Project::empty(),
@@ -523,7 +523,7 @@ fn check_invariants(s: &Soak, step: usize, op: &str) {
     for entry in std::fs::read_dir(&items).expect("item directory").flatten() {
         let name = entry.file_name().to_string_lossy().to_string();
         assert!(
-            !name.ends_with(".tmp"),
+            !name.to_ascii_lowercase().ends_with(".tmp"),
             "{at}: a partial write survived: {name}"
         );
         assert!(

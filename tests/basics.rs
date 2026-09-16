@@ -463,7 +463,11 @@ fn a_note_carrying_crlf_never_reaches_the_file() {
 
     // An LF item stays LF no matter how many CRLF lines a note carries.
     p.add("Plain", &["--body", "Body."]);
-    let many: String = (0..40).map(|n| format!("line {n}\r\n")).collect();
+    let many: String = (0..40).fold(String::new(), |mut s, n| {
+        use std::fmt::Write;
+        let _ = writeln!(s, "line {n}\r");
+        s
+    });
     assert!(p.run_stdin(&["note", "2", "--stdin", "-q"], &many).ok());
     let plain_path = p.expect(&["show", "2", "--path"]).trimmed();
     let plain = std::fs::read_to_string(plain_path).unwrap();
@@ -697,7 +701,7 @@ fn dependencies_survive_an_export_and_import() {
             .as_array()
             .expect("depends_on")
             .iter()
-            .filter_map(|v| v.as_u64())
+            .filter_map(serde_json::Value::as_u64)
             .collect();
         assert_eq!(
             deps,

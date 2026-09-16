@@ -51,10 +51,9 @@ pub fn paint_status(cfg: &Config, status: &str) -> String {
     match &s.color {
         Some(c) => style::named(c, text),
         None => match s.category() {
-            Category::Open => style::dim(text),
             Category::Active => style::yellow(text),
             Category::Done => style::green(text),
-            Category::Dropped => style::dim(text),
+            Category::Open | Category::Dropped => style::dim(text),
         },
     }
 }

@@ -99,10 +99,11 @@ fn argv(command: &str) -> Vec<String> {
     let mut current = String::new();
     let mut quote: Option<char> = None;
     for c in command.chars() {
+        #[allow(clippy::match_same_arms)]
         match (quote, c) {
             (Some(q), _) if c == q => quote = None,
             (Some(_), _) => current.push(c),
-            (None, '\'') | (None, '"') => quote = Some(c),
+            (None, '\'' | '"') => quote = Some(c),
             (None, ' ') => {
                 if !current.is_empty() {
                     out.push(std::mem::take(&mut current));
@@ -149,7 +150,7 @@ fn every_command_in_the_manual_is_one_cairn_accepts() {
         vec!["milestone", "add", "v0.1"],
         vec!["milestone", "add", "v0.2"],
     ] {
-        let args: Vec<String> = setup.iter().map(|s| s.to_string()).collect();
+        let args: Vec<String> = setup.iter().map(std::string::ToString::to_string).collect();
         run(&args, dir.path());
     }
 
@@ -162,7 +163,7 @@ fn every_command_in_the_manual_is_one_cairn_accepts() {
         let args = argv(command);
         // `init` would create a second project inside this one, and `mcp` waits
         // on a protocol. Neither is about argument parsing.
-        if matches!(args.first().map(String::as_str), Some("init") | Some("mcp")) {
+        if matches!(args.first().map(String::as_str), Some("init" | "mcp")) {
             continue;
         }
 

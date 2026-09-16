@@ -244,7 +244,7 @@ pub fn run(args: Args) -> Result<i32> {
     // Dependencies are rewritten once every incoming id has a local one, which
     // is why this cannot happen inside the loop above: an item may depend on
     // one that appears later in the document.
-    for (index, item) in written.iter_mut() {
+    for (index, item) in &mut written {
         let inc = &incoming[*index];
         if inc.depends_on.is_empty() {
             continue;
@@ -492,26 +492,25 @@ fn resolve_status(
         }
     }
     let wanted = match inc.category.as_deref() {
-        Some("done") | Some("closed") => Category::Done,
+        Some("done" | "closed") => Category::Done,
         Some("dropped") => Category::Dropped,
         Some("active") => Category::Active,
         Some("open") => Category::Open,
         // GitHub and friends say `closed` in the status field itself.
         _ => match inc.status.as_deref() {
-            Some("closed") | Some("done") | Some("resolved") => Category::Done,
+            Some("closed" | "done" | "resolved") => Category::Done,
             _ => Category::Open,
         },
     };
-    match cfg.statuses.iter().find(|s| s.category() == wanted) {
-        Some(s) => s.name.clone(),
-        None => {
-            warnings.push(format!(
-                "`{title}`: no status with category `{}` — used `{}`",
-                wanted.as_str(),
-                cfg.initial_status()
-            ));
-            cfg.initial_status().to_string()
-        }
+    if let Some(s) = cfg.statuses.iter().find(|s| s.category() == wanted) {
+        s.name.clone()
+    } else {
+        warnings.push(format!(
+            "`{title}`: no status with category `{}` — used `{}`",
+            wanted.as_str(),
+            cfg.initial_status()
+        ));
+        cfg.initial_status().to_string()
     }
 }
 

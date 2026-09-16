@@ -2,6 +2,8 @@
 //
 // Copyright (c) 2026 Oddur Sigurdsson. MIT licensed; see LICENSE.
 // cairn show / edit / remove — single-item operations.
+use std::io::Write;
+
 use crate::cmd::{item_json, paint_status, paint_type};
 use crate::config::Config;
 use crate::filter::{Ctx, resolve};
@@ -259,7 +261,6 @@ pub fn remove(args: RemoveArgs) -> Result<i32> {
             );
         }
         eprint!("delete {} item(s)? [y/N] ", targets.len());
-        use std::io::Write;
         std::io::stderr().flush()?;
         let mut answer = String::new();
         std::io::stdin().read_line(&mut answer)?;
@@ -279,7 +280,7 @@ pub fn remove(args: RemoveArgs) -> Result<i32> {
             t.title()
         );
     }
-    for dep in dependents.iter_mut() {
+    for dep in &mut dependents {
         dep.meta.depends_on.retain(|d| !doomed.contains(d));
         for def in &refs {
             let kept: Vec<String> = crate::refs::values(dep, def)

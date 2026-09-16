@@ -87,7 +87,10 @@ fn writing_leaves_no_temporary_files_behind() {
     for dir in ["cairn/items", "."] {
         for entry in std::fs::read_dir(p.path(dir)).unwrap() {
             let name = entry.unwrap().file_name().to_string_lossy().to_string();
-            assert!(!name.ends_with(".tmp"), "left behind: {dir}/{name}");
+            assert!(
+                !name.to_ascii_lowercase().ends_with(".tmp"),
+                "left behind: {dir}/{name}"
+            );
         }
     }
 }

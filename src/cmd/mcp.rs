@@ -127,9 +127,8 @@ pub fn run(args: Args) -> Result<i32> {
 /// the client will not be running from this directory.
 fn print_config() -> Result<i32> {
     let cfg = Config::discover()?;
-    let exe = std::env::current_exe()
-        .map(|p| p.display().to_string())
-        .unwrap_or_else(|_| "cairn".to_string());
+    let exe =
+        std::env::current_exe().map_or_else(|_| "cairn".to_string(), |p| p.display().to_string());
     let snippet = json!({
         "mcpServers": {
             "cairn": {
@@ -326,7 +325,7 @@ fn list_items(a: &Value) -> Result<String> {
     let keys = wanted(&cfg, a)?;
     let arr: Vec<Value> = hits
         .iter()
-        .map(|i| narrow(enrich(&cfg, &store, &ctx, i), &keys))
+        .map(|i| narrow(enrich(&cfg, &store, &ctx, i), keys.as_deref()))
         .collect();
     pretty(&json!({ "count": arr.len(), "items": arr }))
 }
@@ -358,7 +357,7 @@ fn next_items(a: &Value) -> Result<String> {
     let keys = wanted(&cfg, a)?;
     let arr: Vec<Value> = picked
         .iter()
-        .map(|i| narrow(enrich(&cfg, &store, &ctx, i), &keys))
+        .map(|i| narrow(enrich(&cfg, &store, &ctx, i), keys.as_deref()))
         .collect();
     pretty(&json!({ "count": arr.len(), "items": arr }))
 }
@@ -388,7 +387,10 @@ fn search_items(a: &Value) -> Result<String> {
         .map(|i| enrich(&cfg, &store, &ctx, i))
         .collect();
     let keys = wanted(&cfg, a)?;
-    let hits: Vec<Value> = hits.into_iter().map(|v| narrow(v, &keys)).collect();
+    let hits: Vec<Value> = hits
+        .into_iter()
+        .map(|v| narrow(v, keys.as_deref()))
+        .collect();
     pretty(&json!({ "count": hits.len(), "items": hits }))
 }
 
@@ -400,7 +402,7 @@ fn show_item(a: &Value) -> Result<String> {
     let item = store.find(require_id(&cfg, a)?)?;
     let mut v = crate::cmd::item_json(&cfg, &item, &store, true);
     decorate(&mut v, &ctx, &item);
-    pretty(&narrow(v, &wanted(&cfg, a)?))
+    pretty(&narrow(v, wanted(&cfg, a)?.as_deref()))
 }
 
 fn create_item(a: &Value) -> Result<String> {
@@ -957,7 +959,7 @@ fn wanted(cfg: &Config, a: &Value) -> Result<Option<Vec<String>>> {
 ///
 /// `id` always survives: a result nothing can be acted on is worth less than
 /// the bytes it took.
-fn narrow(v: Value, keys: &Option<Vec<String>>) -> Value {
+fn narrow(v: Value, keys: Option<&[String]>) -> Value {
     let Some(keys) = keys else { return v };
     let Some(o) = v.as_object() else { return v };
     let schema_fields = o.get("fields").and_then(Value::as_object);

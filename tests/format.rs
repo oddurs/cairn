@@ -949,7 +949,7 @@ fn an_interchange_document_that_is_wrong_is_refused_rather_than_half_read() {
         // Two records claiming one id.
         r#"{"items":[{"id":1,"title":"A","status":"backlog"},{"id":1,"title":"B","status":"backlog"}]}"#,
         // Not a document at all.
-        r#"[]"#,
+        r"[]",
         r#"{"items":"none"}"#,
     ] {
         let out = p.run_stdin(&["import"], doc);
@@ -1012,7 +1012,7 @@ fn history_survives_a_commit_message_that_looks_like_data() {
     assert!(out.ok(), "{}", out.all());
     let json: serde_json::Value =
         serde_json::from_str(&p.expect(&["log", "1", "--json"]).stdout).expect("JSON");
-    let revisions = json["revisions"].as_array().map(Vec::len).unwrap_or(0);
+    let revisions = json["revisions"].as_array().map_or(0, Vec::len);
     assert!(
         revisions >= 2,
         "the history was lost to a commit message: {json}"

@@ -294,6 +294,11 @@ fn run(command: Command) -> Result<i32> {
 }
 
 /// Shared by `new` and `set`: parse `key=value`, `key+=value`, `key-=value`.
+///
+/// # Errors
+///
+/// When the argument contains no assignment operator at all, which is a command
+/// line nobody can act on rather than a value nobody can parse.
 pub fn parse_assignment(s: &str) -> Result<(String, Assign)> {
     for (token, mk) in [
         ("+=", Assign::Add as fn(String) -> Assign),

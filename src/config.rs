@@ -632,12 +632,11 @@ impl IdFormat {
             rest = r;
         }
 
-        match rest.parse::<u32>() {
-            Ok(n) => Ok(n),
-            Err(_) => {
-                let example = self.render(12);
-                bail!("`{raw}` is not a valid item id (expected {example}, or 12)")
-            }
+        if let Ok(n) = rest.parse::<u32>() {
+            Ok(n)
+        } else {
+            let example = self.render(12);
+            bail!("`{raw}` is not a valid item id (expected {example}, or 12)")
         }
     }
 
@@ -833,8 +832,7 @@ impl Config {
             .with_context(|| format!("parsing {}", path.display()))?;
         cfg.root = path
             .parent()
-            .map(Path::to_path_buf)
-            .unwrap_or_else(|| PathBuf::from("."));
+            .map_or_else(|| PathBuf::from("."), Path::to_path_buf);
         cfg.validate()?;
         cfg.notice_if_behind();
         Ok(cfg)
@@ -885,8 +883,7 @@ impl Config {
             toml::from_str(&text).with_context(|| format!("parsing {}", path.display()))?;
         cfg.root = path
             .parent()
-            .map(Path::to_path_buf)
-            .unwrap_or_else(|| PathBuf::from("."));
+            .map_or_else(|| PathBuf::from("."), Path::to_path_buf);
         Ok(cfg)
     }
 
@@ -1037,7 +1034,7 @@ impl Config {
 
     pub fn category(&self, status: &str) -> Category {
         self.status(status)
-            .map(|s| s.category())
+            .map(Status::category)
             .unwrap_or_default()
     }
 

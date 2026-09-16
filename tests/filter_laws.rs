@@ -32,7 +32,7 @@ fn backlog(seed: u64, count: usize) -> Project {
 
     for n in 0..count {
         let out = p.expect(&["new", &format!("Item {n}"), "-q"]);
-        let id = out.trimmed().to_string();
+        let id = out.trimmed().clone();
         p.expect(&[
             "set",
             &id,

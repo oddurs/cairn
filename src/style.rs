@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 static COLOR: AtomicBool = AtomicBool::new(false);
 
 /// `force` mirrors the tri-state `--color` flag: Some(true)/Some(false) override,
-/// None means auto-detect (NO_COLOR, then tty).
+/// None means auto-detect (`NO_COLOR`, then tty).
 pub fn init(force: Option<bool>) {
     let on = match force {
         Some(v) => v,

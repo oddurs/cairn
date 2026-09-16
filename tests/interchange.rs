@@ -107,7 +107,7 @@ fn shapes(p: &Project) -> Vec<Shape> {
                 .as_array()
                 .map(|a| {
                     a.iter()
-                        .filter_map(|v| v.as_u64())
+                        .filter_map(serde_json::Value::as_u64)
                         .map(|d| titles.get(&d).cloned().unwrap_or_else(|| format!("?{d}")))
                         .collect()
                 })

@@ -5,6 +5,11 @@
 use crate::config::{Config, FieldKind};
 use crate::item::Item;
 use crate::render::roadmap_markdown;
+
+/// Unbounded nesting is allowed, but past a handful it is usually a taxonomy
+/// rather than a plan. A warning says "look at this", which is all that is
+/// wanted.
+const DEEP: usize = 4;
 use crate::store::Store;
 use crate::style;
 use anyhow::Result;
@@ -306,9 +311,6 @@ fn collect_inner(
             r.error_at(&at, item, "key", problem);
         }
 
-        // Unbounded, but past a handful this is usually a taxonomy rather than
-        // a plan. A warning says "look at this", which is all that is wanted.
-        const DEEP: usize = 4;
         let depth = crate::refs::depth(items, cfg, item);
         if depth > DEEP {
             r.warn(

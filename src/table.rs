@@ -42,7 +42,10 @@ pub struct Table {
 impl Table {
     pub fn new(headers: &[&str]) -> Table {
         Table {
-            headers: headers.iter().map(|h| h.to_string()).collect(),
+            headers: headers
+                .iter()
+                .map(std::string::ToString::to_string)
+                .collect(),
             rows: Vec::new(),
         }
     }
@@ -78,7 +81,7 @@ impl Table {
         }
         let mut keep_iter = live.iter();
         self.headers.retain(|_| *keep_iter.next().unwrap_or(&true));
-        for row in self.rows.iter_mut() {
+        for row in &mut self.rows {
             let mut it = live.iter();
             row.retain(|_| *it.next().unwrap_or(&true));
         }
@@ -99,9 +102,7 @@ impl Table {
 
         // The last column absorbs whatever room is left over.
         let total: usize = widths.iter().sum::<usize>() + gap * (ncols - 1);
-        let term = terminal_size()
-            .map(|(Width(w), _)| w as usize)
-            .unwrap_or(100);
+        let term = terminal_size().map_or(100, |(Width(w), _)| w as usize);
         if total > term {
             let others: usize = widths[..ncols - 1].iter().sum::<usize>() + gap * (ncols - 1);
             widths[ncols - 1] = term.saturating_sub(others).max(12);

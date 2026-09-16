@@ -64,7 +64,7 @@ pub fn run(args: Args) -> Result<i32> {
         if let Some(g) = &v.group_by
             && args.group_by == "status"
         {
-            group_by = g.clone();
+            group_by.clone_from(g);
         }
     }
     if let Some(expr) = &args.filter {
@@ -117,9 +117,7 @@ pub fn run(args: Args) -> Result<i32> {
         return Ok(0);
     }
 
-    let term = terminal_size()
-        .map(|(Width(w), _)| w as usize)
-        .unwrap_or(100);
+    let term = terminal_size().map_or(100, |(Width(w), _)| w as usize);
     let gap = 2;
     let n = columns.len();
 

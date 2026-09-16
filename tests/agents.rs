@@ -13,8 +13,9 @@ mod support;
 use support::*;
 
 #[allow(unused_imports)]
-use std::path::{Path, PathBuf};
+use std::io::Write;
 #[allow(unused_imports)]
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 // --- agent instructions -----------------------------------------------------
@@ -595,7 +596,6 @@ fn two_agents_at_once_leave_one_consistent_backlog() {
                 .stderr(Stdio::piped())
                 .spawn()
                 .expect("spawn");
-            use std::io::Write;
             child
                 .stdin
                 .take()
@@ -1348,7 +1348,7 @@ fn show_has_a_shape_for_a_script() {
     assert!(raw.starts_with("---"), "--raw is the file itself:\n{raw}");
 
     let path = p.expect(&["show", "1", "--path"]).trimmed();
-    assert!(path.ends_with(".md"), "{path}");
+    assert!(path.to_ascii_lowercase().ends_with(".md"), "{path}");
     assert_eq!(p.read(&path), raw, "--path and --raw disagree");
 }
 

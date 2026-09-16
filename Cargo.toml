@@ -45,3 +45,53 @@ codegen-units = 1
 [dev-dependencies]
 proptest = "1.11.0"
 tempfile = "3.27.0"
+
+# Pedantic is on, and the exceptions are argued rather than silent. Anything not
+# listed here is expected to be fixed, not allowed at the site.
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+
+# A command's argument struct is a `clap` derive: it is constructed once, passed
+# once, and read. Taking it by reference would put a lifetime in every signature
+# to save a move that never happens twice.
+needless_pass_by_value = "allow"
+
+# The same structs: a flag per option is what a command line is. Grouping them
+# into sub-structs to satisfy a count would hide the shape of the interface.
+struct_excessive_bools = "allow"
+
+# Progress bars, column widths and percentages. The values are bounded by a
+# terminal or by the size of a backlog; a cast that could matter is written out
+# with the bound stated instead.
+cast_precision_loss = "allow"
+cast_possible_truncation = "allow"
+cast_sign_loss = "allow"
+
+# A command that does one thing end to end reads better whole than split into
+# helpers that exist only to be short and are each called once.
+too_many_lines = "allow"
+
+# In struct-literal position the field already names the type, and
+# `Default::default()` there follows it if it ever changes. Naming the type a
+# second time is a restatement, not a clarification.
+default_trait_access = "allow"
+
+# Every command returns `Result<i32>` so one `match` in `main` can dispatch them
+# all. Two of them cannot currently fail; narrowing those two would buy nothing
+# and cost the uniformity that makes the dispatch one line per command.
+unnecessary_wraps = "allow"
+
+# `clap` derive: the struct is named for its command and its fields for the
+# command's arguments, so `SetArgs.args` and `Hooks.after_create` are the
+# interface as a person types and writes it.
+struct_field_names = "allow"
+
+# The alternative is `write!(s, ..)` plus a `use std::fmt::Write` and a `Result`
+# discarded at every site, for a push to a `String` that cannot fail. The
+# harness builds schema TOML this way in seventy places and reads better for it.
+format_push_string = "allow"
+
+# A harness method belongs to `Project` because that is what it operates on.
+# One of them not reading a field is an implementation detail, not a reason to
+# make the caller write `Project::` instead of `p.`.
+unused_self = "allow"

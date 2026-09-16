@@ -127,7 +127,7 @@ fn commands_in(src: &str) -> Vec<(String, bool)> {
         // A variant looks like `Name(cmd::x::Args),` at one level of indent.
         if let Some(paren) = line.find('(')
             && line.ends_with("),")
-            && line[..paren].chars().all(|c| c.is_alphanumeric())
+            && line[..paren].chars().all(char::is_alphanumeric)
             && line.starts_with(|c: char| c.is_ascii_uppercase())
         {
             out.push((line[..paren].to_string(), hidden));

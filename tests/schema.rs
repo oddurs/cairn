@@ -1542,7 +1542,8 @@ fn render_settings_that_cannot_work_are_reported() {
 fn a_roadmap_with_nothing_to_group_by_says_so() {
     // A schema where nothing declares `groups`: internally consistent, every
     // reference resolving, and no roadmap to draw.
-    let p = Project::with(Schema::standard().amend_type("milestone", |t| t.groups_none()));
+    let p =
+        Project::with(Schema::standard().amend_type("milestone", support::ItemType::groups_none));
 
     let out = p.expect(&["roadmap"]).all();
     assert_contains(&out, "no type declares `groups`", "it says what is missing");
@@ -1885,7 +1886,7 @@ fn migrating_to_format_three_changes_no_item_file() {
     p.set_schema(
         Schema::standard()
             .format(2)
-            .amend_type("milestone", |t| t.groups_none())
+            .amend_type("milestone", support::ItemType::groups_none)
             .field(
                 Field::reference("milestone", "milestone")
                     .by_key()

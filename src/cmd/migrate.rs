@@ -257,7 +257,7 @@ fn stamp(cfg: &Config, format: u32) -> Result<()> {
     let path = cfg.root.join(CONFIG_FILE);
     let text = std::fs::read_to_string(&path)?;
     let mut doc: toml_edit::DocumentMut = text.parse()?;
-    doc["format"] = toml_edit::value(format as i64);
+    doc["format"] = toml_edit::value(i64::from(format));
     crate::store::write_atomic(&path, doc.to_string().as_bytes())
 }
 

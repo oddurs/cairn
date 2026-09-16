@@ -2,6 +2,8 @@
 //
 // Copyright (c) 2026 Oddur Sigurdsson. MIT licensed; see LICENSE.
 // cairn set / close / reopen — mutating item fields, with schema validation.
+use std::io::Write;
+
 use crate::config::{Config, FieldKind};
 use crate::item::{Field, Item, split_list};
 use crate::lock::Lock;
@@ -205,7 +207,6 @@ fn confirm(cfg: &Config, matched: &[&Item]) -> Result<bool> {
         println!("  {}  {}", cfg.format_id(item.id), item.title());
     }
     eprint!("change {} item(s)? [y/N] ", matched.len());
-    use std::io::Write;
     std::io::stderr().flush()?;
     let mut answer = String::new();
     std::io::stdin().read_line(&mut answer)?;
@@ -326,7 +327,7 @@ pub fn check_no_cycle(store: &Store, item: &Item) -> Result<()> {
     let mut items = store.load_all()?;
     // Consider the graph as it would be once this change lands.
     if let Some(existing) = items.iter_mut().find(|i| i.id == item.id) {
-        existing.meta.depends_on = item.meta.depends_on.clone();
+        existing.meta.depends_on.clone_from(&item.meta.depends_on);
     }
     for dep in &item.meta.depends_on {
         if let Some(path) = crate::store::dependency_path(&items, *dep, item.id) {
@@ -567,7 +568,7 @@ fn apply_custom(item: &mut Item, cfg: &Config, key: &str, assign: Assign) -> Res
                 (Some(ids), true) => item.set_extra_ids(key, &ids),
                 (Some(ids), false) => item.set_extra_id(key, ids.first().copied()),
                 (None, true) => {
-                    item.set_extra(key, (!current.is_empty()).then_some(Field::List(current)))
+                    item.set_extra(key, (!current.is_empty()).then_some(Field::List(current)));
                 }
                 (None, false) => item.set_extra(
                     key,
@@ -630,7 +631,9 @@ pub fn validate_scalar(def: &crate::config::FieldDef, value: &str) -> Result<()>
         }
         // A ref names something that has to exist, which cannot be checked
         // against the definition alone. `check` and the write path resolve it
-        // where the items are in hand.
+        // where the items are in hand. Kept apart from the arm below, which is
+        // empty for the opposite reason: there is nothing to check at all.
+        #[allow(clippy::match_same_arms)]
         FieldKind::Ref => {}
         FieldKind::Date => check_date(&def.name, value)?,
         FieldKind::Number => {
