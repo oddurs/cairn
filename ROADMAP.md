@@ -56,13 +56,9 @@ Enough to run a real project's roadmap without reaching for anything else.
 
 ## v0.2 — Comfortable
 
-`##########` 98% · 49 of 50 done · due 2026-12-01
+`##########` 100% · 50 of 50 done · due 2026-12-01
 
 The rough edges that show up after a few weeks of daily use, and the pieces that make the central claim true rather than merely stated.
-
-### in progress
-
-- [ ] [`0122`](https://github.com/oddurs/cairn/blob/main/cairn/items/0122-a-grouping-type-not-named-milestone-is-invisible-to-list-next-and-sort.md) A grouping type not named milestone is invisible to list, next and sort <sup>bug · p0</sup>
 
 ### done
 
@@ -115,6 +111,7 @@ The rough edges that show up after a few weeks of daily use, and the pieces that
 - [x] [`0111`](https://github.com/oddurs/cairn/blob/main/cairn/items/0111-what-changed-since-i-last-looked.md) What changed since I last looked <sup>feature · p2 · s11</sup>
 - [x] [`0113`](https://github.com/oddurs/cairn/blob/main/cairn/items/0113-a-type-declares-that-it-groups-work.md) A type declares that it groups work <sup>feature · p0 · s12</sup>
 - [x] [`0114`](https://github.com/oddurs/cairn/blob/main/cairn/items/0114-nothing-should-be-looked-up-by-the-word-milestone.md) Nothing should be looked up by the word milestone <sup>feature · p1 · s12</sup>
+- [x] [`0122`](https://github.com/oddurs/cairn/blob/main/cairn/items/0122-a-grouping-type-not-named-milestone-is-invisible-to-list-next-and-sort.md) A grouping type not named milestone is invisible to list, next and sort <sup>bug · p0</sup>
 
 ## v1.0 — Stable
 
@@ -157,13 +154,9 @@ Safe to depend on: every scriptable surface carries a promise, the command surfa
 
 ## later — Someday
 
-`#####·····` 50% · 1 of 2 done
+`##########` 100% · 1 of 1 done
 
 Good ideas without a date yet.
-
-### backlog
-
-- [ ] [`0007`](https://github.com/oddurs/cairn/blob/main/cairn/items/0007-an-interactive-board-in-the-terminal.md) An interactive board in the terminal <sup>feature · p2</sup>
 
 ### done
 

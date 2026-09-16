@@ -2,10 +2,10 @@
 id: 122
 title: A grouping type not named milestone is invisible to list, next and sort
 type: bug
-status: doing
+status: done
 milestone: v0.2
 created: 2026-09-14
-updated: 2026-09-14
+updated: 2026-09-15
 priority: p0
 ---
 

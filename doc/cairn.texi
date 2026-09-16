@@ -1141,6 +1141,25 @@ template = """
 @code{template} seeds the body of every new item of that type, so bug reports
 arrive with the same headings without anyone having to remember them.
 
+@cindex grouping type
+The consequential key is @code{groups}, which says this type is what work is
+filed under rather than work itself:
+
+@example
+[[type]]
+name = "horizon"
+groups = "one"          # or "many"
+inverse = "queued"      # what the container calls what it holds
+@end example
+
+That one line creates the field, addressed by key, and implies both rollup and
+acyclicity --- so an item cannot end up filed under itself. @code{groups = "one"}
+is a release or a horizon, which work belongs to at most one of;
+@code{groups = "many"} is an epic or a theme. Nothing is looked up by the word
+@code{milestone}: the column header, the sort key and the roadmap all take the
+name from the type, so a project may call it whatever it calls it. The
+@emph{Milestones} section below works through what that replaced.
+
 @section status
 
 @example
