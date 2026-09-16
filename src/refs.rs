@@ -247,7 +247,7 @@ impl Config {
                             .and_then(|v| v.as_str())
                     }
                 }
-                _ => None,
+                crate::item::Field::Missing => None,
             },
             None => item.milestone(),
         }

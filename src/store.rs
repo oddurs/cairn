@@ -158,8 +158,7 @@ impl<'a> Store<'a> {
         let parent = item
             .path
             .parent()
-            .map(Path::to_path_buf)
-            .unwrap_or_else(|| self.cfg.items_dir());
+            .map_or_else(|| self.cfg.items_dir(), Path::to_path_buf);
         let want = parent.join(&want_name);
         if want == item.path {
             return Ok(false);
@@ -184,9 +183,8 @@ impl<'a> Store<'a> {
 
 /// Files an interrupted `renumber` moved aside.
 fn collect_staged(dir: &Path, out: &mut Vec<PathBuf>) -> Result<()> {
-    let entries = match std::fs::read_dir(dir) {
-        Ok(e) => e,
-        Err(_) => return Ok(()),
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Ok(());
     };
     for entry in entries.flatten() {
         let path = entry.path();
@@ -210,7 +208,9 @@ fn collect(dir: &Path, out: &mut Vec<PathBuf>) -> Result<()> {
         }
         if path.is_dir() {
             collect(&path, out)?;
-        } else if path.extension().is_some_and(|e| e == "md")
+        } else if path
+            .extension()
+            .is_some_and(|e| e.eq_ignore_ascii_case("md"))
             && !name.eq_ignore_ascii_case("README.md")
         {
             out.push(path);
@@ -236,8 +236,7 @@ pub fn write_atomic(path: &Path, contents: &[u8]) -> Result<()> {
     // and suffixed so a stray one is recognisable and is never parsed as an item.
     let name = path
         .file_name()
-        .map(|n| n.to_string_lossy().to_string())
-        .unwrap_or_else(|| "cairn".to_string());
+        .map_or_else(|| "cairn".to_string(), |n| n.to_string_lossy().to_string());
     let temp = parent.join(format!(".{name}.{}.tmp", std::process::id()));
 
     let write = |temp: &Path| -> Result<()> {
@@ -285,7 +284,7 @@ pub fn dependency_path(items: &[Item], from: u32, to: u32) -> Option<Vec<u32>> {
         if !seen.insert(node) {
             continue;
         }
-        for next in edges.get(&node).map(|v| v.as_slice()).unwrap_or(&[]) {
+        for next in edges.get(&node).map_or(&[][..], |v| v.as_slice()) {
             let mut extended = path.clone();
             extended.push(*next);
             if *next == to {

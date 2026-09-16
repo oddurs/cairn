@@ -192,7 +192,7 @@ fn arbitrary_arguments_never_panic() {
     let seed: u64 = std::env::var("CAIRN_FUZZ_SEED")
         .ok()
         .and_then(|s| s.parse().ok())
-        .unwrap_or(0xC0FFEE);
+        .unwrap_or(0x00C0_FFEE);
     let rounds: usize = std::env::var("CAIRN_FUZZ_ROUNDS")
         .ok()
         .and_then(|s| s.parse().ok())

@@ -268,10 +268,7 @@ impl Item {
     pub fn set_extra(&mut self, key: &str, value: Option<Field>) {
         let k = Value::String(key.to_string());
         match value {
-            None => {
-                self.meta.extra.remove(&k);
-            }
-            Some(Field::Missing) => {
+            None | Some(Field::Missing) => {
                 self.meta.extra.remove(&k);
             }
             Some(Field::Text(s)) => {
@@ -586,7 +583,7 @@ impl Item {
         let body = body.trim_end();
         // Rendered with LF throughout, then given back whatever ending the file
         // arrived with.
-        Ok(self.eol.apply(&format!("---\n{}---\n\n{}\n", yaml, body)))
+        Ok(self.eol.apply(&format!("---\n{yaml}---\n\n{body}\n")))
     }
 
     pub fn save(&self) -> Result<()> {
@@ -1457,6 +1454,11 @@ fn union<T: Clone + PartialEq>(ours: &[T], base: &[T], theirs: &[T]) -> Vec<T> {
 }
 
 /// One extra field, three ways. `Some(None)` means "resolved to absent".
+// The two levels are different answers: the outer `None` is "no resolution,
+// leave the conflict for a person", and `Some(None)` is "resolved, and the
+// resolution is that the key is absent". Flattening them would lose the
+// distinction the merge driver exists to make.
+#[allow(clippy::option_option)]
 fn merge_value(
     ours: Option<Value>,
     base: Option<Value>,

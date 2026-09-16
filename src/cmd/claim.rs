@@ -105,12 +105,11 @@ pub fn claim(args: ClaimArgs) -> Result<i32> {
                     count: false,
                 },
             )?;
-            match picked.first() {
-                Some(i) => i.id,
-                None => {
-                    eprintln!("{}", style::dim("nothing unclaimed is ready to start"));
-                    return Ok(1);
-                }
+            if let Some(i) = picked.first() {
+                i.id
+            } else {
+                eprintln!("{}", style::dim("nothing unclaimed is ready to start"));
+                return Ok(1);
             }
         }
         (None, false) => bail!("give an item id, or --next to take the next ready one"),

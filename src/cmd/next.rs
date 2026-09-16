@@ -158,8 +158,7 @@ pub fn run(args: Args) -> Result<i32> {
         let id = cfg.format_id(i.id);
         let status = cfg
             .status(i.status())
-            .map(|s| s.display().to_string())
-            .unwrap_or_else(|| i.status().to_string());
+            .map_or_else(|| i.status().to_string(), |s| s.display().to_string());
 
         let mut row = vec![Cell::styled(id.clone(), style::dim(&id))];
         for f in &fields {

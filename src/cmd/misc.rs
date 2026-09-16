@@ -153,8 +153,7 @@ pub fn config(args: ConfigArgs) -> Result<i32> {
                 // a blank column read as a formatting quirk rather than the
                 // defect it is.
                 m.key()
-                    .map(str::to_string)
-                    .unwrap_or_else(|| style::yellow("(no key)")),
+                    .map_or_else(|| style::yellow("(no key)"), str::to_string),
                 style::dim(&{
                     let mut bits: Vec<String> = vec![m.title().to_string()];
                     if let Some(d) = crate::refs::due(m) {
@@ -444,8 +443,7 @@ you tried, what to watch for.\n",
             if f.required { " (required)" } else { "" },
             f.description
                 .as_ref()
-                .map(|d| format!(" — {d}{restriction}"))
-                .unwrap_or_else(|| restriction.clone()),
+                .map_or_else(|| restriction.clone(), |d| format!(" — {d}{restriction}")),
         ));
     }
     if !milestones.is_empty() {
@@ -494,16 +492,13 @@ pub fn completions<C: CommandFactory>(args: CompletionsArgs) -> Result<i32> {
 
 pub fn man<C: CommandFactory>(args: ManArgs) -> Result<i32> {
     let cmd = C::command();
-    match args.dir {
-        Some(dir) => {
-            std::fs::create_dir_all(&dir)?;
-            clap_mangen::generate_to(cmd, &dir)?;
-            println!("{} {}", style::green("wrote man pages to"), dir.display());
-        }
-        None => {
-            let mut out = std::io::stdout();
-            clap_mangen::Man::new(cmd).render(&mut out)?;
-        }
+    if let Some(dir) = args.dir {
+        std::fs::create_dir_all(&dir)?;
+        clap_mangen::generate_to(cmd, &dir)?;
+        println!("{} {}", style::green("wrote man pages to"), dir.display());
+    } else {
+        let mut out = std::io::stdout();
+        clap_mangen::Man::new(cmd).render(&mut out)?;
     }
     Ok(0)
 }

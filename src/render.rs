@@ -214,7 +214,7 @@ fn group<'a>(ctx: &Ctx, items: &[&'a Item], key: &str) -> Vec<(String, Vec<&'a I
         // Empty group always last.
         groups.sort_by_key(|(k, _)| k.is_empty());
     }
-    for (_, members) in groups.iter_mut() {
+    for (_, members) in &mut groups {
         members.sort_by_key(|i| (cfg.status_index(i.status()), i.id));
     }
     groups

@@ -213,7 +213,7 @@ pub fn run(args: Args) -> Result<i32> {
         eprintln!(
             "{}: shallow clone: anything before {} is not in this repository",
             style::yellow("note"),
-            revisions.first().map(|r| r.date.as_str()).unwrap_or("here")
+            revisions.first().map_or("here", |r| r.date.as_str())
         );
     }
     Ok(0)
@@ -231,8 +231,7 @@ fn unavailable(root: &Path) -> Option<String> {
         .args(["rev-parse", "--is-inside-work-tree"])
         .current_dir(root)
         .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false);
+        .is_ok_and(|o| o.status.success());
     if !inside {
         return Some(format!(
             "{} is not in a git repository, so there is no history to read",
@@ -290,8 +289,7 @@ fn is_shallow(root: &Path) -> bool {
         .args(["rev-parse", "--is-shallow-repository"])
         .current_dir(root)
         .output()
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim() == "true")
-        .unwrap_or(false)
+        .is_ok_and(|o| String::from_utf8_lossy(&o.stdout).trim() == "true")
 }
 
 fn differs_from_head(root: &Path, relative: &str) -> bool {
@@ -302,8 +300,7 @@ fn differs_from_head(root: &Path, relative: &str) -> bool {
         // A non-zero status means the file differs; a failure to run at all
         // means we cannot tell, and claiming a difference we did not observe is
         // worse than staying quiet.
-        .map(|o| o.status.code() == Some(1))
-        .unwrap_or(false)
+        .is_ok_and(|o| o.status.code() == Some(1))
 }
 
 /// Every commit that touched the file, oldest first, each with what it changed.
@@ -409,7 +406,7 @@ fn history(root: &Path, relative: &str, wanted: u32) -> Result<Vec<Revision>> {
 /// fallback and not the answer.
 fn id_in(path: &str) -> Option<u32> {
     let name = path.rsplit('/').next()?;
-    let digits: String = name.chars().take_while(|c| c.is_ascii_digit()).collect();
+    let digits: String = name.chars().take_while(char::is_ascii_digit).collect();
     digits.parse().ok()
 }
 
@@ -559,5 +556,5 @@ fn raw_patches(root: &Path, relative: &str, max: Option<usize>) -> Result<i32> {
         .args(["--", relative])
         .status()
         .context("running git log --patch")?;
-    Ok(if status.success() { 0 } else { 1 })
+    Ok(i32::from(!status.success()))
 }

@@ -194,7 +194,7 @@ fn ids_output_is_only_ids() {
     ] {
         for line in p.expect(&args).lines() {
             assert!(
-                !line.trim().is_empty() && line.trim().chars().all(|c| c.is_alphanumeric()),
+                !line.trim().is_empty() && line.trim().chars().all(char::is_alphanumeric),
                 "`cairn {args:?}` put something other than an identifier on a line: {line:?}"
             );
         }

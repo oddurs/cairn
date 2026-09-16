@@ -107,7 +107,7 @@ fn sidecar_hook(sidecar: &Path, extra: &[&str]) -> String {
         sidecar.display().to_string(),
         "new".into(),
     ];
-    argv.extend(extra.iter().map(|s| s.to_string()));
+    argv.extend(extra.iter().map(std::string::ToString::to_string));
     argv.push("-q".into());
     let quoted: Vec<String> = argv
         .iter()
@@ -324,7 +324,10 @@ fn concurrent_mixed_writes_leave_a_valid_backlog() {
     assert!(p.count_all() >= 16, "nothing was lost");
     for entry in std::fs::read_dir(p.path("cairn/items")).unwrap() {
         let name = entry.unwrap().file_name().to_string_lossy().to_string();
-        assert!(!name.ends_with(".tmp"), "no partial write survived: {name}");
+        assert!(
+            !name.to_ascii_lowercase().ends_with(".tmp"),
+            "no partial write survived: {name}"
+        );
     }
 }
 

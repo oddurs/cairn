@@ -125,8 +125,7 @@ fn driver(git_dir: &Path, changed: &mut Vec<String>) -> Result<bool> {
         .args(["config", "--get", &key])
         .current_dir(git_dir)
         .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false);
+        .is_ok_and(|o| o.status.success());
     if already {
         return Ok(false);
     }
@@ -267,7 +266,13 @@ pub fn merge_driver(args: MergeArgs) -> Result<i32> {
 }
 
 fn is_item_path(path: &str) -> bool {
-    path.ends_with(".md") && path.contains("items/")
+    // Case-insensitively, because the loader is: a file the store reads as an
+    // item and this driver declines to merge would be resolved by hand every
+    // time, for no reason a person could see.
+    let ext = path
+        .rsplit_once('.')
+        .is_some_and(|(_, e)| e.eq_ignore_ascii_case("md"));
+    ext && path.contains("items/")
 }
 
 /// Resolve a conflict in an item, where the conflict has an answer.
@@ -349,9 +354,7 @@ pub fn is_configured(cfg: &Config) -> bool {
     let hook = git_dir.join("hooks").join("post-merge");
     attributes.lines().any(|l| l.trim() == line)
         && hook.exists()
-        && std::fs::read_to_string(&hook)
-            .map(|s| s.contains("cairn renumber"))
-            .unwrap_or(false)
+        && std::fs::read_to_string(&hook).is_ok_and(|s| s.contains("cairn renumber"))
 }
 
 /// Used by `init` to explain itself when the project is not a repository yet.

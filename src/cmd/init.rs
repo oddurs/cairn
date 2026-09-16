@@ -69,21 +69,19 @@ pub fn run(args: Args) -> Result<i32> {
 
     let name = args.name.unwrap_or_else(|| {
         cwd.file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_else(|| "Project".into())
+            .map_or_else(|| "Project".into(), |n| n.to_string_lossy().to_string())
     });
 
-    let toml = match &args.from {
-        Some(path) => adopt(path, &name, &args.dir)?,
-        None => {
-            let template = match args.preset.unwrap_or(Preset::Standard) {
-                Preset::Minimal => MINIMAL,
-                Preset::Standard => STANDARD,
-            };
-            template
-                .replace("{{name}}", &escape(&name))
-                .replace("{{dir}}", &escape(&args.dir))
-        }
+    let toml = if let Some(path) = &args.from {
+        adopt(path, &name, &args.dir)?
+    } else {
+        let template = match args.preset.unwrap_or(Preset::Standard) {
+            Preset::Minimal => MINIMAL,
+            Preset::Standard => STANDARD,
+        };
+        template
+            .replace("{{name}}", &escape(&name))
+            .replace("{{dir}}", &escape(&args.dir))
     };
     crate::store::write_atomic(&config_path, toml.as_bytes())?;
     if let Some(path) = &args.from {
@@ -227,7 +225,7 @@ fn escape(s: &str) -> String {
     s.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
-const EXAMPLE_BODY: &str = r#"
+const EXAMPLE_BODY: &str = r"
 This is a cairn item: a Markdown file with YAML frontmatter. Edit it by hand,
 or from the command line:
 
@@ -242,9 +240,9 @@ Delete this file once you have the hang of it.
 - [ ] `cairn.toml` describes the workflow this project actually uses
 - [ ] `cairn render` produces a ROADMAP.md worth linking from the README
 - [ ] `cairn check` passes in CI
-"#;
+";
 
-const STANDARD: &str = r####"# cairn.toml — the schema for this project's roadmap and issues.
+const STANDARD: &str = r#"# cairn.toml — the schema for this project's roadmap and issues.
 #
 # Everything here is configurable: the item types, the statuses they move
 # through, any extra fields you want to track, the milestones, the saved views,
@@ -484,9 +482,9 @@ group_by_status = true    # sub-group each section by status
 link_items = false        # requires project.url
 # header = "docs/roadmap-intro.md"   # spliced in above the generated body
 # footer = "docs/roadmap-outro.md"
-"####;
+"#;
 
-const MINIMAL: &str = r####"# cairn.toml — roadmap and issue schema.
+const MINIMAL: &str = r#"# cairn.toml — roadmap and issue schema.
 # Start here and add types, fields, milestones and views as you need them.
 # See `cairn init --preset standard` for a fully commented example.
 
@@ -525,7 +523,7 @@ kind = "date"
 [render]
 target = "ROADMAP.md"
 group_by = "milestone"
-"####;
+"#;
 
 /// Write one of the milestones a new project starts with.
 ///
@@ -556,8 +554,7 @@ fn write_milestone(
     item.meta.key = Some(key.to_string());
     item.meta.kind = Some(
         cfg.schedule_type()
-            .map(|t| t.name.clone())
-            .unwrap_or_else(|| "milestone".into()),
+            .map_or_else(|| "milestone".into(), |t| t.name.clone()),
     );
     item.meta.status = Some(cfg.initial_status().to_string());
     item.meta.created = Some(crate::store::today());
@@ -637,7 +634,7 @@ fn adopt(from: &Path, name: &str, dir: &str) -> Result<String> {
     if let Some(render) = doc.get_mut("render").and_then(|r| r.as_table_mut())
         && render
             .get("link_items")
-            .and_then(|v| v.as_bool())
+            .and_then(toml_edit::Item::as_bool)
             .unwrap_or(false)
     {
         render.insert("link_items", toml_edit::value(false));

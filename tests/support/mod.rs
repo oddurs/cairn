@@ -1649,7 +1649,7 @@ mod harness {
                     .item_type(ItemType::new("epic").groups_many())
                     .status(Status::new("shipped", Category::Done).color("green"))
                     .status(Status::undeclared("vague"))
-                    .amend("area", |f| f.column())
+                    .amend("area", super::Field::column)
                     .field(Field::choice("size", ["s", "m", "l"]).default("m"))
                     .field(Field::date("target"))
                     .field(Field::number("points"))
@@ -1724,7 +1724,7 @@ mod harness {
     #[test]
     #[should_panic(expected = "no field named `nonesuch`")]
     fn amending_a_field_that_is_not_there_stops() {
-        let _ = Schema::standard().amend("nonesuch", |f| f.required());
+        let _ = Schema::standard().amend("nonesuch", super::Field::required);
     }
 
     /// cairn refuses a duplicate field, and finding out at `cairn config` means

@@ -68,17 +68,16 @@ pub fn run(args: Args) -> Result<i32> {
     let lock = Lock::acquire(&cfg)?;
     let mut item = store.find_ref(&args.id)?;
 
-    match args.bare {
-        true => {
-            let body = item.body.trim_end();
-            let combined = if body.is_empty() {
-                text.to_string()
-            } else {
-                format!("{body}\n\n{text}")
-            };
-            item.set_body(&combined);
-        }
-        false => item.append_note(&args.heading.clone().unwrap_or_else(today), text),
+    if args.bare {
+        let body = item.body.trim_end();
+        let combined = if body.is_empty() {
+            text.to_string()
+        } else {
+            format!("{body}\n\n{text}")
+        };
+        item.set_body(&combined);
+    } else {
+        item.append_note(&args.heading.clone().unwrap_or_else(today), text);
     }
     item.touch(&today());
     item.save()?;

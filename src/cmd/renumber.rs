@@ -247,8 +247,7 @@ fn arrival_side(cfg: &Config, items: &[Item]) -> HashMap<PathBuf, u8> {
             .args(["merge-base", "--is-ancestor", &added, published])
             .current_dir(&cfg.root)
             .output()
-            .map(|o| o.status.success())
-            .unwrap_or(false);
+            .is_ok_and(|o| o.status.success());
         side.insert(item.path.clone(), u8::from(!already_there));
     }
     side
