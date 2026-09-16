@@ -179,3 +179,100 @@ fn search_covers_titles_bodies_and_labels() {
     );
     p.fails(&["search", "zzzznotfound"]);
 }
+
+/// `+=` and `-=` on a field that holds one value are refused, by name.
+///
+/// Every scalar field in `apply` ends in an arm that rejects a list assignment,
+/// and not one of them was reached by a test — the lowest-covered file in the
+/// program, on the command that does the writing. A wrong field name in one of
+/// those messages, or an arm that quietly accepted the append and dropped it,
+/// would have looked exactly like this.
+#[test]
+fn a_scalar_field_refuses_a_list_assignment_and_says_which_field() {
+    let p = seeded();
+    // Every key `apply` handles as a single value, with something that would be
+    // valid as a plain `=`.
+    for (field, value) in [
+        ("key", "k1"),
+        ("claimed", "2026-01-01"),
+        ("owner", "alice"),
+        ("created_by", "alice"),
+        ("title", "Another"),
+        ("type", "bug"),
+        ("status", "doing"),
+        ("milestone", "v0.1"),
+        ("assignee", "alice"),
+        ("created", "2026-01-01"),
+        ("updated", "2026-01-01"),
+    ] {
+        for op in ["+=", "-="] {
+            let out = p.run(&["set", "1", &format!("{field}{op}{value}")]);
+            assert!(
+                !out.ok(),
+                "`{field}{op}{value}` was accepted; a scalar field took an append"
+            );
+            assert_contains(
+                &out.all(),
+                field,
+                "the error does not name the field the reader typed",
+            );
+        }
+    }
+
+    // And the item is untouched by any of it.
+    let shown = p.expect(&["show", "1"]).stdout;
+    assert_missing(&shown, "alice", "a refused assignment was written anyway");
+}
+
+/// A write cannot give two items the same key.
+///
+/// `check_no_cycle` states the principle: "a project must not be left in a
+/// state the tool itself rejects". It was applied to cycles, to unknown
+/// statuses, to dates and to refs — and not to keys, which is the one a
+/// reference is resolved *by*. `cairn set 2 key=v1` where 0001 already answers
+/// to `v1` was written, and only `cairn check` said so afterwards.
+///
+/// The cost is not theoretical: a ref by that key resolves to whichever item
+/// was read first, and the roadmap draws two sections under one heading.
+///
+/// Keys are unique *within a type*, so both items here are milestones — a
+/// feature and a bug may share a key without ambiguity, because nothing
+/// resolves a reference without knowing which type it wants.
+#[test]
+fn two_items_cannot_be_given_the_same_key() {
+    let p = seeded();
+    let second = p.add("Another release", &["-t", "milestone"]);
+    p.expect(&["set", "4", "key=shared", "-q"]);
+
+    let out = p.run(&["set", &second, "key=shared"]);
+    assert!(!out.ok(), "a second item took a key that was already taken");
+    assert_contains(
+        &out.all(),
+        "already used by",
+        "it does not say what is wrong",
+    );
+
+    assert!(
+        p.run(&["check"]).ok(),
+        "the refusal did not keep the project valid: {}",
+        p.run(&["check"]).all()
+    );
+
+    // Refused, not half-applied.
+    let json = p.json(&["show", &second, "--json"]);
+    assert_ne!(json["key"], "shared", "the key was written anyway");
+}
+
+/// The same rule reaches `new`, which builds an item the same way.
+#[test]
+fn a_new_item_cannot_claim_a_key_that_is_taken() {
+    let p = seeded();
+    // 0004 is the seeded milestone, whose key is `v0.1`.
+    let out = p.run(&["new", "Latecomer", "-t", "milestone", "--set", "key=v0.1"]);
+    assert!(!out.ok(), "a new item took a key that was already taken");
+    assert_contains(
+        &out.all(),
+        "already used by",
+        "it does not say what is wrong",
+    );
+}

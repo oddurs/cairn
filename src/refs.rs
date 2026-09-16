@@ -331,6 +331,18 @@ pub fn validate_on_write(cfg: &Config, store: &crate::store::Store, item: &Item)
             }
         }
     }
+
+    // The same rule `check` applies, from the same function, so the two cannot
+    // come to disagree. A key is what other items call this one: two items
+    // answering to one key means a reference names both and resolves to
+    // whichever was read first, and the roadmap draws two sections under the
+    // same heading. `check` reported it; nothing stopped it being written.
+    if let Some((_, problem)) = key_problems(cfg, &items)
+        .into_iter()
+        .find(|(id, _)| *id == item.id)
+    {
+        bail!("{problem}");
+    }
     Ok(())
 }
 
