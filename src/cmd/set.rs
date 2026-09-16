@@ -103,8 +103,18 @@ pub fn run(args: Args) -> Result<i32> {
     // which the backlog is half-changed.
     let lock = Lock::acquire(&cfg)?;
     let mut changed = Vec::new();
+    // Read once, under the lock, and keep it up to date as the loop writes.
+    // Every item was previously found by a full directory read, and validated
+    // against another one — so changing a thousand items read every file some
+    // thousands of times. Nothing else may write while the lock is held, so
+    // what is in hand stays true.
+    let mut all = store.load_all()?;
     for id in &targets {
-        let mut item = store.find(*id)?;
+        let mut item = all
+            .iter()
+            .find(|i| i.id == *id)
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("{} does not exist", cfg.format_id(*id)))?;
         let before = item.meta.depends_on.clone();
         let before_key = item.meta.key.clone();
         for (key, assign) in &parsed {
@@ -127,9 +137,9 @@ pub fn run(args: Args) -> Result<i32> {
             })?;
         }
         if item.meta.depends_on != before {
-            check_no_cycle(&store, &item)?;
+            check_no_cycle_in(&store, &mut all, &item)?;
         }
-        crate::refs::validate_on_write(&cfg, &store, &item)?;
+        crate::refs::validate_on_write_in(&cfg, &mut all, &item)?;
         // A key is what other items call this one, so changing it is a rename
         // rather than an assignment. Left alone, every reference would be
         // orphaned silently; `renumber` already rewrites references when an
@@ -143,6 +153,11 @@ pub fn run(args: Args) -> Result<i32> {
         item.touch(&today());
         item.save()?;
         store.sync_path(&mut item)?;
+        // The saved item, path and all, so a later iteration validating against
+        // this one sees what is actually on disk.
+        if let Some(existing) = all.iter_mut().find(|i| i.id == item.id) {
+            *existing = item.clone();
+        }
         if !args.quiet {
             println!(
                 "{} {}  {}",
@@ -325,12 +340,23 @@ fn transition(cfg: &Config, ids: &[String], status: &str, quiet: bool, verb: &st
 /// create one: a project must not be left in a state the tool itself rejects.
 pub fn check_no_cycle(store: &Store, item: &Item) -> Result<()> {
     let mut items = store.load_all()?;
+    check_no_cycle_in(store, &mut items, item)
+}
+
+/// The same check, against items the caller already holds. See
+/// `refs::validate_on_write_in` for why both shapes exist.
+///
+/// # Errors
+///
+/// When the dependency would close a cycle, naming the path that closes it.
+pub fn check_no_cycle_in(store: &Store, items: &mut [Item], item: &Item) -> Result<()> {
     // Consider the graph as it would be once this change lands.
     if let Some(existing) = items.iter_mut().find(|i| i.id == item.id) {
         existing.meta.depends_on.clone_from(&item.meta.depends_on);
     }
+    let items = &*items;
     for dep in &item.meta.depends_on {
-        if let Some(path) = crate::store::dependency_path(&items, *dep, item.id) {
+        if let Some(path) = crate::store::dependency_path(items, *dep, item.id) {
             // The item, then the path back to it: `0001 -> 0003 -> 0002 -> 0001`.
             // A self-dependency reads `0001 -> 0001`, which is also the truth.
             let shown: Vec<String> = std::iter::once(item.id)

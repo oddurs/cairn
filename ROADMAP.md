@@ -56,7 +56,7 @@ Enough to run a real project's roadmap without reaching for anything else.
 
 ## v0.2 — Comfortable
 
-`##########` 100% · 52 of 52 done · due 2026-12-01
+`##########` 100% · 53 of 53 done · due 2026-12-01
 
 The rough edges that show up after a few weeks of daily use, and the pieces that make the central claim true rather than merely stated.
 
@@ -114,10 +114,11 @@ The rough edges that show up after a few weeks of daily use, and the pieces that
 - [x] [`0122`](https://github.com/oddurs/cairn/blob/main/cairn/items/0122-a-grouping-type-not-named-milestone-is-invisible-to-list-next-and-sort.md) A grouping type not named milestone is invisible to list, next and sort <sup>bug · p0</sup>
 - [x] [`0124`](https://github.com/oddurs/cairn/blob/main/cairn/items/0124-an-empty-lock-file-can-never-be-broken.md) An empty lock file can never be broken <sup>bug · p0</sup>
 - [x] [`0125`](https://github.com/oddurs/cairn/blob/main/cairn/items/0125-a-duplicate-key-can-be-written-and-only-check-says-so.md) A duplicate key can be written, and only check says so <sup>bug · p1</sup>
+- [x] [`0126`](https://github.com/oddurs/cairn/blob/main/cairn/items/0126-a-bulk-set-re-reads-every-item-file-for-every-item-it-changes.md) A bulk set re-reads every item file for every item it changes <sup>bug · p0</sup>
 
 ## v1.0 — Stable
 
-`#########·` 82% · 23 of 28 done · due 2027-03-01
+`########··` 79% · 23 of 29 done · due 2027-03-01
 
 Safe to depend on: every scriptable surface carries a promise, the command surface has been reviewed and pruned rather than accumulated, releases can be verified, and it installs from a package manager people already use.
 
@@ -128,6 +129,7 @@ Safe to depend on: every scriptable surface carries a promise, the command surfa
 - [ ] [`0067`](https://github.com/oddurs/cairn/blob/main/cairn/items/0067-decide-whether-identifiers-should-be-collision-free-by-construction.md) Decide whether identifiers should be collision-free by construction <sup>feature · p1 · s7</sup>
 - [ ] [`0118`](https://github.com/oddurs/cairn/blob/main/cairn/items/0118-unquoted-yaml-1-1-booleans-disagree-across-readers.md) Unquoted YAML 1.1 booleans disagree across readers <sup>bug · p2</sup>
 - [ ] [`0123`](https://github.com/oddurs/cairn/blob/main/cairn/items/0123-a-refused-rename-reports-failure-for-a-change-that-happened.md) A refused rename reports failure for a change that happened <sup>bug · p2</sup>
+- [ ] [`0127`](https://github.com/oddurs/cairn/blob/main/cairn/items/0127-a-bulk-write-pays-two-durability-barriers-per-item.md) A bulk write pays two durability barriers per item <sup>bug · p2</sup>
 
 ### done
 

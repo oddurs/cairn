@@ -305,24 +305,38 @@ pub fn is_many(def: &FieldDef) -> bool {
 /// applied to every ref.
 pub fn validate_on_write(cfg: &Config, store: &crate::store::Store, item: &Item) -> Result<()> {
     let mut items = store.load_all()?;
+    validate_on_write_in(cfg, &mut items, item)
+}
+
+/// The same rules, against a set of items the caller already holds.
+///
+/// `items` is brought up to date with `item` and left that way, so a caller
+/// changing many items in one command validates each against what the previous
+/// ones did without reading the directory again.
+///
+/// # Errors
+///
+/// When the write would leave the project in a state `cairn check` rejects.
+pub fn validate_on_write_in(cfg: &Config, items: &mut Vec<Item>, item: &Item) -> Result<()> {
     // The graph as it will be once this write lands, so a cycle is caught
     // before it exists rather than after.
     match items.iter_mut().find(|i| i.id == item.id) {
         Some(existing) => *existing = item.clone(),
         None => items.push(item.clone()),
     }
+    let items = &*items;
 
     for def in cfg.all_ref_fields() {
         let def = &def;
         for value in values(item, def) {
-            if resolve(&items, def, &value).is_none() {
+            if resolve(items, def, &value).is_none() {
                 bail!(
                     "`{}` names `{value}`, which does not exist\n{}",
                     def.name,
-                    unresolved(&items, cfg, def)
+                    unresolved(items, cfg, def)
                 );
             }
-            if def.acyclic && would_cycle(&items, def, item.id, &value) {
+            if def.acyclic && would_cycle(items, def, item.id, &value) {
                 bail!(
                     "`{}` = `{value}` would close a cycle: an item cannot be \
                      beneath itself, however far around",
@@ -337,10 +351,7 @@ pub fn validate_on_write(cfg: &Config, store: &crate::store::Store, item: &Item)
     // answering to one key means a reference names both and resolves to
     // whichever was read first, and the roadmap draws two sections under the
     // same heading. `check` reported it; nothing stopped it being written.
-    if let Some((_, problem)) = key_problems(cfg, &items)
-        .into_iter()
-        .find(|(id, _)| *id == item.id)
-    {
+    if let Some(problem) = key_problem(cfg, items, item) {
         bail!("{problem}");
     }
     Ok(())
@@ -352,6 +363,36 @@ pub fn validate_on_write(cfg: &Config, store: &crate::store::Store, item: &Item)
 /// Two items answering to one key means a ref names two things, and the second
 /// rule is the same one `0062` applies to identifier prefixes: `milestone: 0042`
 /// must not be able to mean either a key or a number depending on what exists.
+/// The same two rules as `key_problems`, asked about one item.
+///
+/// `key_problems` indexes every item to report every problem, which is what
+/// `check` wants. A write wants to know about the item it is writing, and
+/// building an index of the whole backlog to answer that turned a bulk change
+/// into a quadratic one: `cairn set --filter` over a thousand items built a
+/// thousand maps of a thousand entries.
+///
+/// The rule is therefore written twice, because writing it once would make
+/// `check` quadratic instead. `the_two_key_checks_agree` is what keeps them
+/// honest; change one and change the other.
+pub fn key_problem(cfg: &Config, items: &[Item], item: &Item) -> Option<String> {
+    let key = item.key()?;
+    if cfg.id_format().read(key).is_ok() {
+        return Some(format!(
+            "key `{key}` reads as an identifier, so a reference to it \
+             would be ambiguous"
+        ));
+    }
+    let kind = item.kind().unwrap_or_default();
+    items
+        .iter()
+        .find(|other| {
+            other.id != item.id
+                && other.kind().unwrap_or_default() == kind
+                && other.key().is_some_and(|k| k.eq_ignore_ascii_case(key))
+        })
+        .map(|other| format!("key `{key}` is already used by {}", cfg.format_id(other.id)))
+}
+
 pub fn key_problems(cfg: &Config, items: &[Item]) -> Vec<(u32, String)> {
     let mut out = Vec::new();
     let mut seen: HashMap<(String, String), u32> = HashMap::new();
@@ -1077,5 +1118,57 @@ mod tests {
         );
         let items = vec![item(1, "milestone", Some("a"), None), child];
         assert!(targets(&items, &items[1], &def).is_empty());
+    }
+
+    /// The duplicate-key rule is written twice — once over the whole backlog
+    /// for `check`, once about a single item for the write path — because
+    /// either shape alone makes the other quadratic.
+    ///
+    /// They do not agree on *whom to blame*, and should not: `check` reports
+    /// the later of two items sharing a key, because the earlier one was
+    /// blameless when it was written; the write path reports the item being
+    /// written, because that is the one creating the collision now. What must
+    /// agree is whether there is a problem at all — a write the write path
+    /// allows must never leave a backlog `check` rejects.
+    #[test]
+    fn the_two_key_checks_agree_on_whether_there_is_a_problem() {
+        let cfg = schema("");
+        let clean = vec![
+            item(1, "milestone", Some("v1"), None),
+            item(2, "milestone", Some("v2"), None),
+            // Same key under another type: legal, because nothing resolves a
+            // reference without knowing which type it wants.
+            item(3, "epic", Some("v1"), None),
+            item(4, "feature", None, None),
+        ];
+        assert!(key_problems(&cfg, &clean).is_empty(), "a clean backlog");
+        for i in &clean {
+            assert!(
+                key_problem(&cfg, &clean, i).is_none(),
+                "the write path refused {} in a backlog check accepts",
+                i.id
+            );
+        }
+
+        // Each of these makes the backlog one `check` rejects, and each must
+        // therefore be refused on write.
+        for bad in [
+            item(5, "milestone", Some("v1"), None),
+            item(5, "milestone", Some("V1"), None),
+            item(5, "feature", Some("0042"), None),
+        ] {
+            let mut items = clean.clone();
+            items.push(bad.clone());
+            assert!(
+                !key_problems(&cfg, &items).is_empty(),
+                "check accepts `{:?}`, so this case tests nothing",
+                bad.key()
+            );
+            assert!(
+                key_problem(&cfg, &items, &bad).is_some(),
+                "the write path would have written `{:?}`, which check rejects",
+                bad.key()
+            );
+        }
     }
 }
