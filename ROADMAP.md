@@ -56,9 +56,13 @@ Enough to run a real project's roadmap without reaching for anything else.
 
 ## v0.2 — Comfortable
 
-`##########` 100% · 50 of 50 done · due 2026-12-01
+`##########` 98% · 50 of 51 done · due 2026-12-01
 
 The rough edges that show up after a few weeks of daily use, and the pieces that make the central claim true rather than merely stated.
+
+### in progress
+
+- [ ] [`0124`](https://github.com/oddurs/cairn/blob/main/cairn/items/0124-an-empty-lock-file-can-never-be-broken.md) An empty lock file can never be broken <sup>bug · p0</sup>
 
 ### done
 
