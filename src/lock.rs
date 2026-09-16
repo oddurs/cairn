@@ -115,14 +115,26 @@ impl Lock {
             .write(true)
             .create_new(true)
             .open(path)?;
-        // Contents are for a human reading it after something went wrong.
+        // For a human reading it after something went wrong, and for `age` to
+        // prefer over the file's mtime. If it fails — a full disk is the way —
+        // `age` falls back, so a half-written lock is still breakable.
         let _ = writeln!(file, "pid {}\nsince {}", std::process::id(), now_seconds());
         Ok(())
     }
 
-    /// How long ago the lock was taken, by its recorded timestamp rather than
-    /// the file's mtime, which some filesystems keep at a coarse resolution.
+    /// How long ago the lock was taken.
+    ///
+    /// The recorded timestamp is preferred, because some filesystems keep mtime
+    /// at a coarse resolution. But a lock file with no readable timestamp is
+    /// exactly what a process that died *while creating it* leaves behind — a
+    /// full disk between `create_new` and the write — and that lock used to be
+    /// unbreakable, so the project it guarded was wedged until somebody deleted
+    /// the file by hand. A coarse answer is worth having; no answer is not.
     fn age(path: &Path) -> Option<Duration> {
+        Self::recorded_age(path).or_else(|| Self::mtime_age(path))
+    }
+
+    fn recorded_age(path: &Path) -> Option<Duration> {
         let text = std::fs::read_to_string(path).ok()?;
         let since: u64 = text
             .lines()
@@ -131,6 +143,14 @@ impl Lock {
             .parse()
             .ok()?;
         Some(Duration::from_secs(now_seconds().saturating_sub(since)))
+    }
+
+    fn mtime_age(path: &Path) -> Option<Duration> {
+        std::fs::metadata(path)
+            .and_then(|m| m.modified())
+            .ok()?
+            .elapsed()
+            .ok()
     }
 }
 

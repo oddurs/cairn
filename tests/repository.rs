@@ -376,6 +376,35 @@ fn a_stale_lock_is_broken_rather_than_waited_on() {
     assert_eq!(p.count(), 4);
 }
 
+/// A lock with no readable timestamp is still broken, by its mtime.
+///
+/// `try_create` makes the file and then writes the pid and the time into it.
+/// A process that dies between those two — a full disk is the way it happens —
+/// leaves a lock that records nothing. Reading the age from the contents alone
+/// then returned "unknown", the stale check never fired, and the project was
+/// wedged for every later write until somebody deleted the file by hand. The
+/// lock that recorded *less* was the one that could not be recovered from.
+#[test]
+fn a_lock_with_no_readable_timestamp_is_broken_by_its_mtime() {
+    let p = seeded();
+    p.write("cairn/items/.lock", "");
+
+    // Older than the stale threshold, which the recorded timestamp would have
+    // said if there were one.
+    let path = p.path("cairn/items/.lock");
+    let long_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(3600);
+    let f = std::fs::OpenOptions::new()
+        .write(true)
+        .open(&path)
+        .expect("opening the planted lock");
+    f.set_times(std::fs::FileTimes::new().set_modified(long_ago))
+        .expect("ageing the planted lock");
+
+    let out = p.expect(&["new", "Proceeds anyway", "-q"]);
+    assert_contains(&out.all(), "breaking a lock", "it waited the full timeout");
+    assert_eq!(p.count(), 4, "the write did not land");
+}
+
 #[test]
 fn the_lock_is_released_when_a_command_finishes() {
     let p = seeded();
