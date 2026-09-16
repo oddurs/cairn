@@ -295,9 +295,11 @@ pub fn remove(args: RemoveArgs) -> Result<i32> {
                     match (kept.is_empty(), crate::refs::is_many(def)) {
                         (true, _) => None,
                         (false, true) => Some(crate::item::Field::List(kept)),
-                        (false, false) => {
-                            Some(crate::item::Field::Text(kept.into_iter().next().unwrap()))
-                        }
+                        // Not empty: this arm is reached only when the first
+                        // element of the tuple said so.
+                        (false, false) => Some(crate::item::Field::Text(
+                            kept.into_iter().next().expect("kept is not empty here"),
+                        )),
                     },
                 );
             }

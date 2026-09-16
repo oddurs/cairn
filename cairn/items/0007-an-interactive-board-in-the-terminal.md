@@ -2,10 +2,10 @@
 id: 7
 title: An interactive board in the terminal
 type: feature
-status: backlog
+status: dropped
 milestone: later
 created: 2026-09-04
-updated: 2026-09-05
+updated: 2026-09-15
 priority: p2
 effort: l
 ---
@@ -119,3 +119,7 @@ dressed up as a need.
 
 What comes first is making the printed views worth looking at: fully in
 character, cheap, testable, and it is what the README demo shows anyway.
+
+## 2026-09-15
+
+Dropped: built as a separate program. `harrow` is a cairn TUI in its own repository, which is the right shape — an interactive board is a different kind of thing from a CLI that writes files, with its own release cadence and its own dependencies. cairn stays a program you can pipe.

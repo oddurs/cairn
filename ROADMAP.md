@@ -56,13 +56,9 @@ Enough to run a real project's roadmap without reaching for anything else.
 
 ## v0.2 — Comfortable
 
-`##########` 98% · 49 of 50 done · due 2026-12-01
+`##########` 100% · 50 of 50 done · due 2026-12-01
 
 The rough edges that show up after a few weeks of daily use, and the pieces that make the central claim true rather than merely stated.
-
-### in progress
-
-- [ ] [`0122`](https://github.com/oddurs/cairn/blob/main/cairn/items/0122-a-grouping-type-not-named-milestone-is-invisible-to-list-next-and-sort.md) A grouping type not named milestone is invisible to list, next and sort <sup>bug · p0</sup>
 
 ### done
 
@@ -115,10 +111,11 @@ The rough edges that show up after a few weeks of daily use, and the pieces that
 - [x] [`0111`](https://github.com/oddurs/cairn/blob/main/cairn/items/0111-what-changed-since-i-last-looked.md) What changed since I last looked <sup>feature · p2 · s11</sup>
 - [x] [`0113`](https://github.com/oddurs/cairn/blob/main/cairn/items/0113-a-type-declares-that-it-groups-work.md) A type declares that it groups work <sup>feature · p0 · s12</sup>
 - [x] [`0114`](https://github.com/oddurs/cairn/blob/main/cairn/items/0114-nothing-should-be-looked-up-by-the-word-milestone.md) Nothing should be looked up by the word milestone <sup>feature · p1 · s12</sup>
+- [x] [`0122`](https://github.com/oddurs/cairn/blob/main/cairn/items/0122-a-grouping-type-not-named-milestone-is-invisible-to-list-next-and-sort.md) A grouping type not named milestone is invisible to list, next and sort <sup>bug · p0</sup>
 
 ## v1.0 — Stable
 
-`#########·` 85% · 23 of 27 done · due 2027-03-01
+`#########·` 82% · 23 of 28 done · due 2027-03-01
 
 Safe to depend on: every scriptable surface carries a promise, the command surface has been reviewed and pruned rather than accumulated, releases can be verified, and it installs from a package manager people already use.
 
@@ -128,6 +125,7 @@ Safe to depend on: every scriptable surface carries a promise, the command surfa
 - [ ] [`0053`](https://github.com/oddurs/cairn/blob/main/cairn/items/0053-be-in-a-package-manager-people-already-use.md) Be in a package manager people already use <sup>chore · p0 · blocked-on-a-release</sup>
 - [ ] [`0067`](https://github.com/oddurs/cairn/blob/main/cairn/items/0067-decide-whether-identifiers-should-be-collision-free-by-construction.md) Decide whether identifiers should be collision-free by construction <sup>feature · p1 · s7</sup>
 - [ ] [`0118`](https://github.com/oddurs/cairn/blob/main/cairn/items/0118-unquoted-yaml-1-1-booleans-disagree-across-readers.md) Unquoted YAML 1.1 booleans disagree across readers <sup>bug · p2</sup>
+- [ ] [`0123`](https://github.com/oddurs/cairn/blob/main/cairn/items/0123-a-refused-rename-reports-failure-for-a-change-that-happened.md) A refused rename reports failure for a change that happened <sup>bug · p2</sup>
 
 ### done
 
@@ -157,13 +155,9 @@ Safe to depend on: every scriptable surface carries a promise, the command surfa
 
 ## later — Someday
 
-`#####·····` 50% · 1 of 2 done
+`##########` 100% · 1 of 1 done
 
 Good ideas without a date yet.
-
-### backlog
-
-- [ ] [`0007`](https://github.com/oddurs/cairn/blob/main/cairn/items/0007-an-interactive-board-in-the-terminal.md) An interactive board in the terminal <sup>feature · p2</sup>
 
 ### done
 
