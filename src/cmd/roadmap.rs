@@ -113,6 +113,13 @@ pub fn run(args: Args) -> Result<i32> {
         {
             heading.push_str(&style::dim(&format!("  [{}]", ms.status())));
         }
+        // A milestone at 100% that is still open. In poptop every work item was
+        // done and all seven milestones sat at `backlog`, which is the initial
+        // status — so the bracket above showed nothing and the roadmap said
+        // 100% seven times without ever mentioning that the milestones
+        // themselves were open.
+        let finished_open = m
+            .is_some_and(|ms| total > 0 && done == total && !cfg.category(ms.status()).is_closed());
         println!("{heading}");
 
         let bar = progress_bar(done, total, 20);
@@ -121,6 +128,9 @@ pub fn run(args: Args) -> Result<i32> {
             meta.push_str(&style::dim(&format!("   due {d}")));
         }
         println!("{meta}");
+        if finished_open && let Some(ms) = m {
+            println!("  {}", crate::cmd::finished_but_open_line(&cfg, ms));
+        }
 
         // The body is the description, which is most of why a milestone is an
         // item: the reason for a date lives with the date.
