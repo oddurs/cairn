@@ -177,7 +177,8 @@ pub fn run(args: Args) -> Result<i32> {
             item.meta.updated = inc.updated.clone().or_else(|| Some(today()));
             if !args.dry_run {
                 item.save()?;
-                store.sync_path(&mut item)?;
+                let renamed = store.sync_path(&mut item)?;
+                crate::cmd::note_if_blocked(&store, &item, &renamed);
             }
             if !args.quiet {
                 println!(

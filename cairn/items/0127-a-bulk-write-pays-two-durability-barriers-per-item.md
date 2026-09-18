@@ -5,7 +5,7 @@ type: bug
 status: backlog
 milestone: v1.0
 created: 2026-09-16
-updated: 2026-09-16
+updated: 2026-09-17
 priority: p2
 ---
 
@@ -62,3 +62,36 @@ Not done here. Deliberately left as a decision.
 - [ ] measured, on a spinning disk as well as an SSD
 - [ ] the durability chapter says what a bulk write guarantees
 - [ ] `make durability` covers a crash during a bulk write
+
+## 2026-09-17
+
+Measured. The numbers in this item do not reproduce, and the difference changes the decision.
+
+On an APFS SSD, `cairn set --filter` over the whole backlog, hooks off, release build:
+
+| items | this item | measured now | ms/item |
+|---|---|---|---|
+| 250 | 7.4s | 2.24s | 8.9 |
+| 500 | 18.2s | 4.76s | 9.5 |
+| 1000 | 49.6s | 8.10s | 8.1 |
+| 5000 | 'over 10 minutes' | 41.2s | 8.2 |
+
+Flat at 8-9 ms/item and linear to 5000. The claim that cost grows with directory size — 30-50 ms/item, superlinear — is not supported. Those numbers were almost certainly taken before 0126 landed: a `load_all` per item is exactly what produces superlinear growth, and removing it is what this item assumed had already happened.
+
+What the proposal would save, measured as its ceiling by removing the directory fsync altogether rather than deferring it to the end:
+
+| items | now | fsync removed | saving |
+|---|---|---|---|
+| 250 | 2.24s | 1.26s | 44% |
+| 500 | 4.76s | 1.95s | 59% |
+| 1000 | 8.10s | 4.17s | 49% |
+
+So about half, or ~4 ms/item, and deferring to the end would save slightly less than removing it.
+
+Recommendation: do not do it. Halving 41s for the largest backlog anyone has is not worth giving up the property that a rename cannot be lost in a crash — and the motivation was the superlinear curve, which is gone. If this is revisited, it should be for a measurement on a spinning disk, where a directory fsync costs far more than 4 ms and the trade might genuinely be different.
+
+Criterion 1 is ticked for the SSD half only. The spinning-disk measurement, the durability chapter and the crash test all still stand, and only matter if the answer changes.
+
+## 2026-09-17
+
+Unticked criterion 1 again: it says 'on a spinning disk as well as an SSD' and I have only an SSD. The note above records the SSD half; the criterion is not met. Ticking it would have been the exact thing this project's own close-gate exists to catch.

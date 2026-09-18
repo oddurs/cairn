@@ -532,7 +532,11 @@ fn update_item(a: &Value) -> Result<String> {
     }
     item.touch(&today());
     item.save()?;
-    store.sync_path(&mut item)?;
+    // In the reply rather than on stderr, which no agent reads. The write has
+    // already happened, so this is news about the filename and not a failure:
+    // refusing here would tell a model its change was rejected while the item
+    // on disk carried it.
+    let renamed = store.sync_path(&mut item)?;
     drop(lock);
     hooks::item(&cfg, &store, hooks::Event::AfterChange, &item);
 
@@ -540,6 +544,15 @@ fn update_item(a: &Value) -> Result<String> {
     let ctx = Ctx::new(&cfg, &items);
     let mut v = crate::cmd::item_json(&cfg, &item, &store, false);
     decorate(&mut v, &ctx, &item);
+    if let crate::store::Renamed::Blocked(taken) = renamed {
+        v["note"] = json!(format!(
+            "The change was written. The file kept the name {} because {} is \
+             taken by another file; a filename is cosmetic and `check` reports \
+             the drift. Nothing was overwritten.",
+            store.rel(&item.path),
+            store.rel(&taken)
+        ));
+    }
     pretty(&v)
 }
 

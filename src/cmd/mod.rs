@@ -168,6 +168,34 @@ pub fn table_fields(cfg: &Config) -> Vec<String> {
         .collect()
 }
 
+/// Say that a title changed and the filename did not follow it.
+///
+/// Every caller of `sync_path` saves the item first, so this is always news
+/// about something that has already happened. Reporting it as a failure — which
+/// `cairn set` did — told a reader the change had not been made while the file
+/// on disk said it had, and running the command again said the same thing
+/// forever.
+///
+/// One wording in one place, because five commands say it.
+pub fn note_if_blocked(store: &crate::store::Store, item: &Item, outcome: &crate::store::Renamed) {
+    if let crate::store::Renamed::Blocked(taken) = outcome {
+        eprintln!(
+            "{} {} keeps the filename {}: {} is taken by another file.\n  \
+             The change was written. A filename is cosmetic — `cairn check` \
+             reports the drift, and nothing was overwritten.",
+            style::yellow("note:"),
+            cfg_id(store, item),
+            style::dim(&store.rel(&item.path)),
+            style::dim(&store.rel(taken)),
+        );
+    }
+}
+
+/// An item's identifier as the project renders it.
+fn cfg_id(store: &crate::store::Store, item: &Item) -> String {
+    style::bold(&store.cfg.format_id(item.id))
+}
+
 pub fn item_json(
     cfg: &Config,
     item: &Item,

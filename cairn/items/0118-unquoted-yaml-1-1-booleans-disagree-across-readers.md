@@ -2,10 +2,10 @@
 id: 118
 title: Unquoted YAML 1.1 booleans disagree across readers
 type: bug
-status: backlog
+status: dropped
 milestone: v1.0
 created: 2026-09-12
-updated: 2026-09-12
+updated: 2026-09-17
 priority: p2
 area: format
 ---
@@ -55,3 +55,17 @@ the two readers disagree out loud.
 - [ ] `yes`, `no`, `on`, `off` and their capitalisations are quoted on write
 - [ ] A golden corpus case carries one, and both readers agree about it
 - [ ] Existing items are not rewritten merely by being read
+
+## 2026-09-17
+
+Not a defect. Withdrawn after measuring it properly.
+
+The original report tested with `yaml.safe_load`, which is PyYAML's default and implements YAML 1.1. That is not what this project uses. Spec §6 requires the **1.2 core schema**, and `spec/reader.py` implements it with a custom `Core` loader that strips PyYAML's 1.1 resolvers and reinstates the 1.2 set — the spec even says so in the paragraph the report should have read. Under 1.2 core, `no`, `yes`, `on`, `off` and `12:30` are strings. Both readers agree, and there is no disagreement for `conformance.py` to catch.
+
+§6 also puts a **must** on writers: quote any value that would otherwise change meaning when read back. Measured across 34 hazardous scalars through a text field, a list field and the title: cairn quotes all 29 that resolve to a non-string under 1.2 core — `0x1F`, `1e5`, `.inf`, `~`, `null`, `true`, `0`, `1.0`, `-`, `[]`, `#hash`, `a: b`, `*anchor`, `%dir` and the rest. It writes exactly five bare, and all five are the 1.1-only set above, where bare *is* correct under the required schema.
+
+So cairn is conformant on both sides, and the residual hazard is bounded to five value shapes read by a non-conforming reader — which §6 already names, and for which the documented remedy is to quote by hand.
+
+Not changing the writer. serde_yaml_ng decides plain-versus-quoted itself, so forcing those five would need a custom emitter or post-processing the YAML text, and neither buys any conformance.
+
+What the investigation did leave behind: nothing had ever tested the §6 writer requirement. The corpus covers reading, and `tests/golden/yaml-scalars.md` even asserts 'cairn quotes anything it writes' in prose with no test behind it. `a_value_that_would_change_meaning_is_quoted_on_the_way_out` in tests/format.rs now asserts it, and was verified to fail when a plain value is added to the must-quote list.

@@ -118,7 +118,7 @@ The rough edges that show up after a few weeks of daily use, and the pieces that
 
 ## v1.0 — Stable
 
-`########··` 79% · 23 of 29 done · due 2027-03-01
+`#########·` 86% · 24 of 28 done · due 2027-03-01
 
 Safe to depend on: every scriptable surface carries a promise, the command surface has been reviewed and pruned rather than accumulated, releases can be verified, and it installs from a package manager people already use.
 
@@ -127,8 +127,6 @@ Safe to depend on: every scriptable surface carries a promise, the command surfa
 - [ ] [`0052`](https://github.com/oddurs/cairn/blob/main/cairn/items/0052-sign-releases-and-ship-a-source-tarball.md) Sign releases and ship a source tarball <sup>chore · p0 · needs-a-key</sup>
 - [ ] [`0053`](https://github.com/oddurs/cairn/blob/main/cairn/items/0053-be-in-a-package-manager-people-already-use.md) Be in a package manager people already use <sup>chore · p0 · blocked-on-a-release</sup>
 - [ ] [`0067`](https://github.com/oddurs/cairn/blob/main/cairn/items/0067-decide-whether-identifiers-should-be-collision-free-by-construction.md) Decide whether identifiers should be collision-free by construction <sup>feature · p1 · s7</sup>
-- [ ] [`0118`](https://github.com/oddurs/cairn/blob/main/cairn/items/0118-unquoted-yaml-1-1-booleans-disagree-across-readers.md) Unquoted YAML 1.1 booleans disagree across readers <sup>bug · p2</sup>
-- [ ] [`0123`](https://github.com/oddurs/cairn/blob/main/cairn/items/0123-a-refused-rename-reports-failure-for-a-change-that-happened.md) A refused rename reports failure for a change that happened <sup>bug · p2</sup>
 - [ ] [`0127`](https://github.com/oddurs/cairn/blob/main/cairn/items/0127-a-bulk-write-pays-two-durability-barriers-per-item.md) A bulk write pays two durability barriers per item <sup>bug · p2</sup>
 
 ### done
@@ -156,6 +154,7 @@ Safe to depend on: every scriptable surface carries a promise, the command surfa
 - [x] [`0103`](https://github.com/oddurs/cairn/blob/main/cairn/items/0103-say-what-make-check-proves-and-add-the-target-that-proves-the-rest.md) Say what make check proves, and add the target that proves the rest <sup>chore · p1 · s10</sup>
 - [x] [`0112`](https://github.com/oddurs/cairn/blob/main/cairn/items/0112-write-down-what-an-agent-is-and-is-not-to-cairn.md) Write down what an agent is, and is not, to cairn <sup>docs · p2 · s11</sup>
 - [x] [`0120`](https://github.com/oddurs/cairn/blob/main/cairn/items/0120-the-release-checklist-cannot-hold-the-promise-the-release-makes.md) The release checklist cannot hold the promise the release makes <sup>chore · p1</sup>
+- [x] [`0123`](https://github.com/oddurs/cairn/blob/main/cairn/items/0123-a-refused-rename-reports-failure-for-a-change-that-happened.md) A refused rename reports failure for a change that happened <sup>bug · p2</sup>
 
 ## later — Someday
 
