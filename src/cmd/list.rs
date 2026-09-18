@@ -126,14 +126,20 @@ pub fn run(args: Args) -> Result<i32> {
         .collect();
     // Closed items are hidden by default, but never when the caller has said
     // something about status themselves.
+    let matched = items.len();
+    let mut hidden_closed = 0usize;
     if !args.all && !mentions_status {
         items.retain(|i| !cfg.category(i.status()).is_closed());
+        hidden_closed = matched - items.len();
     }
     // `--all` means all: closed work and containers alike. Without it, naming
     // a type is how you ask for them, which is the same rule closed items
     // follow for status.
+    let before_containers = items.len();
+    let mut hidden_containers = 0usize;
     if !args.all && !mentions_type {
         items.retain(|i| !cfg.is_container(i.kind()));
+        hidden_containers = before_containers - items.len();
     }
 
     let sort = args
@@ -172,7 +178,10 @@ pub fn run(args: Args) -> Result<i32> {
     let columns = resolve_columns(&args, view, &cfg);
     if items.is_empty() {
         if !args.plain {
-            eprintln!("{}", style::dim("no items match"));
+            eprintln!(
+                "{}",
+                style::dim(&nothing_to_show(&cfg, hidden_closed, hidden_containers))
+            );
         }
         return Ok(0);
     }
@@ -299,4 +308,42 @@ fn cell(ctx: &Ctx, item: &Item, column: &str) -> Cell {
         "type" => Cell::styled(&text, paint_type(ctx.cfg, item.kind())),
         _ => Cell::plain(text),
     }
+}
+
+/// Why the listing is empty, when something matched and was then hidden.
+///
+/// `no items match` was false in a project whose work is finished: seven
+/// milestones had `status: backlog`, `cairn list --status backlog` found all
+/// seven, hid them for being containers, and reported that nothing matched. The
+/// filter is not what was wrong, so saying the filter found nothing sent people
+/// to rewrite it.
+///
+/// Both default exclusions are named, because both produce the same lie. A
+/// filter on `priority=p0` whose every match is closed had it too.
+fn nothing_to_show(cfg: &Config, closed: usize, containers: usize) -> String {
+    let mut why: Vec<String> = Vec::new();
+    if containers > 0 {
+        // Named by the type that groups, because `container` is cairn's word for
+        // it and `milestone` is the reader's.
+        let kinds: Vec<String> = cfg.grouping_types().map(|t| t.name.clone()).collect();
+        let what = match kinds.len() {
+            1 => kinds[0].clone(),
+            _ => "container".to_string(),
+        };
+        why.push(format!(
+            "{containers} {what}{} hidden — work is filed under them rather than \
+             being work; `--type {what}` to see them",
+            if containers == 1 { "" } else { "s" },
+        ));
+    }
+    if closed > 0 {
+        why.push(format!(
+            "{closed} closed item{} hidden — name a status, or `-A`, to see them",
+            if closed == 1 { "" } else { "s" },
+        ));
+    }
+    if why.is_empty() {
+        return "no items match".to_string();
+    }
+    format!("no items to show\n  {}", why.join("\n  "))
 }

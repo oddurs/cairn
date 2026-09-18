@@ -326,6 +326,34 @@ fn transition(cfg: &Config, ids: &[String], status: &str, quiet: bool, verb: &st
         }
         changed.push(item);
     }
+
+    // Said once, at the moment it becomes true, and only about the milestones
+    // the items just closed were actually filed under — so closing one thing
+    // does not recite every milestone that finished months ago.
+    //
+    // A report and not a write. Closing it automatically would be cairn deciding
+    // that finished work means a shipped milestone, and a project's `later` or
+    // `Someday` milestone can have everything under it done and be meant to stay
+    // open for good.
+    if !quiet && cfg.category(status).is_closed() {
+        let after = store.load_all()?;
+        let touched: Vec<&str> = changed.iter().filter_map(|i| cfg.schedule_of(i)).collect();
+        for (container, total) in crate::cmd::finished_but_open(cfg, &after) {
+            if container
+                .key()
+                .is_some_and(|k| touched.iter().any(|t| t.eq_ignore_ascii_case(k)))
+            {
+                eprintln!(
+                    "  {} all {total} item(s) under {} are done, and it is still \
+                     open — {} when it has shipped",
+                    style::yellow("note:"),
+                    style::bold(container.key().unwrap_or_default()),
+                    style::dim(&format!("`cairn close {}`", cfg.format_id(container.id)))
+                );
+            }
+        }
+    }
+
     drop(lock);
 
     for item in &changed {
