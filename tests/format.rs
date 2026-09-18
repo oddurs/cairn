@@ -1096,3 +1096,115 @@ fn renaming_a_key_moves_references_by_key_and_not_by_id() {
     );
     assert!(p.run(&["check"]).ok(), "{}", p.run(&["check"]).all());
 }
+
+/// §6 puts a **must** on writers: "A writer must quote any value it emits that
+/// would otherwise change meaning when read back."
+///
+/// The golden corpus checks the reading half — that both readers resolve
+/// `assignee: no` and `12:30` the same way — and nothing checked the writing
+/// half. The corpus case for those scalars asserts the claim in prose ("cairn
+/// quotes anything it writes, so this only affects hand-written files") while no
+/// test held cairn to it.
+///
+/// It matters because the failure would be silent and one-way. A value emitted
+/// bare that YAML resolves to a number or a boolean is not a value cairn can
+/// read back: the item now says something else, and nothing reports it, because
+/// the file is perfectly valid YAML.
+#[test]
+fn a_value_that_would_change_meaning_is_quoted_on_the_way_out() {
+    // Every one of these resolves to something that is not a string under the
+    // YAML 1.2 core schema §6 requires, so every one has to come back quoted.
+    const MUST_QUOTE: &[&str] = &[
+        "0x1F", "0o17", "1e5", "-1E+5", ".inf", "-.Inf", ".nan", "~", "null", "Null", "NULL",
+        "true", "False", "TRUE", "0", "007", "1.0", "-0.0", "-", "[]", "{}", "#hash", "a: b",
+        "*anchor", "&alias", ">fold", "|lit", "%dir", "!tag",
+    ];
+
+    // Strings under 1.2 core, and *not* under 1.1 — `no` is `false` and `12:30`
+    // is the integer 750 to a 1.1 reader. cairn writes these bare, which is
+    // conformant: §6 requires 1.2 core, and under it they are already strings.
+    //
+    // They are named here rather than merged above because the difference is the
+    // whole subject of §6, and a future reader of this test should not have to
+    // work out which half of the table a value came from. What is asserted of
+    // them is what conformance actually requires: cairn reads back what it
+    // wrote. That both readers agree about a hand-written `assignee: no` is the
+    // corpus's job, and `tests/golden/yaml-scalars.md` is the case.
+    const ONE_POINT_ONE_ONLY: &[&str] = &["12:30", "no", "yes", "on", "off"];
+
+    let p = Project::new();
+    let id = p.add("Holder", &[]);
+
+    for (value, must_quote) in MUST_QUOTE
+        .iter()
+        .map(|v| (v, true))
+        .chain(ONE_POINT_ONE_ONLY.iter().map(|v| (v, false)))
+    {
+        // A text field, a list field and the title: three serialisation paths,
+        // and a quoting bug would hide in whichever one nobody looked at.
+        p.expect(&["set", &id, &format!("area={value}"), "-q"]);
+        p.expect(&["set", &id, &format!("labels={value}"), "-q"]);
+        p.expect(&["set", &id, &format!("title={value}"), "-q"]);
+
+        // Read the path back every time: setting the title renames the file, and
+        // a path captured before the loop reads nothing — which is how the first
+        // version of this test passed while inspecting no lines at all.
+        let path = p.expect(&["show", &id, "--path"]).trimmed();
+        let text = p.read(&path);
+        let front = text
+            .split("\n---")
+            .next()
+            .expect("frontmatter")
+            .trim_start_matches("---\n");
+
+        let mut inspected = 0usize;
+        for line in front.lines() {
+            let Some(rest) = line
+                .strip_prefix("area:")
+                .or_else(|| line.strip_prefix("title:"))
+                .or_else(|| line.strip_prefix("- "))
+            else {
+                continue;
+            };
+            inspected += 1;
+            if must_quote {
+                assert_ne!(
+                    rest.trim(),
+                    *value,
+                    "`{value}` was written bare in `{line}`. Under the YAML 1.2 \
+                     core schema that is not the string `{value}`, so reading the \
+                     file back gives an item that says something else — and §6 \
+                     requires a writer to quote it."
+                );
+            }
+        }
+        // Three fields were set, so three lines must have been looked at. An
+        // assertion that never runs is the failure mode this test already had
+        // once, and the only way to notice is to count.
+        assert_eq!(
+            inspected, 3,
+            "looked at {inspected} lines for `{value}`, not 3:\n{front}"
+        );
+
+        // Quoted or bare, cairn reads back what it wrote. This is the property
+        // the quoting exists to produce, and it holds for both halves.
+        let json = p.json(&["show", &id, "--json"]);
+        assert_eq!(
+            json["fields"]["area"].as_str(),
+            Some(*value),
+            "`area` did not survive being written and read: {json:#}"
+        );
+        assert_eq!(
+            json["title"].as_str(),
+            Some(*value),
+            "`title` did not survive being written and read"
+        );
+        assert_eq!(
+            json["labels"].as_array().and_then(|a| a.first()),
+            Some(&serde_json::json!(value)),
+            "`labels` did not survive being written and read"
+        );
+    }
+
+    assert!(p.run(&["check"]).ok());
+}

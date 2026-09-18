@@ -6,6 +6,28 @@ See the end of the file for copying conditions.
 Please send bug reports and suggestions through the project's issue tracker.
 
 
+* Noteworthy changes in release 0.2.2 (unreleased)
+
+** `cairn set` no longer reports failure for a change it made
+
+`cairn set 1 title=Taken` exited 1 with `cannot rename to ...: file already
+exists` -- and the title had been changed and written.  The rename failed, not
+the set.  Running it again failed again, while the title had been right the whole
+time, and a script keying off the exit status treated a completed change as not
+having happened.
+
+The filename is cosmetic in cairn: the identifier lives in the frontmatter, and
+`cairn check` reports drift from the title as a warning.  So a name already taken
+is now reported rather than failed -- after the line saying what happened, the
+way `close` reports unticked criteria -- and the file in the way is still never
+touched.
+
+Every command that keeps a filename in step with a title had the same defect,
+because all of them save the item first: `set`, `propose`, `edit`, `import` and
+the MCP `update_item`, which says it in the reply since no agent reads standard
+error.  `renumber` still fails, and deliberately: it exists to make filenames and
+identifiers agree, so a name it cannot take means the repair did not happen.
+
 * Noteworthy changes in release 0.2.1 (2026-09-13)
 
 ** A milestone you create can be filed under

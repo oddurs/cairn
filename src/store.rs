@@ -3,11 +3,32 @@
 // Copyright (c) 2026 Oddur Sigurdsson. MIT licensed; see LICENSE.
 use crate::config::Config;
 use crate::item::Item;
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 
 pub struct Store<'a> {
     pub cfg: &'a Config,
+}
+
+/// What keeping a filename in step with a title came to.
+///
+/// Three outcomes rather than a bool and an error, because the third one is
+/// neither. Every caller saves the item *before* asking for this, so a failure
+/// here reported a change that had been made as one that had not: `cairn set 1
+/// title=Taken` exited 1, and the title was Taken, and running it again exited 1
+/// again forever.
+///
+/// A filename is cosmetic in this project — `cairn check` reports drift from the
+/// title as a warning, not an error — so a name already taken is a thing to
+/// mention, not a thing to fail. The file in the way is never touched.
+#[derive(Debug)]
+pub enum Renamed {
+    /// The filename already matched the title.
+    Unchanged,
+    /// Moved to the name the title implies.
+    Moved,
+    /// Something already occupies that name, so the file kept its own.
+    Blocked(PathBuf),
 }
 
 impl<'a> Store<'a> {
@@ -153,7 +174,7 @@ impl<'a> Store<'a> {
 
     /// Keep the filename in step with the title, preserving whatever
     /// subdirectory the file already lives in.
-    pub fn sync_path(&self, item: &mut Item) -> Result<bool> {
+    pub fn sync_path(&self, item: &mut Item) -> Result<Renamed> {
         let want_name = self.cfg.filename_for(item.id, item.title());
         let parent = item
             .path
@@ -161,15 +182,15 @@ impl<'a> Store<'a> {
             .map_or_else(|| self.cfg.items_dir(), Path::to_path_buf);
         let want = parent.join(&want_name);
         if want == item.path {
-            return Ok(false);
+            return Ok(Renamed::Unchanged);
         }
         if want.exists() {
-            bail!("cannot rename to {}: file already exists", want.display());
+            return Ok(Renamed::Blocked(want));
         }
         std::fs::rename(&item.path, &want)
             .with_context(|| format!("renaming {} -> {}", item.path.display(), want.display()))?;
         item.path = want;
-        Ok(true)
+        Ok(Renamed::Moved)
     }
 
     /// Path relative to the project root, for display and for links.

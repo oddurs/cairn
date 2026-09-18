@@ -297,9 +297,14 @@ fn dropped_work_does_not_count_against_progress() {
 /// and the next title change then has a destination that already exists.
 ///
 /// What this pins is the safety property: the item in the way survives, and the
-/// change to the item being renamed is not half-applied to disk. It deliberately
-/// does not assert the exit status, because today `set` returns failure for a
-/// title change it completed — 0123, where that is argued out.
+/// change to the item being renamed is not half-applied to disk.
+///
+/// It used to leave the exit status alone, because `set` returned failure for a
+/// title change it had completed — and then said so again on every retry, while
+/// the title had been right all along. 0123 argued that out: the write has
+/// already happened by the time the rename is attempted, a filename is cosmetic,
+/// and `check` reports the drift. So the status is asserted now, and what the
+/// command says about itself is asserted with it.
 #[test]
 fn renaming_onto_an_existing_file_never_overwrites_it() {
     let p = Project::new();
@@ -312,11 +317,21 @@ fn renaming_onto_an_existing_file_never_overwrites_it() {
     );
 
     let out = p.run(&["set", "1", "title=Taken"]);
+    assert!(
+        out.ok(),
+        "a change that was written was reported as a failure:\n{}",
+        out.all()
+    );
     assert_contains(
         &out.all(),
-        "already exists",
+        "keeps the filename",
         "it renamed over a file that was there, or said nothing about not doing so",
     );
+    assert_contains(&out.all(), "was written", "and that the change did land");
+
+    // A retry is not a new failure, which is what a script keying off the exit
+    // status used to see forever.
+    assert!(p.run(&["set", "1", "title=Taken"]).ok());
 
     let occupant = std::fs::read_to_string(p.path("cairn/items/0001-taken.md")).unwrap();
     assert_contains(&occupant, "id: 99", "the item in the way was overwritten");

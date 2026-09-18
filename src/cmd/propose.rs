@@ -261,7 +261,8 @@ fn accept(cfg: &Config, store: &Store, raw: &str) -> Result<i32> {
     );
     item.touch(&today());
     item.save()?;
-    store.sync_path(&mut item)?;
+    let renamed = store.sync_path(&mut item)?;
+    crate::cmd::note_if_blocked(store, &item, &renamed);
     drop(lock);
     hooks::item(cfg, store, hooks::Event::AfterChange, &item);
 
