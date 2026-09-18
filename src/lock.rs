@@ -41,12 +41,24 @@ impl Lock {
     /// > their data, and it must never cost them the ability to look.
     pub fn acquire(cfg: &Config) -> Result<Lock> {
         if cfg.format() < crate::config::CURRENT_FORMAT {
+            // What migrating costs, said where somebody is stopped by it rather
+            // than only in the manual. The recurring one-line notice stays short
+            // on purpose — it prints on every command — so this is the place the
+            // detail belongs: it is reached exactly once, by somebody who now
+            // needs it.
             anyhow::bail!(
                 "this project is format {}, and writing needs format {}\n\
                  run `cairn migrate` (`--dry-run` first to see what it would change)\n\
+                 \n\
+                 it rewrites {}, and may create item files for things that used to\n\
+                 live in it. it changes nothing already in the item directory, so\n\
+                 undoing it means restoring that one file and removing anything it\n\
+                 created — `--dry-run` names both.\n\
+                 \n\
                  reading works meanwhile: list, show, next, search, board, roadmap, log, export",
                 cfg.format(),
-                crate::config::CURRENT_FORMAT
+                crate::config::CURRENT_FORMAT,
+                crate::config::CONFIG_FILE
             );
         }
         Lock::acquire_unchecked(cfg)

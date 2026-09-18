@@ -2266,3 +2266,143 @@ fn render_warns_for_a_person_and_not_for_the_hook() {
         "",
     );
 }
+
+// --- a project whose work is finished ------------------------------------
+
+/// The poptop situation: every work item done, every milestone still open.
+///
+/// Three things made the backlog look like it contradicted itself, and this
+/// builds the state all three were reported from.
+fn all_work_done() -> Project {
+    let p = seeded_empty();
+    // Two milestones, one of which is the `later` that is meant to stay open.
+    for (title, key) in [("The rewind works", "v0.1"), ("Someday", "later")] {
+        p.expect(&[
+            "new",
+            title,
+            "-t",
+            "milestone",
+            "-q",
+            "--set",
+            &format!("key={key}"),
+        ]);
+    }
+    for (n, key) in [("one", "v0.1"), ("two", "v0.1"), ("three", "later")] {
+        let id = p.expect(&["new", n, "-q"]).trimmed();
+        p.expect(&["set", &id, &format!("milestone={key}"), "-q"]);
+        p.expect(&["close", &id, "-q"]);
+    }
+    p
+}
+
+/// The standard schema with nothing in it: it declares a `milestone` type that
+/// groups, and statuses with a `done` among them.
+fn seeded_empty() -> Project {
+    Project::with(Schema::standard())
+}
+
+/// `cairn list --status backlog` printed `no items match` while seven items had
+/// exactly that status. They matched and were then hidden for being containers,
+/// and the message described the filter rather than what happened to the result
+/// — so the obvious response was to go and rewrite a filter that was correct.
+#[test]
+fn an_empty_listing_says_what_was_hidden_rather_than_that_nothing_matched() {
+    let p = all_work_done();
+
+    let out = p.expect(&["list", "--status", "backlog"]);
+    assert!(out.ok());
+    assert_contains(&out.all(), "2 milestones hidden", "it counts what it hid");
+    assert_contains(&out.all(), "--type milestone", "and says how to see them");
+    assert_missing(
+        &out.all(),
+        "no items match",
+        "two items matched, so saying nothing did is false",
+    );
+
+    // Naming the type is how you ask for them, and that still works.
+    assert_eq!(
+        p.expect(&["list", "-t", "milestone", "--ids"])
+            .lines()
+            .len(),
+        2
+    );
+
+    // The default listing has both exclusions at once, which is what a finished
+    // project actually sees.
+    let out = p.expect(&["list"]);
+    assert_contains(&out.all(), "milestones hidden", "");
+    assert_contains(&out.all(), "closed item", "");
+
+    // And an empty result with nothing hidden still says the simple thing.
+    let out = p.expect(&["list", "-A", "--filter", "type=nonesuch"]);
+    assert_contains(&out.all(), "no items match", "");
+}
+
+/// Finishing a milestone's last item never said so, so milestones sat in
+/// `backlog` for ever — and at the initial status, which the roadmap does not
+/// print, so the only visible fact was 100%.
+#[test]
+fn finishing_the_last_item_under_a_milestone_says_so_once() {
+    let p = seeded_empty();
+    p.expect(&["new", "v0.1", "-t", "milestone", "-q"]);
+    let a = p.expect(&["new", "one", "-q"]).trimmed();
+    let b = p.expect(&["new", "two", "-q"]).trimmed();
+    p.expect(&["set", &a, &b, "milestone=v0.1", "-q"]);
+
+    // Not on the first, because something is still unfinished.
+    let out = p.expect(&["close", &a]);
+    assert_missing(&out.all(), "nothing unfinished", "said too early");
+
+    // On the last, once, naming the milestone and the command.
+    let out = p.expect(&["close", &b]);
+    assert_contains(&out.all(), "all 2 item(s) under", "");
+    assert_contains(&out.all(), "v0.1", "it names the milestone");
+    assert_contains(&out.all(), "cairn close 0001", "and the command");
+
+    // Reported, never done: the milestone is still open, because whether
+    // finished work means a shipped milestone is not cairn's judgement.
+    assert_eq!(
+        p.json(&["show", "1", "--json"])["status"].as_str(),
+        Some("backlog"),
+        "cairn closed a milestone on its own"
+    );
+
+    // And `-q` says nothing, which is what a hook and a script pass.
+    assert_missing(&p.expect(&["reopen", &b, "-q"]).all(), "unfinished", "");
+    assert_missing(&p.expect(&["close", &b, "-q"]).all(), "unfinished", "");
+}
+
+/// The roadmap is where the state already is, so it is where somebody who
+/// finished the work months ago finds out. poptop had seven milestones at 100%
+/// and no indication that any of them was open.
+#[test]
+fn the_roadmap_marks_a_milestone_that_is_finished_and_open() {
+    let p = all_work_done();
+
+    let out = p.expect(&["roadmap"]).stdout;
+    assert_eq!(
+        out.matches("nothing unfinished").count(),
+        2,
+        "both milestones are finished and open:\n{out}"
+    );
+    assert_contains(&out, "cairn close", "and it names the command");
+
+    // Closing one stops the nudge, and the other is left alone — a `later`
+    // milestone with everything under it done is a legitimate state.
+    p.expect(&["close", "1", "-q"]);
+    let out = p.expect(&["roadmap"]).stdout;
+    assert_eq!(
+        out.matches("nothing unfinished").count(),
+        1,
+        "closing one did not settle it:\n{out}"
+    );
+
+    // A milestone with nothing filed under it is not finished, it is empty.
+    let p2 = seeded_empty();
+    p2.expect(&["new", "v9.9", "-t", "milestone", "-q"]);
+    assert_missing(
+        &p2.expect(&["roadmap"]).stdout,
+        "nothing unfinished",
+        "an empty milestone was called finished",
+    );
+}

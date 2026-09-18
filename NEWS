@@ -6,6 +6,43 @@ See the end of the file for copying conditions.
 Please send bug reports and suggestions through the project's issue tracker.
 
 
+* Noteworthy changes in release 0.2.2 (unreleased)
+
+** A finished project no longer looks like it contradicts itself
+
+Reported from a project with 70 items done and 7 milestones still open.
+
+`cairn list --status backlog` printed `no items match` while seven items had
+exactly that status.  They matched and were then hidden for being containers, so
+the message described the filter rather than what happened to the result -- and
+the obvious response was to go and rewrite a filter that was correct.  An empty
+listing now says how many items were hidden, why, and how to see them, for
+containers and for closed items alike.  Naming a status still does not unhide
+containers, and naming a type still does: that symmetry is deliberate.
+
+Finishing a milestone's last item never said so.  The milestone stayed in
+`backlog` for ever, and `backlog` is usually the initial status, which the
+roadmap does not print -- so the only visible fact was 100%.  `cairn close` now
+says it once, at the moment it becomes true, and `cairn roadmap` marks a
+milestone whose work is all done while it is still open.
+
+Nothing is closed for you.  A project's `later` or `Someday` milestone can have
+every item under it finished and be meant to stay open, so whether done work
+means a shipped milestone is a judgement that stays with the person.  A milestone
+with nothing filed under it is not reported either: nothing filed is vacuously
+complete.
+
+** What migrating changes, and how to undo it
+
+A project behind the current format says so on every command, and the note was
+too short to answer the question it raises.  The recurring line stays short, but
+the write refusal -- reached once, by somebody who now needs to know -- says that
+migrating rewrites `cairn.toml`, may create item files, changes nothing already
+in the item directory, and is undone by restoring that one file.  `cairn migrate
+--dry-run` says the same, counted exactly, and only where it is true: a migration
+that rewrote existing items would not be undone as cheaply.
+
+
 * Noteworthy changes in release 0.2.1 (2026-09-13)
 
 ** A milestone you create can be filed under
