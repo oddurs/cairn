@@ -138,6 +138,11 @@ pub fn run(args: Args) -> Result<i32> {
             rows.push((f.name.as_str(), v.display()));
         }
     }
+    // Beside the other dates. Shown only when set, which is most items: nothing
+    // finished before a project recorded this has a value to show.
+    if let Some(d) = &item.meta.closed_at {
+        rows.push(("closed", d.clone()));
+    }
     let criteria = item.criteria(cfg.project.criteria_section.as_deref());
     if criteria.any() {
         // `cairn show 12 --criteria` prints them in full; the summary here is

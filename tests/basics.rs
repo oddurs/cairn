@@ -719,3 +719,123 @@ fn dependencies_survive_an_export_and_import() {
         "everything looks startable, so the dependencies did not survive"
     );
 }
+
+/// `updated` records the last edit, which is exactly why it cannot answer "what
+/// did we finish this week": fixing a typo in a closed item moved it, and the
+/// week's work changed retroactively.
+#[test]
+fn when_an_item_was_finished_survives_being_edited_afterwards() {
+    let p = Project::new();
+    let id = p.add("Shipped", &[]);
+    p.expect(&["close", &id, "-q"]);
+
+    let closed = p.json(&["show", &id, "--json"])["closed_at"]
+        .as_str()
+        .expect("closed_at was not stamped")
+        .to_string();
+    assert_eq!(closed.len(), 10, "not a date: {closed}");
+
+    // Two later edits, one of which sets `updated` to a date of its own.
+    p.expect(&["set", &id, "updated=2027-01-01", "-q"]);
+    p.expect(&["note", &id, "something learned later", "-q"]);
+    let after = p.json(&["show", &id, "--json"]);
+    assert_eq!(
+        after["closed_at"].as_str(),
+        Some(closed.as_str()),
+        "an edit after the fact moved when it was finished"
+    );
+    // And `updated` did exactly what it is for: the note moved it back to today,
+    // overwriting the date set a moment earlier. That is the whole reason
+    // `closed_at` cannot be answered by reading `updated`.
+    assert_eq!(after["updated"].as_str(), Some(closed.as_str()));
+
+    // Closing what is already closed leaves the original date alone, so a
+    // repeated `cairn close` is not a way to quietly move it.
+    p.expect(&["set", &id, "closed_at=2026-01-15", "-q"]);
+    p.expect(&["close", &id, "-q"]);
+    assert_eq!(
+        p.json(&["show", &id, "--json"])["closed_at"].as_str(),
+        Some("2026-01-15"),
+        "re-closing moved the date"
+    );
+
+    // Reopening clears it: a date nobody can act on is worse than none.
+    p.expect(&["reopen", &id, "-q"]);
+    assert!(p.json(&["show", &id, "--json"])["closed_at"].is_null());
+
+    // And re-closing stamps afresh.
+    p.expect(&["close", &id, "-q"]);
+    assert_eq!(
+        p.json(&["show", &id, "--json"])["closed_at"].as_str(),
+        Some(closed.as_str())
+    );
+}
+
+/// The point of the key: the question it makes answerable.
+#[test]
+fn what_was_finished_on_a_day_is_a_filter() {
+    let p = Project::new();
+    let old = p.add("Finished long ago", &[]);
+    let new = p.add("Finished today", &[]);
+    p.expect(&["close", &old, "-q"]);
+    p.expect(&["set", &old, "closed_at=2026-01-15", "-q"]);
+    p.expect(&["close", &new, "-q"]);
+    let today = p.json(&["show", &new, "--json"])["closed_at"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    assert_eq!(
+        p.expect(&[
+            "list",
+            "-A",
+            "--filter",
+            &format!("closed_at={today}"),
+            "--ids"
+        ])
+        .lines(),
+        vec![new.clone()],
+    );
+    assert_eq!(
+        p.expect(&["list", "-A", "--filter", "closed_at>=2026-06-01", "--ids"])
+            .lines(),
+        vec![new.clone()],
+        "dates compare in order, as ISO dates do"
+    );
+
+    // The pre-existing boolean is untouched, which the filter grammar promises.
+    assert_eq!(
+        p.expect(&["list", "-A", "--filter", "closed=true", "--ids"])
+            .lines()
+            .len(),
+        2
+    );
+
+    // An item finished before a project recorded this has no value, and is not
+    // reported as unfinished for it.
+    let p2 = Project::new();
+    p2.write(
+        "cairn/items/0001-old.md",
+        "---\nid: 1\ntitle: Old\nstatus: done\n---\n",
+    );
+    assert!(p2.run(&["check"]).ok());
+    assert!(p2.json(&["show", "1", "--json"])["closed_at"].is_null());
+}
+
+/// A date on something that is not finished is what a hand-edit or an import
+/// leaves behind. The status is what is believed; the date is what is reported.
+#[test]
+fn a_finished_date_on_unfinished_work_is_reported() {
+    let p = Project::new();
+    let id = p.add("Not done", &[]);
+    p.expect(&["set", &id, "closed_at=2026-01-15", "-q"]);
+
+    let out = p.expect(&["check"]).all();
+    assert_contains(&out, "`closed_at` is set on an item", "");
+    assert_contains(&out, "closed_at=", "and how to clear it");
+    assert!(p.run(&["check"]).ok(), "a warning, not an error");
+
+    // Clearing it settles the matter.
+    p.expect(&["set", &id, "closed_at=", "-q"]);
+    assert_missing(&p.expect(&["check"]).all(), "closed_at", "");
+}

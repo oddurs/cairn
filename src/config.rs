@@ -1130,6 +1130,7 @@ pub const RESERVED_FIELDS: &[&str] = &[
     "created_by",
     "created",
     "updated",
+    "closed_at",
     "depends_on",
     "source",
     "body",

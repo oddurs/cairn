@@ -297,11 +297,26 @@ fn transition(cfg: &Config, ids: &[String], status: &str, quiet: bool, verb: &st
     let mut changed = Vec::new();
     for raw in ids {
         let mut item = store.find_ref(raw)?;
+        let was_closed = cfg.category(item.status()).is_closed();
         apply_requested(&mut item, cfg, "status", Assign::Set(status.to_string()))?;
         // Finishing ends the claim as surely as handing it back does. Left
         // behind, `claimed` would age until a closed item read as abandoned.
         if cfg.category(status).is_closed() {
             apply(&mut item, cfg, "claimed", Assign::Set(String::new()))?;
+            // Stamped at the transition and only at the transition. `updated`
+            // already records the last edit, and that is exactly why it cannot
+            // answer this: fixing a typo in a finished item must not change when
+            // it was finished. Closing something already closed leaves the
+            // original date alone, so a repeated `cairn close` is not a way to
+            // quietly move it.
+            if !was_closed {
+                apply(&mut item, cfg, "closed_at", Assign::Set(today()))?;
+            }
+        } else if was_closed {
+            // Reopened, so the date is no longer true of anything. Cleared
+            // rather than kept, for the same reason `claimed` is cleared on
+            // close: a value nobody can act on is worse than none.
+            apply(&mut item, cfg, "closed_at", Assign::Set(String::new()))?;
         }
         item.touch(&today());
         item.save()?;
@@ -505,13 +520,19 @@ pub fn apply(item: &mut Item, cfg: &Config, key: &str, assign: Assign) -> Result
             Assign::Set(v) => item.meta.assignee = Some(v),
             _ => bail!("`assignee` is not a list field; use assignee=..."),
         },
-        "created" | "updated" => match assign {
+        "created" | "updated" | "closed_at" => match assign {
+            // Settable by hand, like `created` and `updated`, because an import
+            // knows when something was finished and a project adopting cairn
+            // mid-life may be able to say.
+            Assign::Set(v) if v.trim().is_empty() && key == "closed_at" => {
+                item.meta.closed_at = None;
+            }
             Assign::Set(v) => {
                 check_date(key, &v)?;
-                if key == "created" {
-                    item.meta.created = Some(v);
-                } else {
-                    item.meta.updated = Some(v);
+                match key {
+                    "created" => item.meta.created = Some(v),
+                    "closed_at" => item.meta.closed_at = Some(v),
+                    _ => item.meta.updated = Some(v),
                 }
             }
             _ => bail!("`{key}` is not a list field"),

@@ -17,5 +17,6 @@
   "status": "backlog",
   "title": "The smallest possible item",
   "type": null,
-  "updated": null
+  "updated": null,
+  "closed_at": null
 }

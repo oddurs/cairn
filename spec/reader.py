@@ -89,6 +89,7 @@ KNOWN = (
     "depends_on",
     "created",
     "updated",
+    "closed_at",
     "source",
 )
 
@@ -184,6 +185,7 @@ def read(path, text=None):
         "depends_on": as_ids(meta.get("depends_on")),
         "created": text_or_none("created"),
         "updated": text_or_none("updated"),
+        "closed_at": text_or_none("closed_at"),
         "source": text_or_none("source"),
         # §4: anything else is a custom field, and a reader preserves it.
         "fields": {k: v for k, v in meta.items() if k not in KNOWN},

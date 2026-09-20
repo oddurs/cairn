@@ -26,6 +26,7 @@ const ITEM_FIELDS: &[&str] = &[
     "depends_on",
     "created",
     "updated",
+    "closed_at",
     "source",
     "ref",
     "fields",
