@@ -351,3 +351,56 @@ fn renaming_onto_an_existing_file_never_overwrites_it() {
     );
     assert!(p.run(&["check"]).ok(), "the project no longer loads");
 }
+
+/// A checkout with `core.autocrlf` set — the default on Windows — converts the
+/// generated roadmap to CRLF on the way out of git. The comparison was on bytes
+/// against LF-generated markdown, so such a checkout was told the roadmap was out
+/// of date on every run, and `cairn render` rewrote it as LF, which git then
+/// reported as every line changed. There was no state in which it was quiet.
+///
+/// Constructed here rather than left to the platform, so it means the same thing
+/// everywhere — and it was found by a test that only failed on Windows, which is
+/// the kind of thing that stays found only if it is pinned deliberately.
+#[test]
+fn a_roadmap_with_crlf_endings_is_neither_stale_nor_rewritten() {
+    let p = Project::new();
+    p.add("A thing", &[]);
+    p.expect(&["render", "-q"]);
+
+    let lf = p.read("ROADMAP.md");
+    assert!(!lf.contains('\r'), "the fixture is not LF: {lf:?}");
+    p.write("ROADMAP.md", &lf.replace('\n', "\r\n"));
+
+    // The same content, and therefore not stale.
+    assert!(
+        p.run(&["check", "--render"]).ok(),
+        "a CRLF checkout was told its roadmap was out of date"
+    );
+    assert_contains(&p.expect(&["render", "--check"]).all(), "up to date", "");
+
+    // And rendering it leaves the endings alone, so the command somebody runs to
+    // keep the file current does not produce a diff of every line.
+    p.expect(&["render", "-q"]);
+    let after = p.read("ROADMAP.md");
+    assert!(
+        after.contains("\r\n"),
+        "rendering converted a CRLF file to LF"
+    );
+    assert!(
+        !after.replace("\r\n", "").contains('\n'),
+        "a bare newline was left behind:\n{after:?}"
+    );
+
+    // A real change is still a real change, whatever the endings.
+    p.run(&["--no-hooks", "new", "Not yet rendered", "-q"]);
+    assert!(
+        !p.run(&["check", "--render"]).ok(),
+        "genuine staleness stopped being reported"
+    );
+    assert_contains(&p.run(&["render", "--check"]).all(), "out of date", "");
+
+    // LF stays LF, which is what a fresh file gets on every platform.
+    p.remove("ROADMAP.md");
+    p.expect(&["render", "-q"]);
+    assert!(!p.read("ROADMAP.md").contains('\r'), "a new file gained CR");
+}

@@ -6,7 +6,7 @@ A markdown-native roadmap and issue manager that lives in your repository.
 
 ## v0.1 — Usable in anger
 
-`##########` 95% · 36 of 38 done · due 2026-10-15
+`##########` 95% · 37 of 39 done · due 2026-10-15
 
 Enough to run a real project's roadmap without reaching for anything else.
 
@@ -56,6 +56,7 @@ Enough to run a real project's roadmap without reaching for anything else.
 - [x] [`0128`](https://github.com/oddurs/cairn/blob/main/cairn/items/0128-a-finished-project-looks-like-it-contradicts-itself.md) A finished project looks like it contradicts itself <sup>bug · p1</sup>
 - [x] [`0129`](https://github.com/oddurs/cairn/blob/main/cairn/items/0129-the-merge-driver-does-not-survive-a-clone.md) The merge driver does not survive a clone <sup>bug · p1</sup>
 - [x] [`0132`](https://github.com/oddurs/cairn/blob/main/cairn/items/0132-when-something-was-finished-is-not-recorded.md) When something was finished is not recorded <sup>feature · p1</sup>
+- [x] [`0133`](https://github.com/oddurs/cairn/blob/main/cairn/items/0133-a-windows-checkout-reports-the-roadmap-stale-for-ever.md) A Windows checkout reports the roadmap stale for ever <sup>bug · p1</sup>
 
 ## v0.2 — Comfortable
 
