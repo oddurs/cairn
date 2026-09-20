@@ -17,5 +17,6 @@
   "status": "doing",
   "title": "A key is a handle, not an identifier",
   "type": "docs",
-  "updated": null
+  "updated": null,
+  "closed_at": null
 }

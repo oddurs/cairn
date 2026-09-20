@@ -96,6 +96,7 @@ The frontmatter is a YAML mapping. All keys are optional except where noted.
 | `depends_on` | sequence of unsigned integers | A reader **must** also accept a single comma-separated string, and **must** accept each element with an optional leading `#`. |
 | `created` | date | `YYYY-MM-DD`. |
 | `updated` | date | `YYYY-MM-DD`. |
+| `closed_at` | date | `YYYY-MM-DD`. When the item last entered a status whose category is `done` or `dropped`. Distinct from `updated`, which any change moves: editing a finished item does not change when it was finished. A writer **should** set it at the transition and **must not** rewrite it on a later edit. A reader **must not** infer that an item is finished from its presence, nor that it is unfinished from its absence: `status` is what says so, and an item finished before a project recorded this has no value to record. |
 | `source` | string | Where an imported item came from, conventionally `system:locator`, e.g. `github:owner/repo#12`. Used to make repeated imports idempotent. |
 
 Any other key is a **custom field**. Its value **may** be any YAML scalar or

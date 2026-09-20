@@ -17,5 +17,6 @@
   "status": "backlog",
   "title": "A body containing frontmatter delimiters",
   "type": null,
-  "updated": null
+  "updated": null,
+  "closed_at": null
 }

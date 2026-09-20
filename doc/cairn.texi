@@ -1724,8 +1724,8 @@ never changes type.
 Every item in JSON carries @code{id}, @code{title}, @code{type},
 @code{status}, @code{category}, @code{milestone}, @code{assignee},
 @code{labels}, @code{depends_on}, @code{created}, @code{updated},
-@code{source}, @code{ref} and @code{fields}. @command{show} adds @code{body};
-@command{next} adds @code{blockers} and @code{ready}.
+@code{closed_at}, @code{source}, @code{ref} and @code{fields}. @command{show}
+adds @code{body}; @command{next} adds @code{blockers} and @code{ready}.
 
 @item Identifiers only
 @cindex --ids
@@ -2109,6 +2109,36 @@ now rare rather than the way the commonest thing in the schema was spelled.
 
 @code{depends_on} is unchanged and undeclarable: sequencing is universal, and
 asking every project to declare it would be asking for a decision nobody has.
+
+@section When something was finished
+
+@cindex closed_at
+@vindex closed_at
+@code{updated} records the last edit, which is exactly why it cannot answer
+@emph{what did we finish this week}: fixing a typo in a closed item moves it, and
+the week's work changes retroactively.
+
+@command{cairn close} stamps @code{closed_at}, a date, at the transition:
+
+@example
+cairn list -A --filter 'closed_at>=2026-09-01'
+cairn list -A --filter "closed_at=$(date +%F)"
+@end example
+
+Stamped at the transition and only there. Closing something already closed leaves
+the original date alone, so a repeated @command{cairn close} is not a way to move
+it quietly; reopening clears it, because a date nobody can act on is worse than
+none; and every ordinary edit afterwards leaves it where it is.
+
+@code{closed} remains what it always was --- a derived boolean,
+@samp{closed=true}, asking whether an item is finished at all. The two are
+different questions and the filter grammar promises the first one keeps working,
+so the stored date needed a name of its own. @xref{Filters}.
+
+An item finished before a project recorded this has no value to record, and
+nothing infers from the absence: @code{status} is what says whether an item is
+done. @command{cairn check} reports the reverse case --- a date on something that
+is not finished, which a hand-edit or an import can leave behind --- as a warning.
 
 @section A claim is a promise somebody might not keep
 

@@ -17,5 +17,6 @@
   "status": "backlog",
   "title": "No body at all",
   "type": null,
-  "updated": null
+  "updated": null,
+  "closed_at": null
 }

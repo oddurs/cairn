@@ -24,5 +24,6 @@
   "status": "backlog",
   "title": "Labels written as a bare string",
   "type": null,
-  "updated": null
+  "updated": null,
+  "closed_at": null
 }

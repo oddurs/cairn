@@ -17,5 +17,6 @@
   "status": "backlog",
   "title": "Written on a system that uses CRLF",
   "type": null,
-  "updated": null
+  "updated": null,
+  "closed_at": null
 }

@@ -272,6 +272,7 @@ pub fn item_json(
     o.insert("depends_on".into(), json!(item.meta.depends_on));
     o.insert("created".into(), opt_json(item.meta.created.as_deref()));
     o.insert("updated".into(), opt_json(item.meta.updated.as_deref()));
+    o.insert("closed_at".into(), opt_json(item.meta.closed_at.as_deref()));
     o.insert("source".into(), opt_json(item.meta.source.as_deref()));
     o.insert("path".into(), json!(store.rel(&item.path)));
     let mut fields = serde_json::Map::new();

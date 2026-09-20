@@ -123,6 +123,14 @@ pub struct Meta {
     pub created: Option<String>,
     #[serde(default)]
     pub updated: Option<String>,
+    /// When the item last became finished, in the `done` or `dropped` sense.
+    ///
+    /// Its own key rather than reading `updated`, which means something else and
+    /// which every later edit moves: fixing a typo in a closed item must not
+    /// change when it was closed. Without this, "what did we finish this week"
+    /// was answerable only until somebody touched one of the answers.
+    #[serde(default)]
+    pub closed_at: Option<String>,
     /// Where this item came from, if it was imported: `github:owner/repo#12`.
     /// Import matches on it, so re-importing updates rather than duplicates.
     #[serde(default)]
@@ -223,6 +231,7 @@ impl Item {
             "owner" => opt(self.meta.owner.as_deref()),
             "created_by" => opt(self.meta.created_by.as_deref()),
             "created" => opt(self.meta.created.as_deref()),
+            "closed_at" => opt(self.meta.closed_at.as_deref()),
             "updated" => opt(self.meta.updated.as_deref()),
             "source" => opt(self.meta.source.as_deref()),
             "labels" | "label" => Field::List(self.meta.labels.clone()),
@@ -563,6 +572,9 @@ impl Item {
         }
         if let Some(v) = &self.meta.updated {
             put("updated", Value::String(v.clone()));
+        }
+        if let Some(v) = &self.meta.closed_at {
+            put("closed_at", Value::String(v.clone()));
         }
         if let Some(v) = &self.meta.source {
             put("source", Value::String(v.clone()));

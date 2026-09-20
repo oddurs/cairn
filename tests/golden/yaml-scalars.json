@@ -21,5 +21,6 @@
   "status": "backlog",
   "title": "Scalars YAML resolves before cairn sees them",
   "type": null,
-  "updated": null
+  "updated": null,
+  "closed_at": null
 }

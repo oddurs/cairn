@@ -170,6 +170,7 @@ fn collect_inner(
         for (key, value) in [
             ("created", item.meta.created.as_deref()),
             ("updated", item.meta.updated.as_deref()),
+            ("closed_at", item.meta.closed_at.as_deref()),
         ] {
             if let Some(v) = value
                 && chrono::NaiveDate::parse_from_str(v, "%Y-%m-%d").is_err()
@@ -198,6 +199,24 @@ fn collect_inner(
                 format!(
                     "a `{k}` with no `key`, so nothing can be filed under it — \
                      `cairn set {} key=...`",
+                    cfg.format_id(item.id)
+                ),
+            );
+        }
+
+        // A finished-on date on something that is not finished. The spec says a
+        // reader must not infer the state from this key, so the state is what is
+        // believed and the date is what is reported — an import or a hand-edit is
+        // how one gets left behind.
+        if item.meta.closed_at.is_some() && !cfg.category(item.status()).is_closed() {
+            r.warn_at(
+                &at,
+                item,
+                "closed_at",
+                format!(
+                    "`closed_at` is set on an item whose status is `{}`, which is \
+                     not finished — `cairn set {} closed_at=` clears it",
+                    item.status(),
                     cfg.format_id(item.id)
                 ),
             );

@@ -27,6 +27,31 @@ because all of them save the item first: `set`, `propose`, `edit`, `import` and
 the MCP `update_item`, which says it in the reply since no agent reads standard
 error.  `renumber` still fails, and deliberately: it exists to make filenames and
 identifiers agree, so a name it cannot take means the repair did not happen.
+** When something was finished, recorded
+
+`updated` records the last edit, which is exactly why it could not answer *what
+did we finish this week*: fixing a typo in a closed item moved it, and the week's
+work changed retroactively.
+
+`cairn close` now stamps `closed_at`, a date, at the transition.
+
+    cairn list -A --filter 'closed_at>=2026-09-01'
+
+Stamped at the transition and only there.  Closing something already closed
+leaves the original date alone, reopening clears it, and every ordinary edit
+afterwards leaves it where it is.  It can also be set by hand, for an import or a
+project adopting cairn mid-life.
+
+`closed` is unchanged: it remains the derived boolean asking whether an item is
+finished at all, which the filter grammar promises keeps working, so the stored
+date needed a name of its own.
+
+The key is optional and additive, so no format number and no migration -- the
+specification already allows an item to gain an optional key, and requires readers
+to preserve keys they do not recognise.  §4 documents it, `spec/reader.py`
+implements it, and a corpus case carries it with `updated` deliberately different,
+so the two readers are held to agreeing about the distinction.
+
 ** A finished project no longer looks like it contradicts itself
 
 Reported from a project with 70 items done and 7 milestones still open.

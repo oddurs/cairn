@@ -17,5 +17,6 @@
   "status": "backlog",
   "title": "The id comes from the filename",
   "type": null,
-  "updated": null
+  "updated": null,
+  "closed_at": null
 }
