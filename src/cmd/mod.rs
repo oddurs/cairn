@@ -89,6 +89,49 @@ pub fn paint_type(cfg: &Config, kind: Option<&str>) -> String {
 }
 
 /// `[####----]  50%` — used by the roadmap view and the rendered file.
+/// Grouping items whose work is all finished while they are still open.
+///
+/// Reported, never acted on. Closing one automatically would be cairn deciding
+/// that finished work means a shipped milestone, and those are different claims:
+/// a project's `later` or `Someday` milestone can have every item under it done
+/// and be meant to stay open for good. The item is the place that judgement
+/// lives, so cairn says what it can see and leaves the decision.
+///
+/// A grouping item with nothing under it is not reported. Nothing filed is
+/// vacuously complete, and every empty milestone in a young project would
+/// otherwise be told it was finished the day it was written.
+pub fn finished_but_open<'a>(cfg: &Config, items: &'a [Item]) -> Vec<(&'a Item, usize)> {
+    let mut out = Vec::new();
+    for container in items.iter().filter(|i| cfg.is_container(i.kind())) {
+        if cfg.category(container.status()).is_closed() {
+            continue;
+        }
+        let Some(key) = container.key() else { continue };
+        let under: Vec<&Item> = items
+            .iter()
+            .filter(|i| !cfg.is_container(i.kind()))
+            .filter(|i| {
+                cfg.schedule_of(i)
+                    .is_some_and(|v| v.eq_ignore_ascii_case(key))
+            })
+            .collect();
+        let (done, total) = progress(cfg, &under);
+        if total > 0 && done == total {
+            out.push((container, total));
+        }
+    }
+    out
+}
+
+/// What to say about one of them: the fact, and the command, and the reason the
+/// command is not run for you.
+pub fn finished_but_open_line(cfg: &Config, container: &Item) -> String {
+    format!(
+        "nothing unfinished — {} when it has shipped",
+        style::dim(&format!("`cairn close {}`", cfg.format_id(container.id)))
+    )
+}
+
 pub fn progress_bar(done: usize, total: usize, width: usize) -> String {
     if total == 0 {
         return format!("[{}]   —", "-".repeat(width));

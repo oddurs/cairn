@@ -308,6 +308,23 @@ fn report(total: &Effect) -> String {
             "\n{}\n",
             style::green("nothing already in the item directory will be changed.")
         );
+        // And therefore what it takes to go back, which is the other half of the
+        // question somebody asks before running this on years of work. Said only
+        // where it is true: a migration that rewrote existing items would not be
+        // undone this cheaply, and the branch below says so instead.
+        out += &format!(
+            "{}\n",
+            style::dim(&match total.created {
+                0 => format!(
+                    "to undo it, restore {} — nothing else changes.",
+                    crate::config::CONFIG_FILE
+                ),
+                n => format!(
+                    "to undo it, restore {} and remove the {n} item(s) it creates.",
+                    crate::config::CONFIG_FILE
+                ),
+            })
+        );
     } else {
         out += &format!(
             "\n{} {} existing item(s) would be rewritten:\n",
@@ -451,7 +468,22 @@ mod tests {
             out.contains("nothing already in the item directory will be changed."),
             "{out}"
         );
+        // And what it takes to go back, which is the other half of the question
+        // somebody asks before running this on years of work. The count matters:
+        // a migration that creates items needs them removed as well.
+        assert!(out.contains("to undo it"), "{out}");
+        assert!(out.contains("remove the 2 item(s)"), "{out}");
         assert!(!out.contains("careful"), "{out}");
+
+        // With nothing created, restoring the one file is the whole of it.
+        let out = report(&Effect {
+            rewritten: vec![CONFIG_FILE.to_string()],
+            created: 0,
+            modified: Vec::new(),
+            summary: String::new(),
+        });
+        assert!(out.contains("nothing else changes"), "{out}");
+        assert!(!out.contains("remove the"), "{out}");
     }
 
     /// No migration has needed to rewrite an item yet. The day one does, the
