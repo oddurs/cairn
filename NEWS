@@ -27,6 +27,33 @@ because all of them save the item first: `set`, `propose`, `edit`, `import` and
 the MCP `update_item`, which says it in the reply since no agent reads standard
 error.  `renumber` still fails, and deliberately: it exists to make filenames and
 identifiers agree, so a name it cannot take means the repair did not happen.
+** cairn log --range: what a branch did to the backlog
+
+`cairn log` answered what happened to one item.  Nothing answered what a branch
+did, which is the question a reviewer has -- so a pull request touching a dozen
+items was read as a dozen YAML diffs, and the summary reconstructed by hand or not
+at all.
+
+    cairn log --range main..HEAD
+    cairn log --range v0.2.1..
+    cairn log --range main..HEAD --json
+
+Grouped by what happened rather than by file:
+
+      new        0128  A finished project looks like it contradicts itself
+      closed     0044  The rewind works
+      changed    0090  Timeline scrubbing  priority p2 -> p0
+      removed    0077  Filed twice by mistake
+      renumbered 2 item(s)
+
+Items are matched by the `id` in their frontmatter and never by filename, because
+the filename follows the title and is cosmetic.  A renumber is counted rather than
+listed: it moves identifiers and the filenames follow, so reported as they arrive a
+repair of fifty identifiers would read as fifty items gone and fifty arrived, and
+bury whatever else the branch did.
+
+`--json` carries the same, for a script or a comment on a pull request.
+
 ** A Windows checkout is no longer told its roadmap is stale for ever
 
 `ROADMAP.md` is generated with LF and carries no `-text` attribute, so a checkout

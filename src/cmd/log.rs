@@ -15,16 +15,20 @@ use crate::config::Config;
 use crate::item::Item;
 use crate::store::Store;
 use crate::style;
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use serde_json::json;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 #[derive(clap::Args)]
 pub struct Args {
-    /// Item id
-    #[arg(value_name = "ID")]
-    pub id: String,
+    /// Item id. Omit with --range.
+    #[arg(value_name = "ID", required_unless_present = "range")]
+    pub id: Option<String>,
+
+    /// Summarise what a range of history did to the backlog: `main..HEAD`
+    #[arg(long, value_name = "A..B", conflicts_with_all = ["patch", "max_count"])]
+    pub range: Option<String>,
 
     /// Show the raw diffs instead of a summary of what changed
     #[arg(long, short)]
@@ -85,7 +89,14 @@ impl Change {
 pub fn run(args: Args) -> Result<i32> {
     let cfg = Config::discover()?;
     let store = Store::new(&cfg);
-    let item = store.find_ref(&args.id)?;
+    if let Some(range) = args.range.clone() {
+        return range_report(&cfg, &store, &range, args.json);
+    }
+    let id = args
+        .id
+        .clone()
+        .context("give an item id, or --range to summarise a span of history")?;
+    let item = store.find_ref(&id)?;
 
     let relative = item
         .path
@@ -557,4 +568,293 @@ fn raw_patches(root: &Path, relative: &str, max: Option<usize>) -> Result<i32> {
         .status()
         .context("running git log --patch")?;
     Ok(i32::from(!status.success()))
+}
+
+// --- what a range of history did to the backlog ------------------------------
+
+/// What happened to one item across a range.
+enum Outcome {
+    New,
+    Removed,
+    Closed,
+    Reopened,
+    Changed(Vec<Change>),
+}
+
+impl Outcome {
+    fn heading(&self) -> &'static str {
+        match self {
+            Outcome::New => "new",
+            Outcome::Removed => "removed",
+            Outcome::Closed => "closed",
+            Outcome::Reopened => "reopened",
+            Outcome::Changed(_) => "changed",
+        }
+    }
+}
+
+/// Summarise what a range of history did to the backlog.
+///
+/// `cairn log <ID>` answers what happened to one item. Nothing answered what a
+/// branch did, which is the question a reviewer has — so a pull request touching
+/// a dozen items was read as a dozen YAML diffs and the summary reconstructed by
+/// hand, or not at all.
+///
+/// Grouped by what happened rather than by file, because that is the question.
+fn range_report(cfg: &Config, store: &Store, range: &str, json: bool) -> Result<i32> {
+    if let Some(reason) = unavailable(&cfg.root) {
+        if json {
+            println!("{}", serde_json::json!({ "range": range, "items": [] }));
+        } else {
+            eprintln!("{}", style::dim(reason.as_str()));
+        }
+        return Ok(0);
+    }
+
+    let (from, to) = split_range(range);
+    let dir = cfg
+        .items_dir()
+        .strip_prefix(&cfg.root)
+        .unwrap_or(&cfg.items_dir())
+        .to_string_lossy()
+        .replace('\\', "/");
+
+    // No rename detection. An item's identity is the `id` in its frontmatter, not
+    // its filename — the filename follows the title and is cosmetic — so paths
+    // are only a way of finding which items to look at, and the items are then
+    // matched by id.
+    //
+    // `-M` was tried and was worse than useless: it paired a deleted item with an
+    // unrelated new one, because two short items look alike to a similarity
+    // heuristic, and reported the pair as a retitle. Identity is not a guess cairn
+    // has to make.
+    let out = Command::new("git")
+        .args(["diff", "--name-status", &from, &to, "--", &dir])
+        .current_dir(&cfg.root)
+        .output()
+        .context("running git diff")?;
+    if !out.status.success() {
+        bail!(
+            "git could not read `{range}`: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+    }
+
+    let mut before: std::collections::HashMap<u32, Item> = std::collections::HashMap::new();
+    let mut after: std::collections::HashMap<u32, Item> = std::collections::HashMap::new();
+    for line in String::from_utf8_lossy(&out.stdout).lines() {
+        let mut parts = line.split('\t');
+        let _code = parts.next();
+        for path in parts {
+            if !Path::new(path)
+                .extension()
+                .is_some_and(|e| e.eq_ignore_ascii_case("md"))
+            {
+                continue;
+            }
+            if let Some(i) = at_revision(&cfg.root, &from, path) {
+                before.insert(i.id, i);
+            }
+            if let Some(i) = at_revision(&cfg.root, &to, path) {
+                after.insert(i.id, i);
+            }
+        }
+    }
+
+    let mut ids: Vec<u32> = before.keys().chain(after.keys()).copied().collect();
+    ids.sort_unstable();
+    ids.dedup();
+
+    let mut found: Vec<(u32, String, Outcome)> = Vec::new();
+    let mut found_status: std::collections::HashMap<u32, String> = std::collections::HashMap::new();
+    for id in ids {
+        let (b, a) = (before.get(&id), after.get(&id));
+        let outcome = match (b, a) {
+            (None, Some(_)) => Outcome::New,
+            (Some(_), None) => Outcome::Removed,
+            (Some(b), Some(a)) => {
+                let was = cfg.category(b.status()).is_closed();
+                let now = cfg.category(a.status()).is_closed();
+                if !was && now {
+                    Outcome::Closed
+                } else if was && !now {
+                    Outcome::Reopened
+                } else {
+                    let changes = describe(b, a);
+                    if changes.is_empty() {
+                        continue;
+                    }
+                    Outcome::Changed(changes)
+                }
+            }
+            (None, None) => continue,
+        };
+        let item = a.or(b).expect("one side exists");
+        found_status.insert(id, item.status().to_string());
+        found.push((id, item.title().to_string(), outcome));
+    }
+
+    // A renumber moves an identifier, so the same work appears once as removed and
+    // once as new. Paired up and counted, because reporting fifty items twice
+    // would bury the one that matters.
+    let renumbered = pair_renumbered(&mut found, &before, &after);
+
+    found.sort_by_key(|(id, _, _)| *id);
+
+    if json {
+        let payload: Vec<serde_json::Value> = found
+            .iter()
+            .map(|(id, title, o)| {
+                let mut v = serde_json::json!({
+                    "id": id,
+                    "ref": cfg.format_id(*id),
+                    "title": title,
+                    "what": o.heading(),
+                });
+                if let Outcome::Changed(cs) = o {
+                    v["changes"] = serde_json::Value::Array(
+                        cs.iter()
+                            .map(|c| {
+                                serde_json::json!({
+                                    "field": c.field,
+                                    "from": c.from,
+                                    "to": c.to,
+                                })
+                            })
+                            .collect(),
+                    );
+                }
+                v
+            })
+            .collect();
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "range": range,
+                "items": payload,
+            }))?
+        );
+        return Ok(0);
+    }
+
+    if found.is_empty() {
+        eprintln!(
+            "{}",
+            style::dim(&format!("nothing in the backlog changed in {range}"))
+        );
+        return Ok(0);
+    }
+
+    for heading in ["new", "closed", "reopened", "changed", "removed"] {
+        for (id, title, o) in found.iter().filter(|(_, _, o)| o.heading() == heading) {
+            let detail = match o {
+                Outcome::Changed(cs) => {
+                    let each: Vec<String> = cs.iter().map(Change::display).collect();
+                    format!("  {}", style::dim(&each.join(", ")))
+                }
+                // A range is a net effect, so an item created and finished
+                // within it is only ever "new" — and a reviewer wants to know
+                // which of the new ones arrived already done.
+                Outcome::New => status_of(cfg, found_status.get(id))
+                    .map(|s| format!("  {}", style::dim(&s)))
+                    .unwrap_or_default(),
+                _ => String::new(),
+            };
+            println!(
+                "  {:<11}{}  {title}{detail}",
+                style::dim(heading),
+                style::bold(&cfg.format_id(*id))
+            );
+        }
+    }
+    if renumbered > 0 {
+        println!(
+            "  {:<11}{}",
+            style::dim("renumbered"),
+            style::dim(&format!("{renumbered} item(s)"))
+        );
+    }
+    let _ = store;
+    Ok(0)
+}
+
+/// `a..b`, `a...b`, or a single revision meaning "since then".
+fn split_range(range: &str) -> (String, String) {
+    if let Some((a, b)) = range.split_once("...") {
+        return (
+            a.to_string(),
+            if b.is_empty() {
+                "HEAD".into()
+            } else {
+                b.into()
+            },
+        );
+    }
+    if let Some((a, b)) = range.split_once("..") {
+        return (
+            a.to_string(),
+            if b.is_empty() {
+                "HEAD".into()
+            } else {
+                b.into()
+            },
+        );
+    }
+    (range.to_string(), "HEAD".to_string())
+}
+
+/// The status of a newly arrived item, when it says something a reviewer needs.
+///
+/// An item that arrives at the initial status is the ordinary case and needs no
+/// annotation; one that arrives already finished is worth saying, because a range
+/// is a net effect and such an item is only ever reported as new.
+fn status_of(cfg: &Config, status: Option<&String>) -> Option<String> {
+    let s = status?;
+    if s == cfg.initial_status() {
+        return None;
+    }
+    Some(format!("[{s}]"))
+}
+
+/// Collapse a renumber: the same work removed under one identifier and new under
+/// another.
+///
+/// `renumber` moves an identifier and the filename follows it, so a range sees a
+/// deletion and an addition. Reported as they arrive, a repair of fifty
+/// identifiers reads as fifty items gone and fifty arrived, which buries whatever
+/// else the branch did.
+///
+/// Matched on title, which is the only thing left that is the same. That is a
+/// heuristic, and a narrow one: both sides must be in the same range, the
+/// identifiers must differ, and the titles must match exactly.
+fn pair_renumbered(
+    found: &mut Vec<(u32, String, Outcome)>,
+    before: &std::collections::HashMap<u32, Item>,
+    after: &std::collections::HashMap<u32, Item>,
+) -> usize {
+    let removed: Vec<(u32, String)> = found
+        .iter()
+        .filter(|(_, _, o)| matches!(o, Outcome::Removed))
+        .map(|(id, t, _)| (*id, t.clone()))
+        .collect();
+    let mut paired: Vec<u32> = Vec::new();
+    for (gone_id, title) in &removed {
+        let arrived = found
+            .iter()
+            .find(|(id, t, o)| matches!(o, Outcome::New) && t == title && id != gone_id);
+        if let Some((new_id, _, _)) = arrived {
+            // Only when the work itself did not change, so a delete and an
+            // unrelated create that happen to share a title are left alone.
+            let same = match (before.get(gone_id), after.get(new_id)) {
+                (Some(b), Some(a)) => b.status() == a.status() && b.body == a.body,
+                _ => false,
+            };
+            if same {
+                paired.push(*gone_id);
+                paired.push(*new_id);
+            }
+        }
+    }
+    found.retain(|(id, _, _)| !paired.contains(id));
+    paired.len() / 2
 }
