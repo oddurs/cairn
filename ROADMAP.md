@@ -6,13 +6,14 @@ A markdown-native roadmap and issue manager that lives in your repository.
 
 ## v0.1 — Usable in anger
 
-`##########` 94% · 34 of 36 done · due 2026-10-15
+`##########` 92% · 34 of 37 done · due 2026-10-15
 
 Enough to run a real project's roadmap without reaching for anything else.
 
 ### backlog
 
 - [ ] [`0066`](https://github.com/oddurs/cairn/blob/main/cairn/items/0066-find-three-people-who-are-not-the-author.md) Find three people who are not the author <sup>chore · p0 · s7</sup>
+- [ ] [`0129`](https://github.com/oddurs/cairn/blob/main/cairn/items/0129-the-merge-driver-does-not-survive-a-clone.md) The merge driver does not survive a clone <sup>bug · p1</sup>
 
 ### in progress
 
@@ -119,7 +120,7 @@ The rough edges that show up after a few weeks of daily use, and the pieces that
 
 ## v1.0 — Stable
 
-`#########·` 86% · 24 of 28 done · due 2027-03-01
+`########··` 80% · 24 of 30 done · due 2027-03-01
 
 Safe to depend on: every scriptable surface carries a promise, the command surface has been reviewed and pruned rather than accumulated, releases can be verified, and it installs from a package manager people already use.
 
@@ -129,6 +130,8 @@ Safe to depend on: every scriptable surface carries a promise, the command surfa
 - [ ] [`0053`](https://github.com/oddurs/cairn/blob/main/cairn/items/0053-be-in-a-package-manager-people-already-use.md) Be in a package manager people already use <sup>chore · p0 · blocked-on-a-release</sup>
 - [ ] [`0067`](https://github.com/oddurs/cairn/blob/main/cairn/items/0067-decide-whether-identifiers-should-be-collision-free-by-construction.md) Decide whether identifiers should be collision-free by construction <sup>feature · p1 · s7</sup>
 - [ ] [`0127`](https://github.com/oddurs/cairn/blob/main/cairn/items/0127-a-bulk-write-pays-two-durability-barriers-per-item.md) A bulk write pays two durability barriers per item <sup>bug · p2</sup>
+- [ ] [`0130`](https://github.com/oddurs/cairn/blob/main/cairn/items/0130-there-is-no-way-to-see-what-a-branch-did-to-the-backlog.md) There is no way to see what a branch did to the backlog <sup>feature · p1</sup>
+- [ ] [`0131`](https://github.com/oddurs/cairn/blob/main/cairn/items/0131-cairn-onboards-a-model-and-not-a-person.md) cairn onboards a model and not a person <sup>feature · p2</sup>
 
 ### done
 
