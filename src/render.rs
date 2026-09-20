@@ -8,6 +8,32 @@ use crate::item::Item;
 use crate::store::Store;
 use anyhow::{Context, Result};
 
+/// Whether the file already holds this rendering, ignoring line endings.
+///
+/// The generated markdown is LF throughout. `ROADMAP.md` carries no `-text`
+/// attribute, so a checkout with `core.autocrlf` set — the default on Windows —
+/// converts it to CRLF on the way out of git, and a byte comparison then reports
+/// a file that matches as out of date on every run, for ever.
+///
+/// cairn already answers this for item files: `Eol::detect` reads whichever
+/// ending a file uses and `eol.apply` writes the same back, so a CRLF checkout
+/// never turns an edit into a whole-file diff. This is that, for the one
+/// generated file.
+pub fn matches_on_disk(current: &str, rendered: &str) -> bool {
+    current.replace("\r\n", "\n") == rendered.replace("\r\n", "\n")
+}
+
+/// The rendering, given whatever ending the file it replaces already had.
+///
+/// Rendering a CRLF file must not convert it: that would be a diff of every
+/// line, produced by a command the user ran to keep the file current.
+pub fn as_written(current: Option<&str>, rendered: &str) -> String {
+    match current {
+        Some(c) => crate::item::Eol::detect(c).apply(rendered),
+        None => rendered.to_string(),
+    }
+}
+
 pub fn roadmap_markdown(cfg: &Config, store: &Store, items: &[Item]) -> Result<String> {
     let r = &cfg.render;
     let filter = match &r.include {

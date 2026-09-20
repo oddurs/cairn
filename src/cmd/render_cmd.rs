@@ -54,7 +54,7 @@ pub fn run(args: Args) -> Result<i32> {
 
     if args.check {
         let current = std::fs::read_to_string(&target).unwrap_or_default();
-        if current == markdown {
+        if crate::render::matches_on_disk(&current, &markdown) {
             if !args.quiet {
                 println!("{} {}", style::green("up to date"), store.rel(&target));
             }
@@ -68,8 +68,14 @@ pub fn run(args: Args) -> Result<i32> {
         return Ok(1);
     }
 
-    let unchanged = std::fs::read_to_string(&target).is_ok_and(|c| c == markdown);
-    crate::store::write_atomic(&target, markdown.as_bytes())?;
+    let current = std::fs::read_to_string(&target).ok();
+    let unchanged = current
+        .as_deref()
+        .is_some_and(|c| crate::render::matches_on_disk(c, &markdown));
+    // Written with the ending the file already had, so rendering a CRLF checkout
+    // does not convert it and turn a no-op into a diff of every line.
+    let out = crate::render::as_written(current.as_deref(), &markdown);
+    crate::store::write_atomic(&target, out.as_bytes())?;
     hooks::render(&cfg, &store.rel(&target), items.len());
     if !args.quiet {
         let verb = if unchanged { "unchanged" } else { "wrote" };

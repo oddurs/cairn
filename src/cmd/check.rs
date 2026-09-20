@@ -404,7 +404,7 @@ fn collect_inner(
         let target = cfg.root.join(&cfg.render.target);
         let current = std::fs::read_to_string(&target).unwrap_or_default();
         let expected = roadmap_markdown(cfg, store, items)?;
-        if current != expected {
+        if !crate::render::matches_on_disk(&current, &expected) {
             r.error(
                 &store.rel(&target),
                 "out of date — run `cairn render`".into(),

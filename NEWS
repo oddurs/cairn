@@ -27,6 +27,19 @@ because all of them save the item first: `set`, `propose`, `edit`, `import` and
 the MCP `update_item`, which says it in the reply since no agent reads standard
 error.  `renumber` still fails, and deliberately: it exists to make filenames and
 identifiers agree, so a name it cannot take means the repair did not happen.
+** A Windows checkout is no longer told its roadmap is stale for ever
+
+`ROADMAP.md` is generated with LF and carries no `-text` attribute, so a checkout
+with `core.autocrlf` set -- the default on Windows -- converts it to CRLF on the
+way out of git.  The staleness check compared bytes, so it could never match: a
+Windows user was told the roadmap was out of date on every run, and `cairn render`
+rewrote it as LF, which git then reported as every line changed.  There was no
+state in which the project was quiet.
+
+The comparison now ignores line endings, and rendering writes back whichever
+ending the file already had -- the same pair item files have always had.  A
+genuine change is still a genuine change.
+
 ** A clone is told the merge driver did not come with it
 
 A merge driver is per-clone configuration: git deliberately refuses to take an
