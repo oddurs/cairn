@@ -1340,3 +1340,119 @@ fn a_missing_driver_does_not_fail_a_strict_check() {
     assert_contains(&out.all(), "merge driver", "and it still said it");
     assert_contains(&out.all(), "0 warning", "as a note rather than a warning");
 }
+
+/// `cairn log <ID>` answers what happened to one item. Nothing answered what a
+/// branch did, which is the question a reviewer has — so a pull request touching
+/// a dozen items was read as a dozen YAML diffs.
+#[test]
+fn a_range_says_what_the_backlog_did() {
+    let p = repository();
+    let closing = p.add("Will be closed", &[]);
+    let reopening = p.add("Will be reopened", &[]);
+    let going = p.add("Will be removed", &[]);
+    let changing = p.add("Will change", &[]);
+    p.expect(&["--no-hooks", "close", &reopening, "-q"]);
+    git(&p, &["add", "-A"]);
+    git(&p, &["commit", "-qm", "before"]);
+
+    p.expect(&["--no-hooks", "close", &closing, "-q"]);
+    p.expect(&["--no-hooks", "reopen", &reopening, "-q"]);
+    p.expect(&["--no-hooks", "remove", &going, "--force"]);
+    p.expect(&["--no-hooks", "set", &changing, "priority=p0", "-q"]);
+    let arriving = p.add("Brand new", &[]);
+    git(&p, &["add", "-A"]);
+    git(&p, &["commit", "-qm", "after"]);
+
+    let out = p.expect(&["log", "--range", "HEAD~1..HEAD"]).stdout;
+    for (what, id) in [
+        ("closed", &closing),
+        ("reopened", &reopening),
+        ("removed", &going),
+        ("changed", &changing),
+        ("new", &arriving),
+    ] {
+        let line = out
+            .lines()
+            .find(|l| l.contains(id.as_str()))
+            .unwrap_or_else(|| panic!("{id} is absent from:\n{out}"));
+        assert!(
+            line.contains(what),
+            "{id} should be `{what}`, got: {line}\nfull:\n{out}"
+        );
+    }
+    // Grouped by what happened, so what changed is said beside the item.
+    assert_contains(&out, "priority p2 -> p0", "");
+
+    // The same, for a script or a comment on a pull request.
+    let json = p.json(&["log", "--range", "HEAD~1..HEAD", "--json"]);
+    assert_eq!(json["range"].as_str(), Some("HEAD~1..HEAD"));
+    let items = json["items"].as_array().expect("items");
+    assert_eq!(items.len(), 5, "{json:#}");
+    let changed = items
+        .iter()
+        .find(|i| i["what"] == "changed")
+        .expect("a changed item");
+    assert_eq!(changed["changes"][0]["field"].as_str(), Some("priority"));
+    assert_eq!(changed["changes"][0]["to"].as_str(), Some("p0"));
+}
+
+/// A renumber moves identifiers and the filenames follow, so a range sees a
+/// deletion and an addition for each. Reported as they arrive, repairing fifty
+/// identifiers reads as fifty items gone and fifty arrived, which buries whatever
+/// else the branch did.
+#[test]
+fn a_renumber_in_the_range_is_counted_rather_than_listed_twice() {
+    let p = repository();
+    let moving = p.add("Gets a new identifier", &[]);
+    let real = p.add("A real change", &[]);
+    git(&p, &["add", "-A"]);
+    git(&p, &["commit", "-qm", "before"]);
+
+    // What a renumber leaves behind: the same item under a different identifier.
+    let path = p.expect(&["show", &moving, "--path"]).trimmed();
+    let text = p.read(&path);
+    let n: u32 = moving.trim_start_matches('0').parse().unwrap();
+    p.write(
+        "cairn/items/0099-gets-a-new-identifier.md",
+        &text.replace(&format!("id: {n}"), "id: 99"),
+    );
+    p.remove(&path);
+    p.expect(&["--no-hooks", "set", &real, "priority=p0", "-q"]);
+    git(&p, &["add", "-A"]);
+    git(&p, &["commit", "-qm", "renumbered"]);
+
+    let out = p.expect(&["log", "--range", "HEAD~1..HEAD"]).stdout;
+    assert_contains(&out, "renumbered", "the pair was not collapsed");
+    assert_contains(&out, "1 item", "nor counted");
+    assert_missing(
+        &out,
+        "Gets a new identifier",
+        "the renumbered item was listed as work",
+    );
+    // And the change that matters is not buried.
+    assert_contains(&out, "A real change", "");
+    assert_contains(&out, "priority p2 -> p0", "");
+}
+
+/// Every reason there might be nothing to say, and none of them a failure.
+#[test]
+fn a_range_with_nothing_to_say_says_so() {
+    // Outside a repository.
+    let plain = Project::new();
+    plain.add("Something", &[]);
+    let out = plain.expect(&["log", "--range", "main..HEAD"]);
+    assert_contains(&out.all(), "not in a git repository", "");
+
+    let p = repository();
+    // A range in which the backlog did not change.
+    let out = p.expect(&["log", "--range", "HEAD..HEAD"]);
+    assert_contains(&out.all(), "nothing in the backlog changed", "");
+
+    // A revision git has never heard of is an error, unlike the above.
+    let bad = p.run(&["log", "--range", "nonesuch..HEAD"]);
+    assert!(!bad.ok());
+    assert_contains(&bad.all(), "bad revision", "");
+
+    // And the per-item form still needs an id.
+    assert!(!p.run(&["log"]).ok());
+}

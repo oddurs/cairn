@@ -2,10 +2,11 @@
 id: 130
 title: There is no way to see what a branch did to the backlog
 type: feature
-status: backlog
+status: done
 milestone: v1.0
 created: 2026-09-19
 updated: 2026-09-19
+closed_at: 2026-09-19
 priority: p1
 area: log
 effort: m
@@ -73,10 +74,22 @@ over a different scope and `log` already knows how to read git.
 
 ## Acceptance criteria
 
-- [ ] `cairn log --range <a>..<b>` summarises what happened to the backlog
-- [ ] Grouped by what changed, not by file
-- [ ] `--json` carries the same, for a script or a CI comment
-- [ ] A renumber in the range does not read as every item changing
-- [ ] An item removed in the range is reported as removed
-- [ ] Outside a repository it says so rather than printing nothing
-- [ ] The existing per-item `cairn log <ID>` is unchanged
+- [x] `cairn log --range <a>..<b>` summarises what happened to the backlog
+- [x] Grouped by what changed, not by file
+- [x] `--json` carries the same, for a script or a CI comment
+- [x] A renumber in the range does not read as every item changing
+- [x] An item removed in the range is reported as removed
+- [x] Outside a repository it says so rather than printing nothing
+- [x] The existing per-item `cairn log <ID>` is unchanged
+
+## 2026-09-19
+
+Built as `cairn log --range`, a flag rather than a command: the same question over a different scope, and `log` already knows how to read git. It reuses `at_revision` and `describe`, so the per-item and per-range views cannot disagree about what a change is.
+
+Two things the implementation settled that the item left open.
+
+Items are matched by the `id` in their frontmatter, never by filename. I tried `git diff -M` first and it was worse than useless — it paired a *deleted* item with an unrelated *new* one, because two short items look alike to a similarity heuristic, and reported the pair as a retitle. Identity is not something cairn has to guess: the filename is cosmetic and the id is not.
+
+A renumber is counted, not listed. It moves identifiers and filenames follow, so a range sees a delete and an add for each; the pair is matched on an unchanged title, status and body, so a deletion and an unrelated creation that happen to share a title are left alone.
+
+Also: a range is a net effect, so an item created and closed inside it is `new` rather than both — and a new item that did not arrive at the initial status now says which status it did, because otherwise a reviewer cannot tell the six items that arrived done from the two that arrived open.

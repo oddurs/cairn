@@ -3215,6 +3215,50 @@ edit} and the MCP @code{update_item} tool are for; a command whose purpose is to
 add to the record should not be able to erase it. @option{--bare} omits the
 heading, and @option{--stdin} reads a note longer than a line.
 
+@section cairn log --range
+
+@cindex reviewing the backlog
+@cindex range, of history
+What a span of history did to the backlog, which is the question a reviewer has.
+
+@example
+cairn log --range main..HEAD      # this branch
+cairn log --range v0.2.1..        # since the release
+cairn log --range HEAD~10..HEAD
+cairn log --range main..HEAD --json
+@end example
+
+@noindent
+Grouped by what happened rather than by file:
+
+@example
+  new        0128  A finished project looks like it contradicts itself
+  closed     0044  The rewind works
+  reopened   0091  Colour on a monochrome terminal
+  changed    0090  Timeline scrubbing  priority p2 -> p0
+  removed    0077  Filed twice by mistake
+  renumbered 2 item(s)
+@end example
+
+A range is a @emph{net effect}, so an item created and finished inside it is new
+rather than both; a new item that did not arrive at the initial status says which
+status it did arrive at.
+
+Items are matched by the @code{id} in their frontmatter and never by filename.
+The filename follows the title and is cosmetic, so a retitled item is one item
+that changed rather than one deleted and one added. Git's rename detection is
+deliberately not used: asked to guess, it paired a deleted item with an unrelated
+new one because two short items look alike to a similarity heuristic, and
+reported the pair as a retitle. Identity is not something cairn has to guess.
+
+@cindex renumber, in a range
+A renumber is the exception, and is counted rather than listed. It moves
+identifiers and the filenames follow, so a range sees a deletion and an addition
+for each: reported as they arrive, repairing fifty identifiers reads as fifty
+items gone and fifty arrived, which buries whatever else the branch did. The pair
+is matched on an unchanged title, status and body, so a deletion and an unrelated
+creation that happen to share a title are left alone.
+
 @section cairn tick, cairn untick
 @cindex ticking criteria
 Tick or untick the acceptance criteria an item states, by the numbers
