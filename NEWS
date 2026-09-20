@@ -27,6 +27,27 @@ because all of them save the item first: `set`, `propose`, `edit`, `import` and
 the MCP `update_item`, which says it in the reply since no agent reads standard
 error.  `renumber` still fails, and deliberately: it exists to make filenames and
 identifiers agree, so a name it cannot take means the repair did not happen.
+** A clone is told the merge driver did not come with it
+
+A merge driver is per-clone configuration: git deliberately refuses to take an
+executable name from a file in the repository.  `.gitattributes` is tracked and
+the driver is not, so `cairn init --git` committed a file asking for a driver that
+nobody who cloned the project had.
+
+The failure was silent and one-sided.  It worked for whoever ran `init --git`,
+which means the one person who could fix it was the one person who could not see
+it; everybody else got `.gitattributes` asking for a driver git had never heard
+of, git merged the item files itself, and two branches that had both allocated an
+identifier kept it.  What the newcomer learned about cairn was that a shared
+backlog produces merge conflicts.
+
+`cairn check` now says so -- as a note about the working copy rather than a
+finding about the project, which is the right distinction and not a nicety: every
+continuous-integration run is a fresh checkout with no driver and no need of one,
+so a warning would have made `--strict` fail everywhere.  `cairn config` no longer
+calls such a project integrated, because the driver is part of the integration and
+was not being checked.  `cairn init --git` was already safe to run twice.
+
 ** When something was finished, recorded
 
 `updated` records the last edit, which is exactly why it could not answer *what

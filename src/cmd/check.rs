@@ -73,6 +73,21 @@ pub fn run(args: Args) -> Result<i32> {
         eprintln!("{}: {e}", style::red("cairn"));
     }
 
+    // Deliberately not in the report, and the distinction is the point: a report
+    // is about the *project*, which is shared and committed, and this is about
+    // *this working copy*, which is neither. Putting it in the report made
+    // `check --strict` fail on every continuous-integration run, because a fresh
+    // checkout has no driver and does not need one — it never merges locally.
+    //
+    // Said here rather than nowhere, because `check` is what a newcomer runs.
+    if crate::cmd::git::driver_missing(&cfg) {
+        eprintln!(
+            "{} {}",
+            style::yellow("note:"),
+            crate::cmd::git::driver_missing_note()
+        );
+    }
+
     let failed = !r.errors.is_empty() || (args.strict && !r.warnings.is_empty());
     if failed {
         eprintln!();

@@ -345,16 +345,70 @@ fn decline(args: &MergeArgs) -> Result<i32> {
 }
 
 /// Whether this project already has the integration, for `cairn config`.
+///
+/// The driver is part of it. It was left out, and that is the half that does not
+/// survive a clone: `.gitattributes` is tracked and the driver is not, so a
+/// project could report itself integrated while every merge in a fresh clone was
+/// left to git.
 pub fn is_configured(cfg: &Config) -> bool {
     let Ok(git_dir) = git_dir(&cfg.root) else {
         return false;
     };
-    let line = format!("{} merge={DRIVER}", cfg.render.target);
-    let attributes = std::fs::read_to_string(cfg.root.join(".gitattributes")).unwrap_or_default();
     let hook = git_dir.join("hooks").join("post-merge");
-    attributes.lines().any(|l| l.trim() == line)
+    attributes_ask_for_driver(cfg)
+        && driver_registered(cfg)
         && hook.exists()
         && std::fs::read_to_string(&hook).is_ok_and(|s| s.contains("cairn renumber"))
+}
+
+/// Whether the tracked `.gitattributes` asks for the cairn merge driver.
+///
+/// Tracked, so it arrives with a clone and says what the project wants.
+pub fn attributes_ask_for_driver(cfg: &Config) -> bool {
+    let attributes = std::fs::read_to_string(cfg.root.join(".gitattributes")).unwrap_or_default();
+    let wanted = format!("merge={DRIVER}");
+    attributes
+        .lines()
+        .any(|l| l.split_whitespace().any(|w| w == wanted))
+}
+
+/// Whether this clone defines the driver `.gitattributes` names.
+///
+/// Not tracked, and not trackable: git refuses to take an executable name from a
+/// file in the repository, which is the whole reason these two can disagree.
+pub fn driver_registered(cfg: &Config) -> bool {
+    let Ok(git_dir) = git_dir(&cfg.root) else {
+        return false;
+    };
+    std::process::Command::new("git")
+        .args(["config", "--get", &format!("merge.{DRIVER}.driver")])
+        .current_dir(&git_dir)
+        .output()
+        .is_ok_and(|o| o.status.success() && !o.stdout.is_empty())
+}
+
+/// A project that asks for the driver in a clone that does not have it.
+///
+/// The failure this detects is silent and one-sided. Whoever ran `cairn init
+/// --git` has the driver and everything works; everybody who clones has
+/// `.gitattributes` asking for a driver git has never heard of, so git merges the
+/// item files itself, two branches that both allocated an identifier keep it, and
+/// the newcomer's first experience of a shared backlog is a conflict.
+///
+/// Worse, the person who could fix it is the one person who cannot see it.
+pub fn driver_missing(cfg: &Config) -> bool {
+    git_dir(&cfg.root).is_ok() && attributes_ask_for_driver(cfg) && !driver_registered(cfg)
+}
+
+/// What to say about it. One wording, because more than one command says it.
+pub fn driver_missing_note() -> String {
+    format!(
+        ".gitattributes asks for the `{DRIVER}` merge driver and this clone does \
+         not define it, so git will merge item files itself — two branches that \
+         both allocated an identifier will keep it.\n\
+         a merge driver is per-clone configuration and cannot be committed: run \
+         `cairn init --git` here, once."
+    )
 }
 
 /// Used by `init` to explain itself when the project is not a repository yet.

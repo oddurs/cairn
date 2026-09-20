@@ -2,10 +2,11 @@
 id: 129
 title: The merge driver does not survive a clone
 type: bug
-status: backlog
+status: done
 milestone: v0.1
 created: 2026-09-19
 updated: 2026-09-19
+closed_at: 2026-09-19
 priority: p1
 area: git
 effort: s
@@ -80,9 +81,27 @@ the opposite of the thing being demonstrated.
 
 ## Acceptance criteria
 
-- [ ] A repository whose `.gitattributes` names a driver that is not defined is told so
-- [ ] The message names the command that fixes it
-- [ ] `cairn init --git` is safe to run again on a project that is already set up
-- [ ] Said once, and not by every command in a loop
-- [ ] Nothing is said when the driver is defined, or when the project is not a repository
-- [ ] A test clones a configured project and asserts the newcomer is told
+- [x] A repository whose `.gitattributes` names a driver that is not defined is told so
+- [x] The message names the command that fixes it
+- [x] `cairn init --git` is safe to run again on a project that is already set up
+- [x] Said once, and not by every command in a loop
+- [x] Nothing is said when the driver is defined, or when the project is not a repository
+- [x] A test clones a configured project and asserts the newcomer is told
+
+## 2026-09-19
+
+Fixed. `git::driver_registered` reads `merge.cairn.driver` from this clone and `attributes_ask_for_driver` reads the tracked file; `driver_missing` is the two disagreeing, which only happens in a clone. `check` reports it before the duplicate identifiers, because those are the symptom and `renumber` repairs them every time without stopping the next merge producing them again.
+
+`is_configured` was checking `.gitattributes` and the post-merge hook and not the driver — so `cairn config` would call a fresh clone integrated. That was the same bug one level up, and it is why the fix includes `config`.
+
+`cairn init --git` was already idempotent (`driver()` checks `--get` first) and already explained the hook not being cloned. Nothing needed changing there; the gap was that nobody was ever told to run it.
+
+## 2026-09-19
+
+Fixed. `git::driver_registered` reads `merge.cairn.driver` from this clone, `attributes_ask_for_driver` reads the tracked file, and `driver_missing` is the two disagreeing — which can only happen in a clone.
+
+`is_configured` was checking `.gitattributes` and the post-merge hook and not the driver, so `cairn config` would call a fresh clone integrated. Same bug one level up.
+
+`init --git` was already idempotent and already explained the hook not being cloned; the gap was only that nobody was told to run it.
+
+One thing the first attempt got wrong, worth recording: the note was a `check` warning, and `check --render --strict` then failed on cairn's own repository — because every CI checkout is a clone with no driver and no need of one. A report is about the project, which is shared and committed; this is about one working copy, which is neither. It is printed beside the report rather than inside it, and `a_missing_driver_does_not_fail_a_strict_check` pins that.

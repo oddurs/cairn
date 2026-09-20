@@ -1225,3 +1225,118 @@ fn renumber_that_cannot_finish_leaves_everything_findable() {
     );
     assert!(p.run(&["renumber"]).ok(), "the lock was left held");
 }
+
+/// A merge driver is per-clone configuration: git deliberately refuses to take
+/// an executable name from a tracked file. `.gitattributes` is tracked and the
+/// driver is not, so `cairn init --git` commits a file asking for a driver that
+/// nobody who clones the project has.
+///
+/// The failure is silent and one-sided. It works for whoever ran `init --git`,
+/// which means the one person who could fix it is the one person who cannot see
+/// it — and what the newcomer learns instead is that a shared backlog produces
+/// merge conflicts.
+#[test]
+fn a_clone_is_told_the_merge_driver_did_not_come_with_it() {
+    let origin = repository();
+    // Two branches that both allocate the same identifier, which is the case the
+    // driver exists for.
+    git(&origin, &["checkout", "-qb", "alice"]);
+    origin.add("Alice's work", &[]);
+    git(&origin, &["add", "-A"]);
+    git(&origin, &["commit", "-qm", "alice"]);
+    git(&origin, &["checkout", "-q", "main"]);
+    git(&origin, &["checkout", "-qb", "bob"]);
+    origin.add("Bob's work", &[]);
+    git(&origin, &["add", "-A"]);
+    git(&origin, &["commit", "-qm", "bob"]);
+    git(&origin, &["checkout", "-q", "main"]);
+
+    // The project that set it up is fine, and says so.
+    assert_contains(&origin.expect(&["config"]).stdout, "integrated", "");
+    assert_missing(
+        &origin.expect(&["check"]).all(),
+        "merge driver",
+        "the project that installed the driver was told it had not",
+    );
+
+    // A fresh clone has `.gitattributes` and no driver.
+    let clone = Project::empty();
+    git(
+        &clone,
+        &[
+            "clone",
+            "-q",
+            &origin.root().display().to_string(),
+            &clone.root().display().to_string(),
+        ],
+    );
+    assert!(
+        clone.exists(".gitattributes"),
+        "the tracked half did not arrive"
+    );
+
+    let out = clone.expect(&["check"]).all();
+    assert_contains(&out, "merge driver", "the clone was not told");
+    assert_contains(&out, "cannot be committed", "nor why");
+    assert_contains(&out, "cairn init --git", "nor how to fix it");
+    assert_contains(
+        &clone.expect(&["config"]).stdout,
+        "not integrated",
+        "`config` claimed the clone was set up",
+    );
+
+    // Running the fix settles it, and running it twice is not an error — which
+    // matters, because the advice is given to somebody who may already have done
+    // it in another working copy.
+    clone.expect(&["init", "--git"]);
+    assert_missing(&clone.expect(&["check"]).all(), "merge driver", "");
+    assert_contains(&clone.expect(&["config"]).stdout, "integrated", "");
+    let again = clone.expect(&["init", "--git"]);
+    assert_contains(
+        &again.all(),
+        "already in place",
+        "re-running was not a no-op",
+    );
+
+    // And nothing is said in a project that is not a repository at all.
+    let plain = Project::new();
+    assert_missing(&plain.expect(&["check"]).all(), "merge driver", "");
+}
+
+/// It is a note about the working copy, not a finding about the project, and
+/// `--strict` must not fail on it.
+///
+/// This is not a stylistic preference. Every continuous-integration run is a
+/// fresh checkout with no driver, and a fresh checkout does not need one — it
+/// never merges locally. Reporting it as a warning made `cairn check --render
+/// --strict` fail on cairn's own repository, which is how the distinction got
+/// noticed: a report is about the project, which is shared and committed, and
+/// this is about one working copy, which is neither.
+#[test]
+fn a_missing_driver_does_not_fail_a_strict_check() {
+    let origin = repository();
+    let clone = Project::empty();
+    git(
+        &clone,
+        &[
+            "clone",
+            "-q",
+            &origin.root().display().to_string(),
+            &clone.root().display().to_string(),
+        ],
+    );
+
+    // `--strict` without `--render`: the point here is the exit status, and
+    // `--render` drags in a separate, unrelated cross-platform defect — a
+    // Windows checkout converts the generated file to CRLF, and `--render`
+    // compares bytes against LF, so it reports staleness for ever. Filed
+    // separately; this test is about the driver.
+    let out = clone.run(&["check", "--strict"]);
+    assert!(
+        out.ok(),
+        "a per-clone condition failed a check about the project:\n{}",
+        out.all()
+    );
+    assert_contains(&out.all(), "merge driver", "and it still said it");
+    assert_contains(&out.all(), "0 warning", "as a note rather than a warning");
+}
