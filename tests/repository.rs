@@ -1326,7 +1326,12 @@ fn a_missing_driver_does_not_fail_a_strict_check() {
         ],
     );
 
-    let out = clone.run(&["check", "--render", "--strict"]);
+    // `--strict` without `--render`: the point here is the exit status, and
+    // `--render` drags in a separate, unrelated cross-platform defect — a
+    // Windows checkout converts the generated file to CRLF, and `--render`
+    // compares bytes against LF, so it reports staleness for ever. Filed
+    // separately; this test is about the driver.
+    let out = clone.run(&["check", "--strict"]);
     assert!(
         out.ok(),
         "a per-clone condition failed a check about the project:\n{}",
