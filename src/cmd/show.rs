@@ -203,7 +203,8 @@ pub fn edit(args: EditArgs) -> Result<i32> {
     // Re-read so a malformed hand-edit is reported immediately rather than at
     // the next command.
     let mut reloaded = crate::item::Item::load(&item.path)?;
-    store.sync_path(&mut reloaded)?;
+    let renamed = store.sync_path(&mut reloaded)?;
+    crate::cmd::note_if_blocked(&store, &reloaded, &renamed);
     drop(lock);
     hooks::item(&cfg, &store, hooks::Event::AfterChange, &reloaded);
     Ok(0)

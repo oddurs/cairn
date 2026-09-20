@@ -152,7 +152,10 @@ pub fn run(args: Args) -> Result<i32> {
         };
         item.touch(&today());
         item.save()?;
-        store.sync_path(&mut item)?;
+        // Reported, not failed. The item is already written by here, so the
+        // old error said a completed change had not happened — and said it
+        // again on every retry, while the title had been right all along.
+        let moved = store.sync_path(&mut item)?;
         // The saved item, path and all, so a later iteration validating against
         // this one sees what is actually on disk.
         if let Some(existing) = all.iter_mut().find(|i| i.id == item.id) {
@@ -165,6 +168,9 @@ pub fn run(args: Args) -> Result<i32> {
                 style::bold(&cfg.format_id(item.id)),
                 item.title()
             );
+            // After the line that says what happened, the way `close` reports
+            // unticked criteria: the change is the news and this is the caveat.
+            crate::cmd::note_if_blocked(&store, &item, &moved);
             for id in &renamed {
                 println!("  {} {}", style::dim("also"), cfg.format_id(*id));
             }

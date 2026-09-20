@@ -2,10 +2,10 @@
 id: 123
 title: A refused rename reports failure for a change that happened
 type: bug
-status: backlog
+status: done
 milestone: v1.0
 created: 2026-09-15
-updated: 2026-09-15
+updated: 2026-09-17
 priority: p2
 ---
 
@@ -58,6 +58,14 @@ The first is what a reader expects from a command that exits non-zero.
 
 ## Acceptance criteria
 
-- [ ] `cairn set` does not report failure for a change it completed
-- [ ] the item occupying the name is still not overwritten
-- [ ] a test covers the collision, which `store.rs:168` had none for
+- [x] `cairn set` does not report failure for a change it completed
+- [x] the item occupying the name is still not overwritten
+- [x] a test covers the collision, which `store.rs:168` had none for
+
+## 2026-09-17
+
+Took the second option. The first — check the destination before saving — makes `set` refuse a legal metadata change because the project is in a state `check` merely warns about, which is the two commands disagreeing about how serious a filename is. This project has been consistent that the identifier lives in the frontmatter and the filename is cosmetic, so the fix follows that rather than contradicting it.
+
+`sync_path` now returns `Renamed::{Unchanged,Moved,Blocked}` instead of a bool and an error, because the blocked case is neither. All seven callers save the item first, so every one of them had the same defect; each now chooses. `set`, `propose`, `edit` and `import` report it after the line saying what happened, the way `close` reports unticked criteria. `update_item` puts it in the MCP reply, since no agent reads stderr and refusing there would tell a model its change was rejected while the item on disk carried it. `renumber` still fails, and deliberately: it exists to make filenames and identifiers agree, so a name it cannot take means the repair did not happen.
+
+`renaming_onto_an_existing_file_never_overwrites_it` in tests/durability.rs already covered the safety property and deliberately left the exit status alone pending this item; it now asserts the status and the retry too. The claim in this item that store.rs:168 had no test was wrong — that test landed in the meantime.

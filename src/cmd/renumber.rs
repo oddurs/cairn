@@ -14,7 +14,7 @@ use crate::item::Item;
 use crate::lock::Lock;
 use crate::store::{Store, today};
 use crate::style;
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use clap::ArgAction;
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
@@ -161,7 +161,19 @@ fn rename_to_match(
             style::bold(&want)
         );
         if !dry_run {
-            store.sync_path(item)?;
+            // The one caller that fails on a collision, and deliberately.
+            // `renumber` exists to make filenames and identifiers agree; a name
+            // already taken means it cannot, and carrying on would report a
+            // repair it did not make.
+            if let crate::store::Renamed::Blocked(taken) = store.sync_path(item)? {
+                bail!(
+                    "cannot rename {} to {}: that name is taken.\n\
+                     `cairn check` lists what is inconsistent; move or remove \
+                     the file in the way and run this again.",
+                    store.rel(&item.path),
+                    store.rel(&taken)
+                );
+            }
         }
         renamed += 1;
     }
