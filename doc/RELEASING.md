@@ -10,13 +10,14 @@ make check            # fmt, clippy, the whole suite, and cairn's own roadmap
 make soak             # a long arbitrary sequence, plus concurrent writers
 make fuzz             # 20,000 arbitrary argument vectors
 make conformance      # the second reader against the golden corpus
+make agreement        # pinned Harrow checkout; set HARROW_REPO if needed
 make dist             # the source tarball, built the way CI will build it
 ```
 
 Then the checks that used to be checkboxes here:
 
 ```sh
-make release-check TAG=v0.2.2
+make release-check TAG=v0.3.0
 ```
 
 That refuses the tag unless it matches `Cargo.toml`, `NEWS` has a dated section
@@ -48,8 +49,8 @@ What is left is judgement, and stays by hand:
 ## The tag
 
 ```sh
-git tag -a v0.2.2 -m 'cairn 0.2.2'      # use -s once there is a signing key
-git push origin v0.2.2
+git tag -a v0.3.0 -m 'cairn 0.3.0'      # use -s once there is a signing key
+git push origin v0.3.0
 ```
 
 That is the whole of it. The release workflow runs `make release-check` first

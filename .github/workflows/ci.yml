@@ -177,6 +177,21 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y texinfo
       - run: makeinfo --output=/dev/null doc/cairn.texi
 
+  companion:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - id: counterpart
+        run: echo "revision=$(cat spec/harrow-revision)" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v7
+        with:
+          repository: oddurs/harrow
+          ref: ${{ steps.counterpart.outputs.revision }}
+          path: .counterparts/harrow
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: make agreement HARROW_REPO=.counterparts/harrow
+
   recordings:
     # The README demo and the website's terminal samples are both captured from
     # real command output, so a change in behaviour that nobody re-recorded

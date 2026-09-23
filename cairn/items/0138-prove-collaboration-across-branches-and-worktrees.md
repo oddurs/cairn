@@ -2,12 +2,14 @@
 id: 138
 title: Prove collaboration across branches and worktrees
 type: feature
-status: planned
+status: done
 milestone: v0.3
+assignee: codex
 owner: oddurs
 created_by: codex
 created: 2026-09-23
 updated: 2026-09-23
+closed_at: 2026-09-23
 priority: p1
 effort: m
 area: git
@@ -27,12 +29,16 @@ Test clone setup, linked worktrees, existing core.hooksPath, merge, rebase, and 
 
 ## Acceptance criteria
 
-- [ ] Tests and documentation distinguish same-directory claim exclusion from branch-local claims and show the supported handoff.
-- [ ] Two branches adding items and references retain their intent after the supported merge/repair workflow.
-- [ ] Git integration is located correctly in linked worktrees and respects an existing hooks configuration.
-- [ ] Rebase and cherry-pick behaviour is documented and tested; unsupported automatic repairs are stated explicitly.
-- [ ] A reviewer can see both the code change and its item history, with no claim of global locking.
+- [x] Tests and documentation distinguish same-directory claim exclusion from branch-local claims and show the supported handoff.
+- [x] Two branches adding items and references retain their intent after the supported merge/repair workflow.
+- [x] Git integration is located correctly in linked worktrees and respects an existing hooks configuration.
+- [x] Rebase and cherry-pick behaviour is documented and tested; unsupported automatic repairs are stated explicitly.
+- [x] A reviewer can see both the code change and its item history, with no claim of global locking.
 
 ## Boundaries
 
 Git remains responsible for commits, branches, and transport. No remote claim service, mandatory background process, or automatic commits.
+
+## 2026-09-23
+
+Nine real-Git scenarios now pass: linked common hooks; relative/absolute core.hooksPath; preserved foreign/unreadable/disabled hooks; fresh clone setup; same-directory exclusion versus independent worktree claims; committed handoff with code/item review; branch collisions with explicit reference repair; rebase and cherry-pick manual repair. Hook location uses git rev-parse --git-path. The guide and manual explain the limits, and obsolete compact/automatic claims in the manual were corrected. Final full durability runs with the release candidate.

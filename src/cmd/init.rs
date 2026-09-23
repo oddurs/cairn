@@ -43,7 +43,7 @@ pub struct Args {
 
 #[derive(Copy, Clone, PartialEq, Eq, ValueEnum)]
 pub enum Preset {
-    /// Two statuses, no custom fields — grow it as you go
+    /// A task type, three statuses, and milestones — grow it as you go
     Minimal,
     /// Types, priorities, milestones and saved views
     Standard,
@@ -207,14 +207,21 @@ fn write_example(cfg: &Config, dir: &Path, id: u32, milestone: Option<&str>) -> 
         .project
         .default_type
         .clone()
-        .or_else(|| cfg.types.first().map(|t| t.name.clone()));
+        .filter(|kind| !cfg.is_container(Some(kind)))
+        .or_else(|| {
+            cfg.types
+                .iter()
+                .find(|t| !cfg.is_container(Some(&t.name)))
+                .map(|t| t.name.clone())
+        });
     let mut front = format!("---\nid: {id}\ntitle: Adopt cairn for the roadmap\n");
     if let Some(k) = kind {
         front.push_str(&format!("type: {k}\n"));
     }
     front.push_str(&format!("status: {}\n", cfg.initial_status()));
     if let Some(m) = milestone {
-        front.push_str(&format!("milestone: {m}\n"));
+        let field = cfg.schedule_field().unwrap_or("milestone");
+        front.push_str(&format!("{field}: {m}\n"));
     }
     front.push_str(&format!("created: {today}\nupdated: {today}\n---\n"));
     front.push_str(EXAMPLE_BODY);
@@ -500,6 +507,10 @@ format = 3
 name = "{{name}}"
 dir = "{{dir}}"
 
+# Ordinary work must not default to a grouping type.
+[[type]]
+name = "task"
+
 # Order matters: it is the column order on `cairn board` and the sort order in
 # listings, so reordering these blocks changes behaviour.
 [[status]]
@@ -567,7 +578,7 @@ fn write_milestone(
     if id > 1 {
         item.meta.depends_on = vec![id - 1];
     }
-    if let Some(d) = due {
+    if let Some(d) = due.filter(|_| cfg.field("due").is_some()) {
         item.set_extra("due", Some(crate::item::Field::Text(d.to_string())));
     }
     item.set_body(body);

@@ -139,6 +139,11 @@ A claim coordinates writers using **the same item directory**. Separate
 branches, worktrees, and clones have separate state. Agree on assignments
 before splitting work; a claim is not a distributed lock.
 
+The [Git collaboration guide](doc/COLLABORATION.md) covers assignments,
+worktrees, hook locations, reference repair, rebase, cherry-pick, and review.
+The [companion contract](doc/COMPATIBILITY.md) identifies the verified Harrow
+revision and cross-tool checks; the old 0.1.0 binary is not the tested pair.
+
 In this repository, start with `cairn list --view next` or
 `harrow --view next`. [CONTRIBUTING.md](CONTRIBUTING.md) explains what our
 statuses mean, how we select work, and how to validate it.

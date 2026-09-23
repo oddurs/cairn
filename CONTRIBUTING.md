@@ -89,6 +89,9 @@ Claims and locks are local to the item directory. When work is split across
 branches, linked worktrees, or clones, coordinate the assignments before
 splitting. Commit the item and code together, review both, and run `cairn check`
 after merging. Do not infer distributed exclusion from a successful claim.
+Follow [the tested collaboration workflow](doc/COLLABORATION.md), including
+reference review after identifier repair and explicit checks after rebase or
+cherry-pick. A successful Git operation is not itself validation of the backlog.
 
 ## While you work
 

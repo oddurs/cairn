@@ -126,3 +126,7 @@ ajar, and this item should end by doing one or the other.
 ## 2026-09-23
 
 Assessment 0134: keep the current integer identifiers during the next cycle. No format change or permanent promise is justified by this review alone. Decide after 0138 has measured the actual branch/worktree failure modes, with independent human review as the existing criteria require. A collision-free identifier would not by itself coordinate claims.
+
+## 2026-09-23
+
+Evidence from 0138: real branch merges can repair numeric collisions deterministically while retaining every item, but references to colliding IDs still need branch-context review; rebase and cherry-pick need explicit repair. Shared-directory locks do not coordinate worktrees. This is a real ergonomic cost to weigh before 1.0, not grounds to change identity mid-v0.3. The executable cases are tests/collaboration.rs and the supported workflow is doc/COLLABORATION.md.

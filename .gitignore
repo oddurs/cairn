@@ -1,4 +1,5 @@
 /target
+.counterparts/
 doc/cairn.info
 doc/cairn.html
 doc/cairn.pdf

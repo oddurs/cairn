@@ -9,7 +9,7 @@ CARGO       ?= cargo
 MAKEINFO    ?= makeinfo
 CAIRN       := target/release/cairn
 
-.PHONY: all build check test soak fuzz durability coverage conformance audit dist doc info html pdf record demo install install-bin \
+.PHONY: all build check test soak fuzz durability coverage conformance agreement audit dist doc info html pdf record demo install install-bin \
         install-man install-info clean release-check release-notes
 
 all: build doc
@@ -27,6 +27,17 @@ check: build test
 # cairn's own tests use. Needs `pip install pyyaml`.
 conformance:
 	python3 spec/conformance.py
+
+# The independent companion is a real contract consumer. Pin its revision so
+# this comparison never silently becomes whatever happens to be next door.
+HARROW_REPO ?= ../harrow
+agreement: build
+	@test "$$(git -C "$(HARROW_REPO)" rev-parse HEAD)" = "$$(cat spec/harrow-revision)" || \
+	  { echo "agreement: HARROW_REPO must be at the revision in spec/harrow-revision" >&2; exit 1; }
+	@git -C "$(HARROW_REPO)" diff --quiet HEAD -- src tests scripts Cargo.toml Cargo.lock || \
+	  { echo "agreement: counterpart contract code has uncommitted changes" >&2; exit 1; }
+	cd "$(HARROW_REPO)" && PATH="$(CURDIR)/target/release:$$PATH" \
+	  CAIRN_PROJECT_DIR="$(CURDIR)" scripts/task agreement
 
 # Advisories, licences and sources. Needs `cargo install cargo-deny`.
 audit:
