@@ -1,7 +1,7 @@
 ---
 title: What an item is
 description: A cairn item is a record of intent that happens to be schedulable — worth more after it closes than before.
-summary: Calling cairn an issue manager is accurate, and undersells it enough to produce the wrong decisions.
+summary: Intent, work, and decisions form a project memory that travels with the code.
 order: 1
 ---
 
@@ -10,9 +10,13 @@ the problem, the proposal, the costs weighed, how you will know it is done — i
 lives with the code it describes, and it is worth **more** after it closes than
 before, because it is then the answer to *why is it like this*.
 
-That is true of an architecture decision record and false of a ticket. A ticket
-points at a conversation that happened somewhere else, and is worthless the
-moment it closes.
+Small tasks and architecture decisions can both carry useful reasoning. Write
+enough that a future reader can recover the choice without its original
+conversation. Closing the item makes it part of the project's memory.
+
+Cairn validates and changes that record. Git carries its history and review.
+[Harrow](https://github.com/oddurs/harrow) is the terminal interface for watching
+the work and making decisions, using the same files and Cairn's write commands.
 
 Scheduling — statuses, milestones, what is ready to start — exists to make the
 record actionable, not the other way round.

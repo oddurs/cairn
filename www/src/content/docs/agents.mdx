@@ -16,15 +16,15 @@ cairn mcp --config
 
 That prints the snippet for `.mcp.json`, `.cursor/mcp.json` or wherever your
 client keeps its configuration. `cairn mcp` then serves the backlog over the
-Model Context Protocol on standard input and output — eleven tools covering
+Model Context Protocol on standard input and output, with tools covering
 `get_schema`, `next_items`, `list_items`, `search_items`, `show_item`,
-`claim_item`, `create_item`, `update_item`, `add_note`, `close_item` and
-`check`.
+`claim_item`, `create_item`, `update_item`, `add_note`, `tick_criteria`,
+`propose_change`, `release_item`, `close_item` and `check`.
 
-Tools beat written instructions for the same reason a type beats a comment: they
-are checked. An agent cannot forget them halfway through a task, and it cannot
-invent a format because the only way to touch the backlog is through calls that
-reject bad writes.
+The CLI and MCP validate changes against the same project schema. Choose the
+interface the agent works with well. Generated instructions explain the project;
+validated writes enforce its structure. These are cooperative workflow rules,
+not a security boundary against a process that can edit the files directly.
 
 ## A rejected write teaches
 
@@ -47,9 +47,14 @@ can read what went wrong and correct itself.
    erase what came before.
 5. `close_item`, then `check` before reporting done.
 
-Every item crossing that boundary carries `blocked`, `ready` and `blockers`,
+Item responses carry `blocked`, `ready` and `blockers` by default,
 because dependency state is what an agent most needs and cannot work out from a
 single item.
+
+Dependency readiness is not an approval to implement every open idea. Scope
+`next_items` and `claim_item` with the project's approved-work filter, such as
+`status=planned`. Search with `all=true` before proposing a change so completed
+and dropped decisions are part of the context.
 
 ## Work is recorded under the caller's name
 
@@ -84,5 +89,9 @@ somebody's write. Forty processes creating items simultaneously produce forty
 distinct identifiers, and twelve agents racing for one item produce exactly one
 owner and eleven refusals that name the holder.
 
-Across branches the lock does not apply, so identifiers can still collide on a
-merge. `cairn init --git` teaches git to repair that automatically.
+This exclusion holds within one item directory. Separate branches, worktrees,
+and clones can claim the same item independently. Agree on assignments before
+splitting work, and review the item changes when merging.
+
+Identifiers can also collide across branches. `cairn init --git` installs merge
+support once per working copy; validation and review still matter after a merge.

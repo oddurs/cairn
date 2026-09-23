@@ -16,7 +16,7 @@ make dist             # the source tarball, built the way CI will build it
 Then the checks that used to be checkboxes here:
 
 ```sh
-make release-check TAG=v0.2.1
+make release-check TAG=v0.2.2
 ```
 
 That refuses the tag unless it matches `Cargo.toml`, `NEWS` has a dated section
@@ -48,8 +48,8 @@ What is left is judgement, and stays by hand:
 ## The tag
 
 ```sh
-git tag -s v0.1.0 -m 'cairn 0.1.0'      # -s once there is a signing key
-git push origin v0.1.0
+git tag -a v0.2.2 -m 'cairn 0.2.2'      # use -s once there is a signing key
+git push origin v0.2.2
 ```
 
 That is the whole of it. The release workflow runs `make release-check` first
@@ -89,9 +89,9 @@ that was fixed months ago.
 | Homebrew core | Only once the notability bar is met | anyone |
 | Debian, Fedora | Needs the source tarball and a signature | a distribution packager |
 
-None of these is done yet, and `0053` tracks them. They are listed here now
-because the checklist is the thing that stops the list existing only in
-somebody's memory.
+The Homebrew tap is live at `oddurs/homebrew-cairn`. Verify its formula after
+each release; the release workflow does not update it. Crates.io publication
+is tracked by `0001`; the other distribution channels are follow-up in `0053`.
 
 ## What CI already proved
 

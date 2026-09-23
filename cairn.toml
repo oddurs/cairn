@@ -12,12 +12,15 @@ format = 3
 
 [project]
 name = "cairn"
-description = "A markdown-native roadmap and issue manager that lives in your repository."
+description = "Project memory, versioned with the code. Plain Markdown, a schema you own, and a shared workflow for people and agents."
 dir = "cairn/items"           # where item files live, relative to this file
 id_width = 4              # 0001, 0002, ...
 default_type = "feature"
 default_status = "backlog"
 url = "https://github.com/oddurs/cairn/blob/main"
+claim_stale_after = 7     # surface an abandoned claim; never release it automatically
+# Keep historical checkboxes honest. Many early closed items predate criteria
+# discipline; do not tick them just to enable require_criteria globally.
 
 # ─── Item types ──────────────────────────────────────────────────────────────
 # `template` seeds the body of new items of that type, so every bug report and
@@ -49,23 +52,72 @@ template = """
 ## Reproduction
 
 1.
+
+## Acceptance criteria
+
+- [ ] A regression check reproduces the failure and passes with the fix.
+- [ ] User-visible behaviour and any recovery steps are documented.
 """
 
 [[type]]
 name = "chore"
 icon = "~"
 color = "gray"
+template = """
+## Purpose
+
+## Approach
+
+## Acceptance criteria
+
+- [ ]
+"""
 
 [[type]]
 name = "docs"
 icon = "*"
 color = "blue"
+template = """
+## Reader and question
+
+## Change
+
+## Acceptance criteria
+
+- [ ] The reader can complete the described task with the current program.
+"""
+
+[[type]]
+name = "decision"
+icon = "?"
+color = "magenta"
+description = "A choice worth remembering after the work is finished"
+template = """
+## Context
+
+## Options and tradeoffs
+
+## Decision
+
+## Revisit when
+
+## Acceptance criteria
+
+- [ ] The choice, its evidence, and its consequences are recorded.
+"""
 
 [[type]]
 name = "milestone"
-description = "a release, or whatever this project ships"
+description = "An outcome to ship; dates are commitments, not placeholders"
 groups = "one"
 inverse = "scheduled"
+template = """
+Describe the outcome in one paragraph; this appears in the roadmap.
+
+## Release gate
+
+State what must be true to ship. Keep executable work in linked items.
+"""
 
 # ─── Statuses ────────────────────────────────────────────────────────────────
 # Order matters: it is the column order on the board and the sort order in
@@ -76,11 +128,13 @@ inverse = "scheduled"
 name = "backlog"
 category = "open"
 color = "gray"
+label = "not committed"
 
 [[status]]
 name = "planned"
 category = "open"
 color = "blue"
+label = "up next"
 
 [[status]]
 name = "doing"
@@ -90,8 +144,11 @@ color = "yellow"
 
 [[status]]
 name = "blocked"
-category = "active"
+category = "open"
 color = "red"
+label = "waiting"
+# Waiting is not work in progress. The `blocked` query field separately means
+# unfinished dependencies; status names alone do not affect `cairn next`.
 
 [[status]]
 name = "done"
@@ -115,7 +172,7 @@ kind = "enum"
 values = ["p0", "p1", "p2", "p3"]
 default = "p2"
 column = true
-description = "p0 is a release blocker"
+description = "p0: data loss or broken core workflow; p1: next outcome; p2: useful; p3: optional"
 
 [[field]]
 name = "effort"
@@ -127,54 +184,81 @@ description = "Rough size, not an estimate"
 name = "sprint"
 kind = "enum"
 values = ["s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10", "s11", "s12"]
-column = true
-description = "Durability sprint; see ROADMAP.md"
+column = false
+description = "Historical durability sprint; retained for old items, not assigned to new work"
 
 [[field]]
 name = "area"
 kind = "text"
-description = "Subsystem this touches"
+description = "Subsystem: workflow, git, format, integration, cli, docs, distribution, or direction"
 
 [[field]]
 name = "due"
 kind = "date"
-description = "when a milestone is meant to land"
+description = "A committed date, YYYY-MM-DD; leave unset when the release is gated by evidence"
 
 # ─── Saved views ─────────────────────────────────────────────────────────────
 # `cairn list --view next`, `cairn board --view triage`
 
 [[view]]
 name = "now"
-description = "What is actually being worked on"
-filter = "category=active"
+description = "Work someone is doing now"
+filter = "category=active,type!=milestone"
 sort = "priority,id"
+columns = ["id", "status", "assignee", "priority", "title"]
 
 [[view]]
 name = "next"
-description = "Planned work for the nearest milestone"
-filter = "status=planned"
+description = "Approved work with no unfinished dependencies"
+filter = "status=planned,blocked=false,type!=milestone"
 sort = "priority,milestone"
+columns = ["id", "priority", "area", "title"]
 
 [[view]]
-name = "sprint"
-description = "The current durability sprint, in order"
-filter = "sprint=s1,category!=done"
+name = "waiting"
+description = "Needs an external action or a decision; read the item's note"
+filter = "status=blocked,type!=milestone"
+sort = "priority,id"
+columns = ["id", "owner", "priority", "title"]
+
+[[view]]
+name = "dependencies"
+description = "Work held by an unfinished dependency"
+filter = "blocked=true,category=open|active,type!=milestone"
 sort = "priority,id"
 
 [[view]]
 name = "triage"
-description = "Items that still need a milestone or a priority"
-filter = "milestone=,category!=done"
+description = "Unscheduled ideas to accept, defer, or drop"
+filter = "status=backlog,milestone=,type!=milestone"
 columns = ["id", "type", "title", "created"]
+
+[[view]]
+name = "later"
+description = "Options without a commitment to build them"
+filter = "milestone=later,category=open|active,type!=milestone"
+sort = "priority,id"
+
+[[view]]
+name = "decisions"
+description = "Explicitly typed decisions; search --all also finds reasoning in older work"
+filter = "type=decision,category=open|active|done|dropped"
+sort = "-updated,id"
+
+[[view]]
+name = "history"
+description = "Finished and dropped records, by last edit (not completion date)"
+filter = "category=done|dropped,type!=milestone"
+sort = "-updated,id"
 
 # ─── Hooks ───────────────────────────────────────────────────────────────────
 # Keeping the rendered roadmap current is the point, so it is done rather than
 # remembered. See "Hooks" in the manual for the shell and argv forms.
 
 [hooks]
-after-create = "cairn render -q"
-after-change = "cairn render -q"
-after-remove = "cairn render -q"
+after-create = ["cairn", "render", "-q"]
+after-change = ["cairn", "render", "-q"]
+after-remove = ["cairn", "render", "-q"]
 
 # ─── Rendered roadmap ────────────────────────────────────────────────────────
 
@@ -182,11 +266,11 @@ after-remove = "cairn render -q"
 target = "ROADMAP.md"
 title = "Roadmap"
 group_by = "milestone"    # any field works: milestone, area, assignee, type
-include = "category!=dropped"
+include = "category=open|active"
 checkbox = true           # render items as a task list
 show_ids = true
-progress = true           # per-milestone progress bar
+progress = false          # an open-work view cannot show meaningful completion percentages
 group_by_status = true    # sub-group each section by status
 link_items = true         # requires project.url
-# header = "docs/roadmap-intro.md"   # spliced in above the generated body
+header = "doc/roadmap-intro.md"
 # footer = "docs/roadmap-outro.md"

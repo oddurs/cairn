@@ -1,13 +1,15 @@
 ---
 id: 67
 title: Decide whether identifiers should be collision-free by construction
-type: feature
+type: decision
 status: backlog
 milestone: v1.0
+depends_on:
+- 138
 created: 2026-09-06
-updated: 2026-09-06
+updated: 2026-09-23
 priority: p1
-sprint: s7
+area: git
 effort: m
 ---
 
@@ -121,3 +123,6 @@ future maintainer to reopen it at the worst possible time; a promise does not.
 Closing a door deliberately is worth more than the flexibility of leaving it
 ajar, and this item should end by doing one or the other.
 
+## 2026-09-23
+
+Assessment 0134: keep the current integer identifiers during the next cycle. No format change or permanent promise is justified by this review alone. Decide after 0138 has measured the actual branch/worktree failure modes, with independent human review as the existing criteria require. A collision-free identifier would not by itself coordinate claims.

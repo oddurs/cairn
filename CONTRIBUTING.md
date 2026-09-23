@@ -1,11 +1,13 @@
 # Contributing to cairn
 
-cairn tracks its own roadmap, so the backlog is the contribution guide.
+cairn tracks its own work. Start with the selected queue and read an item's
+reasoning before changing code. The [direction and assessment](cairn/items/0134-give-cairn-a-durable-direction-and-a-working-project-setup.md)
+explain the current priorities; [ROADMAP.md](ROADMAP.md) shows unfinished work.
 
 ```sh
 cargo build --release
-./target/release/cairn next          # what is ready to work on
-./target/release/cairn next --blocked   # and what is waiting on something
+./target/release/cairn list --view next  # the approved, dependency-ready queue
+./target/release/cairn list --view waiting # external actions and decisions
 ./target/release/cairn show 23       # the reasoning behind an item
 ```
 
@@ -13,9 +15,63 @@ Items carry the thinking that produced them — the problem, the proposal, the
 costs that were weighed, and acceptance criteria you can check yourself. If an
 item's body does not tell you enough to start, that is a bug in the item; say so.
 
+## How this project works
+
+Cairn is project memory versioned with the code. Harrow is the human interface
+for watching and triaging it; Git carries history and review. Keep the core
+small: try a schema choice, query, hook, or external reader before expanding
+the program. The next engineering slice is 0136–0138 in milestone `v0.3`.
+
+| Status | Meaning here |
+| --- | --- |
+| `backlog` | Captured, but not committed to implementation |
+| `planned` | Selected and described well enough to start |
+| `doing` | Someone is actively working; claim it |
+| `blocked` | Waiting for an external action or decision, recorded in the body |
+| `done` | The stated outcome is verified |
+| `dropped` | Deliberately declined; the reasoning remains useful |
+
+Dependencies use `depends_on`. A status called `blocked` does not itself change
+the computed dependency readiness. Bare `cairn next` ranks unfinished,
+dependency-ready work, including ideas and external waits. For autonomous
+selection in **this project**, use:
+
+```sh
+cairn claim --next --filter 'status=planned'
+```
+
+Keep at most three engineering items selected at a time and one active item
+per worker. This is a working convention, not a hidden scheduler. Finish or
+explicitly hand back the current work before taking more. A user-assigned task
+can be claimed directly even when it was not in the selected queue.
+
+`p0` means data loss or a broken core workflow, `p1` the next important outcome,
+`p2` useful follow-up, and `p3` an option. Set `area` when it helps routing; do
+not assign new `sprint` values, which describe the historical durability effort.
+Release milestones have outcomes; add a `due` date only for a real commitment.
+
+Use `cairn config` for the actual schema. The saved views are `now`, `next`,
+`waiting`, `dependencies`, `triage`, `later`, `decisions`, and `history`.
+`harrow --view next` reads the same selection. Search with `--all` before
+filing a proposal, because closed and dropped items hold previous decisions.
+The `decisions` view selects explicitly typed decisions; older reasoning also
+lives in ordinary feature and documentation items.
+
+After any two new features, the next investment is observing a real user's
+workflow before selecting a third. The author's daily use counts as evidence;
+0066 adds outside perspectives. Correctness fixes continue when needed.
+Record the observation and any changed priorities in items, not a second
+planning document.
+
 ## Before you start
 
-Claim the item, so nobody duplicates your work:
+Set up the local Git integration once after cloning:
+
+```sh
+cairn init --git
+```
+
+Claim the item so other writers in the same working copy can see it is taken:
 
 ```sh
 cairn claim 23
@@ -24,12 +80,22 @@ cairn claim 23
 That writes your name into the item and moves it to an active status. If you
 change your mind, `cairn release 23` hands it back.
 
+For agents, set `CAIRN_AGENT` to the agent's name and use `CAIRN_USER` or
+`claim --as` for an explicit assignee. An `owner` is the person accountable
+for an external decision; it is not a second claim.
+
+Claims and locks are local to the item directory. When work is split across
+branches, linked worktrees, or clones, coordinate the assignments before
+splitting. Commit the item and code together, review both, and run `cairn check`
+after merging. Do not infer distributed exclusion from a successful claim.
+
 ## While you work
 
 Record what you learn in the item, not in a scratch file:
 
 ```sh
 cairn set 23 labels+=needs-windows-testing
+cairn note 23 "Reproduced on Windows; checking the rename path."
 cairn edit 23        # opens $EDITOR on the item itself
 ```
 
@@ -45,7 +111,14 @@ suite, and `cairn check --render --strict` over cairn's own roadmap. All of it
 must pass. If you changed behaviour that the README demo shows, run `make demo`
 and commit the regenerated SVG.
 
-Then `cairn close 23` and open a pull request.
+Tick only criteria that have become true, then `cairn close 23`. Run
+`cairn check --render --strict` again after closing and include the item and
+rendered roadmap in the pull request. Old closed items with unticked boxes
+are not evidence that those checks passed; do not tick them retroactively to
+make a progress count look better.
+
+After a schema change, run `cairn agent --write AGENTS.md` and `cairn render`.
+The project-specific guidance outside the generated markers is preserved.
 
 ## Releasing
 
@@ -72,21 +145,16 @@ judgments are what review is for.
 > not merely different. If an existing command with a flag would do, that is the
 > answer.
 
-cairn has twenty-eight commands, written over three days, each locally
-justified and collectively more than anybody needs. There was never a bar;
-every one of them seemed reasonable at the moment it was written, which is how
-surfaces grow. Applying the bar before the code is written is much cheaper than
-pruning afterwards.
+The command surface is already substantial. Every addition creates another
+piece of documentation, compatibility, and testing to maintain. Apply the bar
+before writing code; a common workflow should remain learnable through a small
+set of commands even when the reference interface is broad.
 
 > A command that exists to be tested rather than used is hidden from `--help`.
 
-`merge-driver` is called by git, not by people. `migrate` exists so that the
-migration path is exercised long before it is needed — a good reason for the
-command to exist and a poor reason for it to occupy a line in the help output.
-Both are hidden and both are documented in the manual: hidden is not the same
-as undocumented. When there is genuinely something to migrate, `migrate` stops
-being a command that exists to be tested, and the test in `tests/rules.rs` will
-tell you to unhide it.
+`merge-driver` is called by Git, so it is hidden and documented in the manual.
+`migrate` is visible: older project formats exist and people need to discover
+how to update them. `tests/rules.rs` holds that distinction to account.
 
 ### Prefer schema over a documented key
 

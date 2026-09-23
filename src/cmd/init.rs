@@ -188,7 +188,13 @@ pub fn run(args: Args) -> Result<i32> {
 
     println!();
     println!("{}", style::bold("Next:"));
-    println!("  cairn new \"Ship the first release\" --milestone v0.1");
+    // Bare projects have no example milestones to name in the first command.
+    let milestone = if !args.bare && has_milestones {
+        " --milestone v0.1"
+    } else {
+        ""
+    };
+    println!("  cairn new \"Ship the first release\"{milestone}");
     println!("  cairn board");
     println!("  cairn render                 # writes ROADMAP.md");
     println!("  cairn agent --write AGENTS.md  # teach coding agents the schema");

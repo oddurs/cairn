@@ -2,11 +2,14 @@
 id: 1
 title: Publish to crates.io and Homebrew
 type: chore
-status: doing
-milestone: v0.1
+status: blocked
+milestone: later
+owner: oddurs
 created: 2026-09-04
-updated: 2026-09-19
-priority: p0
+updated: 2026-09-23
+priority: p2
+effort: s
+area: distribution
 ---
 
 ## 2026-09-05
@@ -35,3 +38,7 @@ the manual page and completions for three shells.
 Verified the install path end to end against v0.2.1: `install.sh` detects the platform, downloads `cairn-0.2.1-aarch64-apple-darwin.tar.gz`, verifies the release checksum, installs, and the binary reports `cairn 0.2.1`. So the curl path works today.
 
 crates.io did not publish. The release workflow skips it when `CARGO_REGISTRY_TOKEN` is absent, and the repository has no secrets set at all — `gh api repos/oddurs/cairn/actions/secrets` returns `total_count: 0`. The same is true of `GPG_PRIVATE_KEY`, so v0.2.1 shipped unsigned too (0052). Both are one-time actions only the maintainer can take; nothing in the code is waiting on anything.
+
+## 2026-09-23
+
+Assessment 0134: the binary installer and Homebrew path are already recorded as working. The remaining crates.io publication is an optional distribution choice requiring a maintainer account action. Move it out of doing and out of the historical v0.1 outcome; no credentials were inspected or changed in this assessment.

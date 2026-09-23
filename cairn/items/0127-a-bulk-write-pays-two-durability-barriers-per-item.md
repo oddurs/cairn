@@ -2,11 +2,12 @@
 id: 127
 title: A bulk write pays two durability barriers per item
 type: bug
-status: backlog
-milestone: v1.0
+status: dropped
+milestone: later
 created: 2026-09-16
-updated: 2026-09-17
-priority: p2
+updated: 2026-09-23
+priority: p3
+area: format
 ---
 
 ## What happens
@@ -95,3 +96,7 @@ Criterion 1 is ticked for the SSD half only. The spinning-disk measurement, the 
 ## 2026-09-17
 
 Unticked criterion 1 again: it says 'on a spinning disk as well as an SSD' and I have only an SSD. The note above records the SSD half; the criterion is not met. Ticking it would have been the exact thing this project's own close-gate exists to catch.
+
+## 2026-09-23
+
+Decision in 0134: decline the proposed durability tradeoff. The later measurements in this item already retract the original superlinear premise. Preserve per-file fsync and keep the unfulfilled HDD/crash criteria unticked; dropping the proposal does not mean they passed. Reopen only with a reproducible workload and hardware measurement showing a user-facing cost that justifies reconsideration. 0140 owns further longevity measurements.

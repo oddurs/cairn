@@ -44,9 +44,8 @@ created cairn/items/
 That writes the schema and the directory items live in. Run it at the root of a
 repository — items are meant to be committed alongside the code they describe.
 
-`cairn init --preset minimal` starts from three statuses and nothing else. The
-default writes a fully commented schema to delete from, which is usually the
-faster way to arrive somewhere that fits.
+`cairn init --preset minimal --bare` starts from a small schema without example
+items. The default writes a fully commented schema to adapt to your project.
 
 ## The loop
 
@@ -68,16 +67,24 @@ $ cairn close 1
 was decided; a note records why, which is the difference between a backlog and a
 list of things nobody remembers rejecting.
 
+`next` excludes unfinished dependencies; it does not decide which ideas your
+project has approved. If your schema uses `planned` for selected work, scope an
+agent's claim with `cairn claim --next --filter 'status=planned'`.
+
+[Harrow](https://github.com/oddurs/harrow) is the optional terminal counterpart.
+Run it beside an editor or agent to watch the same backlog and make interactive
+decisions. It reads the files directly and delegates changes to Cairn.
+
 ## What gets written down
 
 An item is a Markdown file, and that is the whole storage format.
 
 <Terminal name="item" />
 
-Everything above the closing `---` is checked against the schema. Everything
-below it is yours and is never interpreted. Edit the file in your editor or from
-the command line — both keep working, and changing a title renames the file to
-match.
+Everything above the closing `---` is checked against the schema. The body is
+yours; conventions such as acceptance checkboxes and proposals let tools help
+you work it. Edit the file in your editor or from the command line — both keep
+working, and changing a title normally renames the file to match.
 
 ## The generated roadmap
 
