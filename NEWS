@@ -6,6 +6,45 @@ See the end of the file for copying conditions.
 Please send bug reports and suggestions through the project's issue tracker.
 
 
+* Noteworthy changes in release 0.3.0 (2026-09-23)
+
+** Select an approved queue once, use it everywhere
+
+`cairn next --view NAME` and `cairn claim --next --view NAME` reuse a saved
+view's filter. Extra filters narrow it; ranking stays active-first, then
+priority. MCP next_items and automatic claim_item accept the same `view`.
+`cairn agent --view NAME` generates matching instructions. No reserved status
+names, implicit defaults, schema changes, or new on-disk format are needed.
+Bare commands keep their existing behavior.
+
+** Git setup works in linked worktrees and with custom hook locations
+
+`cairn init --git` asks Git where its post-merge hook belongs. It respects
+relative and absolute core.hooksPath and the common directory of linked
+worktrees, and never replaces an existing unreadable or foreign hook.
+
+The collaboration guide and executable tests cover local versus branch-local
+claims, committed handoffs, colliding branch references, rebase, cherry-pick,
+and review. Renumbering leaves ambiguous references for explicit review;
+rebase and cherry-pick require explicit repair and validation. No global lock,
+background coordinator, automatic commit or new identifier format was added.
+
+** The companion contract is checked in both projects
+
+The verified Harrow companion is revision e7397a5 (PR 93), not the older
+0.1.0 release binary. It reads, displays and filters closed_at without treating
+a later edit as a new completion, and fixes query disagreements exposed by
+the expanded suite. Cairn and Harrow now run pinned-counterpart CI; Cairn's
+`make agreement` compares the project's views through machine-readable IDs.
+See doc/COMPATIBILITY.md for tested versions and intentional differences.
+
+** Minimal initialization starts with actual work
+
+The minimal preset has a plain task type, so its example and ordinary new
+items are selectable work, not keyless milestones. Initializing from another
+schema also avoids choosing a grouping type for the example. Fresh minimal
+projects pass strict validation with or without the example.
+
 * Noteworthy changes in release 0.2.2 (2026-09-23)
 
 ** Companion compatibility

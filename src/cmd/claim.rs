@@ -22,7 +22,7 @@ pub struct ClaimArgs {
     pub id: Option<String>,
 
     /// Claim whatever `cairn next` would suggest
-    #[arg(long, action = ArgAction::SetTrue)]
+    #[arg(long, action = ArgAction::SetTrue, conflicts_with = "id")]
     pub next: bool,
 
     /// Narrow what `--next` may pick: `--filter 'type=bug'`
@@ -33,6 +33,10 @@ pub struct ClaimArgs {
     /// the lock is to close exactly that gap.
     #[arg(long, value_name = "EXPR", requires = "next")]
     pub filter: Option<String>,
+
+    /// Restrict `--next` to a saved view; --filter can narrow it further
+    #[arg(long, value_name = "NAME", requires = "next", conflicts_with = "id")]
+    pub view: Option<String>,
 
     /// Claim on behalf of someone else (default: you)
     #[arg(long = "as", value_name = "WHO")]
@@ -98,6 +102,7 @@ pub fn claim(args: ClaimArgs) -> Result<i32> {
                     milestone: None,
                     kind: None,
                     filter: args.filter.clone(),
+                    view: args.view.clone(),
                     blocked: false,
                     json: false,
                     ids: false,

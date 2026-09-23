@@ -332,8 +332,11 @@ items are settled.
 
 @cindex hooks, not cloned
 @cindex merge driver, not cloned
-Three consequences worth knowing. The hook lives in @file{.git/hooks}, which git
-does not clone. So does the driver, in a stronger sense: git deliberately refuses
+Three consequences worth knowing. Git resolves the hook location, including
+@code{core.hooksPath}; linked worktrees normally share the common hook directory.
+A relative hooks path is relative to each working tree, so run setup there too.
+Git does not clone the default hooks directory. Nor does it clone the driver:
+git deliberately refuses
 to take an executable name from a file in the repository, so @file{.gitattributes}
 can say @emph{use the cairn driver} and only per-clone configuration can say what
 that is. Each working copy therefore runs @command{cairn init --git} once, and
@@ -352,6 +355,30 @@ why @command{cairn check --render} belongs in continuous integration regardless.
 
 Anything the hook changed is left for a person to commit; a hook that amended
 the merge commit would be doing something nobody asked it to.
+
+@subsection Worktrees, handoff, and operations without a post-merge hook
+
+A claim excludes another writer only in the same item directory. Agree on
+assignments in a shared base or through an explicit coordinator before splitting
+into worktrees or clones. Publish the assignment through your normal review
+workflow. To hand it back, @command{cairn release --reason} records what the
+next worker needs; they read that note before claiming it.
+
+Rebase, cherry-pick, forge merges, and a merge stopped by conflicts do not run
+the successful local merge's repair hook. After finishing the operation, inspect
+@command{cairn renumber --dry-run}, run @command{cairn renumber}, audit references,
+run @command{cairn render}, and finish with @command{cairn check --render --strict}.
+Commit repairs explicitly. The hook also leaves repairs unstaged and uncommitted.
+
+If both branches created the same id, renumbering cannot know which item an
+existing reference meant. Compare branch additions against the merge base and
+the reported id mapping, then restore intended references with @command{cairn
+set}. Audit all id-valued reference fields and prose, not just
+@code{depends_on}. A structurally valid link can still name the wrong idea.
+
+Review both @command{cairn log --range main..HEAD} and
+@command{git diff main...HEAD}; use @command{cairn log ID --patch} for the
+item's reasoning over time. Substitute your actual base branch.
 
 @section Which side keeps a contested identifier
 
@@ -1021,7 +1048,7 @@ created cairn/items/
 @end example
 
 @noindent
-@option{--preset minimal} starts from three statuses and a milestone type;
+@option{--preset minimal} starts from three statuses, ordinary tasks and a milestone type;
 @option{--bare} omits example items and milestones. The default,
 @option{--preset standard}, writes a fully commented schema to adapt. In a
 fresh standard project, the examples occupy identifiers 1 through 4, so the
@@ -1574,6 +1601,27 @@ ID    STATUS       MILESTONE  BLOCKED BY  TITLE
 unfinished dependencies. Work already under way is ranked first, on the grounds
 that the most useful next action is usually finishing something. @option{--blocked}
 includes blocked work, annotated with what blocks it.
+
+Readiness is not approval: an untriaged idea or an external wait can have no
+unfinished dependencies. Select your project's approved queue explicitly with
+a saved view. Its name and statuses are yours, not reserved words:
+
+@example
+cairn next --view next
+cairn claim --next --view next --filter 'type=bug'
+cairn agent --view next --write AGENTS.md
+@end example
+
+The view's filter selects candidates; extra filters are intersected with it,
+never substituted. Its sort, columns and grouping are presentation settings
+and do not alter the active-first priority ranking. Closed items and containers
+are still excluded. Bare commands retain the unscoped queue. Unknown views
+fail rather than selecting from the whole backlog. This is selection policy,
+not access control: an explicitly named claim remains an assignment.
+
+Over MCP, pass @code{"view":"next"} to @code{next_items} and to
+@code{claim_item} without an id. Regenerate instructions with the same
+@option{--view}; omitting it deliberately generates the unscoped workflow.
 
 @example
 $ cairn claim --next
@@ -3150,6 +3198,7 @@ uncoloured). Aliased as @command{cairn ls}.
 @section cairn next
 Ready work, ranked. @xref{Working the backlog}. @option{--limit} bounds the
 list, @option{--mine} restricts to work assigned to you or to nobody,
+@option{--view} intersects a saved view's filter with @option{--filter},
 @option{--blocked} includes blocked items, and @option{--json} and
 @option{--ids} are for programs.
 
@@ -3682,8 +3731,9 @@ merge cleanly, because the filenames differ, and the repository now holds two
 items sharing an id.
 
 @command{cairn check} detects this and names both files.
-@command{cairn renumber} repairs it: the first file to hold the id, in a
-deterministic order, keeps it, and the others are reassigned. Because nothing
+@command{cairn renumber} repairs it: published-side preference at a merge,
+otherwise creation date and filename, decides which item keeps the id; the
+others are reassigned. Because nothing
 can unambiguously refer to a duplicated id, existing @code{depends_on}
 references are left pointing at the retained item and a note says so.
 
@@ -3694,14 +3744,12 @@ $ cairn renumber
 @end example
 
 @cindex compacting ids
-@option{--compact} renumbers every item into a gapless sequence, rewriting
-@code{depends_on} references as it goes. It refuses to run while duplicates
-exist, since which item a reference meant would then be a guess. Compacting
-rewrites most of the item directory, so it is worth doing rarely and on a
-clean tree.
+There is no @option{--compact}. Gaps preserve identifiers already used in
+history and external references. Renumbering repairs collisions, not cosmetics.
 
-Renumbering is never automatic. It rewrites files, and that should happen
-because you asked.
+Renumbering is explicit unless you opted into @command{cairn init --git}; its
+post-merge hook performs the repair and leaves changes for review. References
+remain yours to audit, and no hook commits the repair for you.
 
 @node Index
 @unnumbered Index

@@ -64,7 +64,37 @@ fn init_writes_an_example_item_unless_told_not_to() {
 fn init_minimal_is_a_working_schema() {
     let p = Project::with_init(&["init", "--preset", "minimal", "--bare", "--name", "Min"]);
     p.add("Something", &[]);
-    assert!(p.expect(&["check"]).ok());
+    p.expect(&["check", "--strict"]);
+    assert_eq!(p.expect(&["next", "--count"]).trimmed(), "1");
+}
+
+#[test]
+fn minimal_initialization_creates_work_not_a_keyless_container() {
+    let p = Project::with_init(&["init", "--preset", "minimal"]);
+    p.expect(&["check", "--strict"]);
+    assert_eq!(p.expect(&["next", "--count"]).trimmed(), "1");
+    let id = p.expect(&["claim", "--next", "-q"]).trimmed();
+    assert_eq!(p.json(&["show", &id, "--json"])["type"], "task");
+}
+
+#[test]
+fn an_adopted_schema_never_turns_the_example_into_a_container() {
+    for ordinary in [false, true] {
+        let mut schema = Schema::bare()
+            .item_type(ItemType::new("release").groups_one())
+            .render(|r| r.group_by("release"));
+        if ordinary {
+            schema = schema.item_type(ItemType::new("task"));
+        }
+        let source = Project::with(schema);
+        source.expect(&["check", "--strict"]);
+        let p = Project::with_init(&["init", "--from", source.root().to_str().unwrap()]);
+        p.expect(&["check", "--strict"]);
+        let work = p.json(&["next", "--json"]);
+        assert_eq!(work.as_array().unwrap().len(), 1);
+        assert_ne!(work[0]["type"], "release");
+        assert_eq!(work[0]["fields"]["release"], "v0.1");
+    }
 }
 // --- creating and querying --------------------------------------------------
 

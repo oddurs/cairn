@@ -25,6 +25,10 @@ pub struct AgentArgs {
     /// Insert or update the block in this file instead of printing it
     #[arg(short, long, value_name = "FILE")]
     pub write: Option<PathBuf>,
+
+    /// Teach agents to select work through this saved view
+    #[arg(long, value_name = "NAME")]
+    pub view: Option<String>,
 }
 
 #[derive(clap::Args)]
@@ -303,11 +307,16 @@ const END: &str = "<!-- cairn:end -->";
 
 pub fn agent(args: AgentArgs) -> Result<i32> {
     let cfg = Config::discover()?;
+    crate::cmd::next::view_filter(&cfg, args.view.as_deref())?;
     let items = crate::store::Store::new(&cfg)
         .load_lenient()
         .map(|(items, _)| items)
         .unwrap_or_default();
-    let block = agent_block(&cfg, &crate::refs::Milestones::new(&cfg, &items));
+    let block = agent_block(
+        &cfg,
+        &crate::refs::Milestones::new(&cfg, &items),
+        args.view.as_deref(),
+    );
 
     let Some(path) = args.write else {
         print!("{block}");
@@ -346,7 +355,19 @@ pub fn agent(args: AgentArgs) -> Result<i32> {
 
 /// The instructions block. Generated from the live schema so it can never
 /// describe a workflow the project does not actually have.
-fn agent_block(cfg: &Config, milestones: &crate::refs::Milestones) -> String {
+fn agent_block(cfg: &Config, milestones: &crate::refs::Milestones, view: Option<&str>) -> String {
+    let scope = view.map_or_else(String::new, |name| {
+        let word = if !name.is_empty()
+            && name
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || "_-./".contains(c))
+        {
+            name.to_string()
+        } else {
+            format!("'{}'", name.replace('\'', "'\\''"))
+        };
+        format!(" --view {word}")
+    });
     let mut s = String::new();
     s.push_str(BEGIN);
     s.push_str("\n## Roadmap and issues\n\n");
@@ -361,15 +382,15 @@ fn agent_block(cfg: &Config, milestones: &crate::refs::Milestones) -> String {
     );
 
     s.push_str("### The loop\n\n");
-    s.push_str(
-        "1. `cairn next` — what is ready to start. It excludes anything blocked by unfinished \
+    s.push_str(&format!(
+        "1. `cairn next{scope}` — what is ready to start. It excludes anything blocked by unfinished \
 dependencies and puts work already in progress first.\n",
-    );
-    s.push_str(
+    ));
+    s.push_str(&format!(
         "2. `cairn claim <ID>` — take it before you start, so no one duplicates the work. \
-`cairn claim --next` picks and claims the top-ranked unclaimed item in one step, and prints its \
+`cairn claim --next{scope}` picks and claims the top-ranked unclaimed item in one step, and prints its \
 body so you can begin immediately.\n",
-    );
+    ));
     s.push_str(
         "3. Do the work. Record what you learn: `cairn set <ID> <field>=<value>` for fields, \
 `cairn note <ID> \"<TEXT>\"` for anything that needs a sentence — why you chose something, what \
@@ -383,8 +404,12 @@ you tried, what to watch for.\n",
     s.push_str("6. `cairn check` before you report finished. It must pass.\n\n");
 
     s.push_str("### Commands\n\n```sh\n");
-    s.push_str("cairn next --json                 # ready work, ranked\n");
-    s.push_str("cairn claim --next                # take the next ready item\n");
+    s.push_str(&format!(
+        "cairn next{scope} --json                 # ready work, ranked\n"
+    ));
+    s.push_str(&format!(
+        "cairn claim --next{scope}                # take the next ready item\n"
+    ));
     s.push_str("cairn search <TEXT> --json        # titles, bodies and labels\n");
     s.push_str("cairn list --json                 # all open items\n");
     s.push_str("cairn list --filter 'blocked=false,priority=p0'\n");
@@ -401,6 +426,19 @@ you tried, what to watch for.\n",
         cfg.render.target
     ));
 
+    if let Some(name) = view {
+        let argument = serde_json::json!({"view": name});
+        s.push_str(&format!(
+            "Selection uses saved view `{name}`. Additional filters only narrow it; the view's \
+sort and columns do not change `next` ranking. Over MCP, pass `{argument}` to `next_items` \
+and to `claim_item` without an id. A direct claim is an explicit assignment outside this \
+selection policy. Regenerate these instructions with `cairn agent{scope} --write AGENTS.md`.\n\n"
+        ));
+    }
+    s.push_str(
+        "Claims coordinate writers in the same item directory, not separate branches, \
+worktrees, or clones. Agree on assignments before splitting work.\n\n",
+    );
     s.push_str("### Schema\n\n");
     if !cfg.types.is_empty() {
         s.push_str(&format!(

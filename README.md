@@ -120,13 +120,29 @@ cairn log 12                       # the item's history in Git
 ```
 
 `next` means dependency-ready, not necessarily approved by your project.
-Scope autonomous work with a filter, for example
-`cairn claim --next --filter 'status=planned'` when your schema uses that
-status. Saved views make that convention easy to share with people and Harrow.
+Select autonomous work with an explicit saved view:
+
+```sh
+cairn next --view next
+cairn claim --next --view next
+cairn agent --view next --write AGENTS.md
+```
+
+Define `next` in `cairn.toml` using your own statuses. It is a convention, not
+a reserved view name. The view selects candidates; `next` still ranks active
+work first, then priority. An additional `--filter` only narrows the selection.
+MCP `next_items` and automatic `claim_item` accept the same `view` argument.
+Without a view, behavior is unchanged. Views share the selection with Harrow;
+they are not permissions and do not restrict explicit item assignments.
 
 A claim coordinates writers using **the same item directory**. Separate
 branches, worktrees, and clones have separate state. Agree on assignments
 before splitting work; a claim is not a distributed lock.
+
+The [Git collaboration guide](doc/COLLABORATION.md) covers assignments,
+worktrees, hook locations, reference repair, rebase, cherry-pick, and review.
+The [companion contract](doc/COMPATIBILITY.md) identifies the verified Harrow
+revision and cross-tool checks; the old 0.1.0 binary is not the tested pair.
 
 In this repository, start with `cairn list --view next` or
 `harrow --view next`. [CONTRIBUTING.md](CONTRIBUTING.md) explains what our

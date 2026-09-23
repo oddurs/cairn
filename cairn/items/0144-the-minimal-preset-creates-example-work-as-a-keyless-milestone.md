@@ -2,11 +2,14 @@
 id: 144
 title: The minimal preset creates example work as a keyless milestone
 type: bug
-status: backlog
+status: done
+milestone: v0.3
+assignee: codex
 owner: oddurs
 created_by: codex
 created: 2026-09-23
 updated: 2026-09-23
+closed_at: 2026-09-23
 priority: p2
 effort: s
 area: cli
@@ -30,10 +33,18 @@ The minimal preset should represent ordinary work simply and pass its own strict
 
 ## Acceptance criteria
 
-- [ ] Minimal initialization with and without example items passes strict validation.
-- [ ] Its example work is selectable by next and claim, rather than treated as a container.
-- [ ] Adopting a custom schema does not create work using a grouping type accidentally.
+- [x] Minimal initialization with and without example items passes strict validation.
+- [x] Its example work is selectable by next and claim, rather than treated as a container.
+- [x] Adopting a custom schema does not create work using a grouping type accidentally.
 
 ## Scope
 
 This was reproduced in the current release build during assessment. It predates the hint-only fix in 0143 and remains unimplemented; triage it for the first-use workflow.
+
+## 2026-09-23
+
+Included in the v0.3 release check because a lightweight first-use path must not begin invalid or hide its own example from next. The minimal schema now declares one ordinary task type; examples adopted from custom schemas choose a non-grouping type, or stay untyped when none exists. No extra workflow fields or on-disk format change.
+
+## 2026-09-23
+
+Regression tests now pass for minimal initialization with and without examples, next/claim visibility, and adopted grouping-only or grouping-first schemas. Adopted examples also use the actual schedule field and do not invent an undeclared due field. All 54 basics tests pass.

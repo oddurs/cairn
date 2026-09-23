@@ -30,17 +30,18 @@ use std::path::{Path, PathBuf};
 const DRIVER: &str = "cairn";
 
 pub fn setup(cfg: &Config) -> Result<()> {
-    let git_dir = git_dir(&cfg.root)?;
+    git_dir(&cfg.root)?;
+    let hook = hook_path(&cfg.root)?;
     let mut changed = Vec::new();
 
     if attributes(cfg, &mut changed)? {
         println!("{} .gitattributes", style::green("updated"));
     }
-    if driver(&git_dir, &mut changed)? {
+    if driver(&cfg.root, &mut changed)? {
         println!("{} merge driver `{DRIVER}`", style::green("registered"));
     }
-    if post_merge(&git_dir, &mut changed)? {
-        println!("{} .git/hooks/post-merge", style::green("installed"));
+    if post_merge(&hook, &mut changed)? {
+        println!("{} {}", style::green("installed"), hook.display());
     }
 
     if changed.is_empty() {
@@ -56,8 +57,9 @@ pub fn setup(cfg: &Config) -> Result<()> {
         println!(
             "{}",
             style::dim(
-                "The hook lives in .git/hooks, which git does not clone — run this once per \
-                 working copy."
+                "Git chooses the hook location, including core.hooksPath. Run this once per \
+                 clone, and in each worktree using a relative hooksPath. Review any identifier \
+                 repairs and their references before committing."
             )
         );
     }
@@ -119,11 +121,11 @@ fn attributes(cfg: &Config, changed: &mut Vec<String>) -> Result<bool> {
 
 /// The driver itself is per-clone configuration: git deliberately refuses to
 /// take executable names from a tracked file.
-fn driver(git_dir: &Path, changed: &mut Vec<String>) -> Result<bool> {
+fn driver(root: &Path, changed: &mut Vec<String>) -> Result<bool> {
     let key = format!("merge.{DRIVER}.driver");
     let already = std::process::Command::new("git")
         .args(["config", "--get", &key])
-        .current_dir(git_dir)
+        .current_dir(root)
         .output()
         .is_ok_and(|o| o.status.success());
     if already {
@@ -137,8 +139,8 @@ fn driver(git_dir: &Path, changed: &mut Vec<String>) -> Result<bool> {
         (key, "cairn merge-driver %A %O %B %P".to_string()),
     ] {
         let out = std::process::Command::new("git")
-            .args(["config", &k, &v])
-            .current_dir(git_dir)
+            .args(["config", "--local", &k, &v])
+            .current_dir(root)
             .output()
             .context("running git config")?;
         if !out.status.success() {
@@ -168,20 +170,31 @@ cairn renumber --quiet
 cairn render --quiet
 
 # A hook cannot politely amend the merge commit, so anything it changed is left
-# staged for a person to look at and commit.
+# unstaged for a person to look at and commit.
 if ! git diff --quiet || ! git diff --cached --quiet; then
   echo "cairn: the merge changed identifiers or the roadmap; review and commit:"
   git status --short -- "$(git rev-parse --show-toplevel)" | sed "s/^/  /"
 fi
 "#;
 
-fn post_merge(git_dir: &Path, changed: &mut Vec<String>) -> Result<bool> {
-    let hooks = git_dir.join("hooks");
-    std::fs::create_dir_all(&hooks).with_context(|| format!("creating {}", hooks.display()))?;
-    let path = hooks.join("post-merge");
+fn post_merge(path: &Path, changed: &mut Vec<String>) -> Result<bool> {
+    let hooks = path.parent().context("post-merge hook has no parent")?;
+    std::fs::create_dir_all(hooks).with_context(|| format!("creating {}", hooks.display()))?;
 
-    if let Ok(existing) = std::fs::read_to_string(&path) {
+    if path.symlink_metadata().is_ok() {
+        let existing = std::fs::read_to_string(path).with_context(|| {
+            format!(
+                "reading existing hook {}; it has not been replaced",
+                path.display()
+            )
+        })?;
         if existing.contains("cairn renumber") {
+            if !hook_executable(path) {
+                bail!(
+                    "{} exists but is not executable; make the hook executable before using the integration",
+                    path.display()
+                );
+            }
             return Ok(false);
         }
         // Somebody else's hook is here. Refusing is better than appending to a
@@ -193,15 +206,60 @@ fn post_merge(git_dir: &Path, changed: &mut Vec<String>) -> Result<bool> {
         );
     }
 
-    crate::store::write_atomic(&path, HOOK.as_bytes())?;
+    crate::store::write_atomic(path, HOOK.as_bytes())?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755))
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755))
             .with_context(|| format!("making {} executable", path.display()))?;
     }
     changed.push("post-merge hook".into());
     Ok(true)
+}
+
+/// Git owns this layout. In a linked worktree `.git` names a private admin
+/// directory, while hooks normally live in the shared one. core.hooksPath can
+/// relocate them again, including to a path relative to this working tree.
+fn hook_path(root: &Path) -> Result<PathBuf> {
+    let out = std::process::Command::new("git")
+        .args(["rev-parse", "--git-path", "hooks/post-merge"])
+        .current_dir(root)
+        .output()
+        .context("locating Git's post-merge hook")?;
+    if !out.status.success() {
+        bail!(
+            "cannot locate Git's post-merge hook: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+    }
+    let raw = String::from_utf8(out.stdout).context("Git hook path is not UTF-8")?;
+    let path = PathBuf::from(raw.trim_end_matches(['\r', '\n']));
+    if path.as_os_str().is_empty() {
+        bail!("Git returned an empty hook path");
+    }
+    Ok(if path.is_absolute() {
+        path
+    } else {
+        root.join(path)
+    })
+}
+
+fn hook_executable(path: &Path) -> bool {
+    let Ok(meta) = path.metadata() else {
+        return false;
+    };
+    if !meta.is_file() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        meta.permissions().mode() & 0o111 != 0
+    }
+    #[cfg(not(unix))]
+    {
+        true
+    }
 }
 
 /// Resolve `.git`, following the file form a worktree or submodule uses.
@@ -351,13 +409,15 @@ fn decline(args: &MergeArgs) -> Result<i32> {
 /// project could report itself integrated while every merge in a fresh clone was
 /// left to git.
 pub fn is_configured(cfg: &Config) -> bool {
-    let Ok(git_dir) = git_dir(&cfg.root) else {
+    if git_dir(&cfg.root).is_err() {
+        return false;
+    }
+    let Ok(hook) = hook_path(&cfg.root) else {
         return false;
     };
-    let hook = git_dir.join("hooks").join("post-merge");
     attributes_ask_for_driver(cfg)
         && driver_registered(cfg)
-        && hook.exists()
+        && hook_executable(&hook)
         && std::fs::read_to_string(&hook).is_ok_and(|s| s.contains("cairn renumber"))
 }
 
@@ -377,12 +437,12 @@ pub fn attributes_ask_for_driver(cfg: &Config) -> bool {
 /// Not tracked, and not trackable: git refuses to take an executable name from a
 /// file in the repository, which is the whole reason these two can disagree.
 pub fn driver_registered(cfg: &Config) -> bool {
-    let Ok(git_dir) = git_dir(&cfg.root) else {
+    if git_dir(&cfg.root).is_err() {
         return false;
-    };
+    }
     std::process::Command::new("git")
         .args(["config", "--get", &format!("merge.{DRIVER}.driver")])
-        .current_dir(&git_dir)
+        .current_dir(&cfg.root)
         .output()
         .is_ok_and(|o| o.status.success() && !o.stdout.is_empty())
 }

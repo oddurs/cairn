@@ -123,7 +123,8 @@ pub fn run(args: Args) -> Result<i32> {
     println!("{} {} item(s)", style::green("renumbered:"), plan.len());
     eprintln!(
         "{} existing `depends_on` references still point at the retained items; \
-         check whether any should point at the renumbered ones",
+         check whether any should point at the renumbered ones. \
+         Review other id-valued reference fields and prose too",
         style::yellow("note:")
     );
     Ok(0)

@@ -168,7 +168,9 @@ fn initialize() -> Value {
         "instructions": "This project's roadmap and issues are cairn items: Markdown files \
     in the repository under a schema defined in cairn.toml. Call get_schema first to learn the \
     project's own statuses, types and fields; they are not fixed. Use next_items to find work that \
-    is ready, claim_item before starting so nobody duplicates it, update_item as you go, and \
+    is ready. When the project's instructions select a saved view, pass the same view to \
+    next_items and automatic claim_item; extra filters only narrow it. Claims coordinate the \
+    same item directory, not separate branches or clones. Use claim_item before starting, update_item as you go, and \
     close_item when done. Never write TODO or PLAN files — create an item instead."
     })
 }
@@ -348,6 +350,7 @@ fn next_items(a: &Value) -> Result<String> {
             kind: s(a, "type"),
             filter: s(a, "filter"),
             blocked: b(a, "include_blocked"),
+            view: s(a, "view"),
             json: false,
             ids: false,
             plain: false,
@@ -557,6 +560,9 @@ fn update_item(a: &Value) -> Result<String> {
 }
 
 fn claim_item(a: &Value) -> Result<String> {
+    if a.get("id").is_some_and(|id| !id.is_null()) && s(a, "view").is_some() {
+        bail!("view applies only when picking automatically; omit id");
+    }
     let cfg = Config::discover()?;
     let store = Store::new(&cfg);
     let lock = Lock::acquire(&cfg)?;
@@ -577,6 +583,7 @@ fn claim_item(a: &Value) -> Result<String> {
                     milestone: s(a, "milestone"),
                     kind: s(a, "type"),
                     filter: s(a, "filter"),
+                    view: s(a, "view"),
                     blocked: false,
                     json: false,
                     ids: false,
@@ -1066,6 +1073,7 @@ fn tools() -> Vec<Value> {
                 "unassigned": bool_prop("Only work with no assignee"),
                 "filter": str_prop(FILTER_HELP),
                 "include_blocked": bool_prop("Include blocked work, with its blockers"),
+                "view": str_prop("Restrict to this saved view's filter; additional filters only narrow it. Ranking stays active-first, then priority. Omit to preserve the unscoped queue."),
                 "fields": json!({
                     "type": "array", "items": {"type": "string"},
                     "description": "Return only these keys, to spend less of your context. \
@@ -1137,6 +1145,7 @@ fn tools() -> Vec<Value> {
                 "id": id_prop("Item id; omit to take the next ready one"),
                 "as": str_prop("Claim as this name (default: CAIRN_USER, else git user.name)"),
                 "status": str_prop("Status to move to (default: the first active status)"),
+                "view": str_prop("When omitting id, restrict to this saved view's filter; additional filters only narrow it"),
                 "milestone": str_prop("When picking automatically, restrict to this milestone"),
                 "type": str_prop("When picking automatically, restrict to this type"),
                 "filter": str_prop(FILTER_HELP),
