@@ -28,11 +28,13 @@ People and agents can choose approved work, carry it through a branch, and revie
 
 ### up next
 
-- [ ] [`0136`](https://github.com/oddurs/cairn/blob/main/cairn/items/0136-make-the-approved-queue-explicit-to-agents.md) Make the approved queue explicit to agents <sup>feature · p1</sup>
-- [ ] [`0137`](https://github.com/oddurs/cairn/blob/main/cairn/items/0137-keep-cairn-and-harrow-on-the-same-contract.md) Keep Cairn and Harrow on the same contract <sup>bug · p1</sup>
 - [ ] [`0138`](https://github.com/oddurs/cairn/blob/main/cairn/items/0138-prove-collaboration-across-branches-and-worktrees.md) Prove collaboration across branches and worktrees <sup>feature · p1</sup>
 
 ### in progress
+
+- [ ] [`0137`](https://github.com/oddurs/cairn/blob/main/cairn/items/0137-keep-cairn-and-harrow-on-the-same-contract.md) Keep Cairn and Harrow on the same contract <sup>bug · p1</sup>
+
+### waiting
 
 - [ ] [`0141`](https://github.com/oddurs/cairn/blob/main/cairn/items/0141-publish-the-fixes-already-on-main.md) Publish the fixes already on main <sup>chore · p1</sup>
 

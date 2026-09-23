@@ -2,10 +2,8 @@
 id: 141
 title: Publish the fixes already on main
 type: chore
-status: doing
+status: blocked
 milestone: v0.3
-assignee: codex
-claimed: 2026-09-23
 owner: oddurs
 created_by: codex
 created: 2026-09-23
@@ -40,3 +38,7 @@ A maintainer choosing and publishing a release. No publication, push, tag, secre
 ## 2026-09-23
 
 Starting the authorized v0.3 implementation with the required maintenance release. Version 0.2.2 packages the fixes already on main plus the bare-init hint. Harrow 0.1.0 remains readable for format 3; its closed_at filter limitation is explicitly documented in NEWS pending 0137.
+
+## Released by codex
+
+Release candidate 335a4d3 is prepared; waiting for durability/CI and publication verification while implementing the next selected slice.

@@ -13,7 +13,7 @@ use crate::item::Item;
 use crate::store::Store;
 use crate::style;
 use crate::table::{Cell, Table};
-use anyhow::Result;
+use anyhow::{Result, bail};
 use clap::ArgAction;
 
 #[derive(clap::Args)]
@@ -45,6 +45,10 @@ pub struct Args {
     /// Additional filter expression
     #[arg(short, long, value_name = "EXPR")]
     pub filter: Option<String>,
+
+    /// Restrict candidates to a saved view (ranking stays active-first)
+    #[arg(long, value_name = "NAME")]
+    pub view: Option<String>,
 
     /// Include blocked work, annotated with what blocks it
     #[arg(short = 'b', long, action = ArgAction::SetTrue)]
@@ -213,7 +217,7 @@ pub fn select<'a>(
     items: &'a [Item],
     args: &Args,
 ) -> Result<Vec<&'a Item>> {
-    let mut filter = Filter::default();
+    let mut filter = view_filter(cfg, args.view.as_deref())?;
     if let Some(m) = &args.milestone {
         filter.push(
             cfg.schedule_field().unwrap_or("milestone"),
@@ -280,4 +284,19 @@ pub fn select<'a>(
         .iter()
         .filter_map(|id| items.iter().find(|i| i.id == *id))
         .collect())
+}
+
+/// Reuse a project's selection without inventing a status or an implicit
+/// default queue. Presentation settings belong to `list`, not this ranking.
+pub fn view_filter(cfg: &Config, name: Option<&str>) -> Result<Filter> {
+    let Some(name) = name else {
+        return Ok(Filter::default());
+    };
+    let Some(view) = cfg.view(name) else {
+        bail!("unknown view `{name}`; see `cairn config` for saved views");
+    };
+    match &view.filter {
+        Some(expr) => crate::filter::parse_checked(cfg, expr, &format!("view `{name}`")),
+        None => Ok(Filter::default()),
+    }
 }

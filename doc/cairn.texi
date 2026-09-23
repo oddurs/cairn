@@ -1575,6 +1575,27 @@ unfinished dependencies. Work already under way is ranked first, on the grounds
 that the most useful next action is usually finishing something. @option{--blocked}
 includes blocked work, annotated with what blocks it.
 
+Readiness is not approval: an untriaged idea or an external wait can have no
+unfinished dependencies. Select your project's approved queue explicitly with
+a saved view. Its name and statuses are yours, not reserved words:
+
+@example
+cairn next --view next
+cairn claim --next --view next --filter 'type=bug'
+cairn agent --view next --write AGENTS.md
+@end example
+
+The view's filter selects candidates; extra filters are intersected with it,
+never substituted. Its sort, columns and grouping are presentation settings
+and do not alter the active-first priority ranking. Closed items and containers
+are still excluded. Bare commands retain the unscoped queue. Unknown views
+fail rather than selecting from the whole backlog. This is selection policy,
+not access control: an explicitly named claim remains an assignment.
+
+Over MCP, pass @code{"view":"next"} to @code{next_items} and to
+@code{claim_item} without an id. Regenerate instructions with the same
+@option{--view}; omitting it deliberately generates the unscoped workflow.
+
 @example
 $ cairn claim --next
 claimed 0001  Publish to crates.io
@@ -3150,6 +3171,7 @@ uncoloured). Aliased as @command{cairn ls}.
 @section cairn next
 Ready work, ranked. @xref{Working the backlog}. @option{--limit} bounds the
 list, @option{--mine} restricts to work assigned to you or to nobody,
+@option{--view} intersects a saved view's filter with @option{--filter},
 @option{--blocked} includes blocked items, and @option{--json} and
 @option{--ids} are for programs.
 

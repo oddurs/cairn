@@ -90,7 +90,7 @@ record: build
 	python3 doc/demo.py --cairn $(CAIRN)
 	python3 doc/samples.py --cairn $(CAIRN)
 	$(CAIRN) render
-	$(CAIRN) agent --write AGENTS.md
+	$(CAIRN) agent --view next --write AGENTS.md
 
 doc: info
 

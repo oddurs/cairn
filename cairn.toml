@@ -210,7 +210,7 @@ columns = ["id", "status", "assignee", "priority", "title"]
 [[view]]
 name = "next"
 description = "Approved work with no unfinished dependencies"
-filter = "status=planned,blocked=false,type!=milestone"
+filter = "status=planned|doing,blocked=false,type!=milestone"
 sort = "priority,milestone"
 columns = ["id", "priority", "area", "title"]
 

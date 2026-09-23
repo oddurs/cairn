@@ -6,6 +6,17 @@ See the end of the file for copying conditions.
 Please send bug reports and suggestions through the project's issue tracker.
 
 
+* Noteworthy changes in release 0.3.0 (unreleased)
+
+** Select an approved queue once, use it everywhere
+
+`cairn next --view NAME` and `cairn claim --next --view NAME` reuse a saved
+view's filter. Extra filters narrow it; ranking stays active-first, then
+priority. MCP next_items and automatic claim_item accept the same `view`.
+`cairn agent --view NAME` generates matching instructions. No reserved status
+names, implicit defaults, schema changes, or new on-disk format are needed.
+Bare commands keep their existing behavior.
+
 * Noteworthy changes in release 0.2.2 (2026-09-23)
 
 ** Companion compatibility

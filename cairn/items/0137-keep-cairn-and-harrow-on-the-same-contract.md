@@ -2,8 +2,10 @@
 id: 137
 title: Keep Cairn and Harrow on the same contract
 type: bug
-status: planned
+status: doing
 milestone: v0.3
+assignee: codex
+claimed: 2026-09-23
 owner: oddurs
 created_by: codex
 created: 2026-09-23

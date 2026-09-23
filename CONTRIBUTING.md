@@ -37,7 +37,8 @@ dependency-ready work, including ideas and external waits. For autonomous
 selection in **this project**, use:
 
 ```sh
-cairn claim --next --filter 'status=planned'
+cairn next --view next
+cairn claim --next --view next
 ```
 
 Keep at most three engineering items selected at a time and one active item

@@ -7,8 +7,8 @@ This project tracks its roadmap and issues with `cairn`. Every item is a Markdow
 
 ### The loop
 
-1. `cairn next` — what is ready to start. It excludes anything blocked by unfinished dependencies and puts work already in progress first.
-2. `cairn claim <ID>` — take it before you start, so no one duplicates the work. `cairn claim --next` picks and claims the top-ranked unclaimed item in one step, and prints its body so you can begin immediately.
+1. `cairn next --view next` — what is ready to start. It excludes anything blocked by unfinished dependencies and puts work already in progress first.
+2. `cairn claim <ID>` — take it before you start, so no one duplicates the work. `cairn claim --next --view next` picks and claims the top-ranked unclaimed item in one step, and prints its body so you can begin immediately.
 3. Do the work. Record what you learn: `cairn set <ID> <field>=<value>` for fields, `cairn note <ID> "<TEXT>"` for anything that needs a sentence — why you chose something, what you tried, what to watch for.
 4. `cairn tick <ID> <N>` as each acceptance criterion becomes true — `cairn show <ID> --criteria` lists them numbered. Tick what is true, not what would let you close.
 5. `cairn close <ID>` when it is done, or `cairn release <ID>` to hand it back.
@@ -17,8 +17,8 @@ This project tracks its roadmap and issues with `cairn`. Every item is a Markdow
 ### Commands
 
 ```sh
-cairn next --json                 # ready work, ranked
-cairn claim --next                # take the next ready item
+cairn next --view next --json                 # ready work, ranked
+cairn claim --next --view next                # take the next ready item
 cairn search <TEXT> --json        # titles, bodies and labels
 cairn list --json                 # all open items
 cairn list --filter 'blocked=false,priority=p0'
@@ -32,6 +32,10 @@ cairn close <ID>
 cairn check                       # validate; run before finishing
 cairn render                      # regenerate ROADMAP.md
 ```
+
+Selection uses saved view `next`. Additional filters only narrow it; the view's sort and columns do not change `next` ranking. Over MCP, pass `{"view":"next"}` to `next_items` and to `claim_item` without an id. A direct claim is an explicit assignment outside this selection policy. Regenerate these instructions with `cairn agent --view next --write AGENTS.md`.
+
+Claims coordinate writers in the same item directory, not separate branches, worktrees, or clones. Agree on assignments before splitting work.
 
 ### Schema
 
@@ -66,7 +70,8 @@ repository, autonomous selection must use the approved queue:
 
 ```sh
 cairn list --view next
-cairn claim --next --filter 'status=planned'
+cairn next --view next
+cairn claim --next --view next
 ```
 
 Explicit user assignments can be claimed directly. Resume your existing claim
@@ -85,5 +90,5 @@ Changing Harrow belongs in its own repository and tracked item.
 
 Run `make check` before handing off code or project changes. Touching the lock,
 write path, identifiers, or merge driver also requires `make durability`.
-After changing the schema, regenerate this block with `cairn agent --write
-AGENTS.md`, run `cairn render`, and finish with `cairn check --render --strict`.
+After changing the schema, regenerate this block with `cairn agent --view next
+--write AGENTS.md`, run `cairn render`, and finish with `cairn check --render --strict`.
