@@ -17,8 +17,8 @@ all: build doc
 build:
 	$(CARGO) build --release
 
-# Everything CI runs.
-check: test
+# Everyday checks; CI also exercises portability, packaging, and the site.
+check: build test
 	$(CARGO) fmt --check
 	$(CARGO) clippy --all-targets -- -D warnings
 	$(CAIRN) check --render --strict

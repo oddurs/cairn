@@ -1,89 +1,47 @@
 # cairn
 
-A roadmap and issue manager that lives in your repository, as Markdown, under a
-schema you define.
+Project memory, versioned with the code.
 
-**[cairn.sh docs →](https://oddurs.github.io/cairn)**
+Cairn keeps a project's intent, work, and decisions as Markdown files in its
+repository. A schema you own gives those files structure. People and agents
+use the same record; Git carries its history, review, and distribution.
 
-A cairn is a stack of stones marking a trail. This one marks yours: every item
-is a plain `.md` file with YAML frontmatter, versioned alongside the code,
-reviewable in a pull request, and greppable with the tools you already have.
-`cairn.toml` describes the item types, statuses, fields, milestones and views
-your project actually uses — the CLI enforces that schema, so the structure
-holds up whether a human, a script or a coding agent is doing the writing.
+Use it as a lightweight issue tracker and roadmap. Keep it because, months
+later, the item still explains **why the code is like this**.
+
+[Documentation](https://oddurs.github.io/cairn/docs) ·
+[Harrow, the terminal interface](https://github.com/oddurs/harrow) ·
+[Roadmap](ROADMAP.md) · [File format](spec/README.md)
 
 ![cairn](doc/demo.svg)
 
-<sup>Recorded by `make demo`, which runs those commands for real and renders
-their actual output — so the picture cannot drift from the program.</sup>
+<sup>Recorded from real commands by `make demo`.</sup>
 
-Note the third command. `0002` depends on `0001`, so it stays off the list until
-`0001` closes: `cairn next` shows work that is genuinely startable, not
-everything that is open.
+## The idea
 
-## What an item is
+An item records a problem, the reasoning behind a change, and the evidence that
+it is finished. It can be a small task or a consequential decision. Closing
+it makes it part of the project's memory.
 
-Calling cairn an issue manager is accurate and undersells it enough to produce
-the wrong decisions.
+Three pieces fit together:
 
-An item is a **record of intent**. It carries the reasoning that produced it —
-the problem, the proposal, the costs weighed, how you will know it is done — it
-lives with the code it describes, and it is worth **more** after it closes than
-before, because it is then the answer to *why is it like this*.
+| Piece | Responsibility |
+| --- | --- |
+| Cairn | The schema, queries, validated writes, and the agent workflow |
+| Harrow | Watching the backlog, reading it, and making interactive decisions |
+| Git | Version history, branches, review, and sharing |
 
-That is true of an architecture decision record and false of a ticket. A ticket
-points at a conversation that happened somewhere else and is worthless the
-moment it closes. Scheduling — statuses, milestones, what is ready to start —
-exists to make the record actionable, not the other way round.
+The files remain useful without either program. There is no account, required
+server, background process, or database to maintain.
 
-It decides things, which is why it is written down. Items carry reasoning rather
-than titles, so a type template seeds headings and that is a feature rather than
-friction. `cairn log` was worth building because a record whose history cannot
-be read is a worse record. The format is specified for a horizon longer than
-this program's.
-
-And it says what to refuse: a record of intent does not need comment threads,
-reactions, or a notification when somebody starts typing. Those belong to the
-conversation, and the conversation is not the record — it is the thing the
-record exists to survive.
-
-## Why
-
-Roadmaps rot because they live somewhere the work does not. A `ROADMAP.md`
-edited by hand drifts from reality within a month. An issue tracker on another
-website is invisible from the terminal, unavailable offline, and impossible to
-review alongside the diff that closes it. And coding agents, left to themselves,
-strew `TODO.md`, `PLAN.md` and `NOTES-final-v2.md` across the tree, each in a
-format of its own invention.
-
-cairn takes the position that project state is source, and that the fix for
-freeform Markdown is not less Markdown but a schema:
-
-- **The repository is the database.** No server, no account, no network. Items
-  merge, branch and revert like everything else you version.
-- **The schema is yours.** `cairn.toml` is the whole configuration surface.
-  Rename the statuses, add the fields, define the views. Nothing is hardcoded.
-- **The roadmap is generated.** `cairn render` builds `ROADMAP.md` from the
-  items, and `cairn render --check` fails CI when the committed file has drifted.
-- **Agents get a contract.** `cairn agent` emits an instruction block, generated
-  from your live schema, that tells a coding agent exactly which commands and
-  fields to use. It cannot describe a workflow you do not have.
+Cairn is agent-first because an agent can discover the project's vocabulary,
+find work, claim it, record evidence, and hand it back through a predictable
+interface. It does not run the agent. Harrow gives the person beside that agent
+a live view of the same work, and delegates changes to Cairn.
 
 ## Install
 
-**A prebuilt binary**, no Rust toolchain needed:
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/oddurs/cairn/main/install.sh | sh
-```
-
-Detects your platform, verifies the release checksum, and installs to
-`~/.local/bin`. Linux (x86-64, aarch64, static musl) and macOS (both
-architectures); Windows binaries are on the
-[releases page](https://github.com/oddurs/cairn/releases).
-
-**Homebrew.** Recent Homebrew requires third-party taps to be trusted
-explicitly, so it is three commands rather than two:
+Homebrew:
 
 ```sh
 brew tap oddurs/cairn
@@ -91,666 +49,208 @@ brew trust oddurs/cairn
 brew install cairn
 ```
 
-**From source:**
+Or install a prebuilt binary:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/oddurs/cairn/main/install.sh | sh
+```
+
+The installer detects Linux or macOS, checks the release checksum, and installs
+to `~/.local/bin`. Windows binaries are on the
+[releases page](https://github.com/oddurs/cairn/releases). Release archives also
+carry build provenance; the [manual](doc/cairn.texi) explains verification.
+
+From source:
 
 ```sh
 cargo install --git https://github.com/oddurs/cairn cairn-md
 ```
 
-The package is `cairn-md` because `cairn` is taken on crates.io by an unrelated
-crate; the binary it installs is `cairn`. It is not on crates.io yet — see
-`0001` — so `--git` is the way for now.
+The package name is `cairn-md`; the executable is `cairn`. See
+[0001](cairn/items/0001-publish-to-crates-io-and-homebrew.md) for the remaining
+crates.io publication work.
 
-Optional, and worth doing:
+Harrow is optional. Install it from
+[its repository](https://github.com/oddurs/harrow#install), then run `harrow`
+inside any Cairn project.
 
-```sh
-cairn completions zsh > ~/.zfunc/_cairn        # also bash, fish, elvish, powershell
-cairn man --dir /usr/local/share/man/man1
-make install                                   # binary, man pages, and the Info manual
-```
+## Start small
 
-The full manual is Texinfo — `info cairn` after `make install-info`, or
-`make html` for a browsable copy. `README.md` is the tour; the manual is the
-reference.
-
-## Quickstart
+In a new project:
 
 ```sh
-cairn init                                    # writes cairn.toml + cairn/items/
-cairn new "Support OAuth login" \
-    --type feature --milestone v0.1 --set priority=p0 --label auth
-cairn set 1 status=doing
-cairn board
-cairn render                                  # regenerates ROADMAP.md
-cairn check                                   # validates everything
+cairn init --preset minimal --bare
+cairn new "Document how to build this project"
+cairn claim 1
+cairn edit 1
+cairn note 1 "Verified the instructions from a clean checkout."
+cairn close 1
+cairn render
+cairn check
 ```
 
-`cairn init --preset minimal` starts from three statuses and nothing else;
-`--preset standard` (the default) writes a fully commented schema to cut down.
+Add your problem, approach, and acceptance criteria when editing the item.
+Tick criteria as they become true with `cairn tick 1 1`; check them with
+`cairn show 1 --criteria`.
 
-## An item
+The minimal preset is a starting point. `cairn init --bare` uses the richer
+standard schema; `cairn init --from ../another-project/cairn.toml --bare`
+adopts a schema you already like.
 
-```markdown
----
-id: 1
-title: Support OAuth login
-type: feature
-status: doing
-milestone: v0.1
-labels:
-  - auth
-  - backend
-depends_on:
-  - 3
-created: 2026-09-04
-updated: 2026-09-11
-priority: p0
----
+For a Git repository, set up merge support once per working copy:
 
-## Problem
-
-Password auth is the only option, and enterprise users keep asking for SSO.
-
-## Acceptance criteria
-
-- [ ] Authorization code flow with PKCE
-- [ ] Refresh tokens survive a restart
+```sh
+cairn init --git
 ```
 
-Everything above `---` is schema-checked. Everything below is yours. Edit the
-file in your editor, or from the CLI — either way the other one keeps working.
-`cairn edit 1` opens `$EDITOR` and re-validates on the way out; a title change
-renames the file to match.
+Commit the items, `cairn.toml`, and generated roadmap with the changes they
+describe. Cairn does not commit for you.
 
-## Configuring the schema
+## Work the record
 
-`cairn.toml` is the only configuration. A sketch:
+```sh
+cairn next                         # ranked, unfinished, dependency-ready work
+cairn claim --next                 # atomically choose and claim in this working copy
+cairn show 12
+cairn set 12 priority=p1
+cairn note 12 "Kept the old representation to preserve existing references."
+cairn release 12 --reason "Needs a reproduction on Windows."
+cairn search --all "representation" # include finished and dropped reasoning
+cairn log 12                       # the item's history in Git
+```
+
+`next` means dependency-ready, not necessarily approved by your project.
+Scope autonomous work with a filter, for example
+`cairn claim --next --filter 'status=planned'` when your schema uses that
+status. Saved views make that convention easy to share with people and Harrow.
+
+A claim coordinates writers using **the same item directory**. Separate
+branches, worktrees, and clones have separate state. Agree on assignments
+before splitting work; a claim is not a distributed lock.
+
+In this repository, start with `cairn list --view next` or
+`harrow --view next`. [CONTRIBUTING.md](CONTRIBUTING.md) explains what our
+statuses mean, how we select work, and how to validate it.
+
+## A schema you own
+
+`cairn.toml` declares types, statuses, fields, relationships, and views.
+These are project choices, not a prescribed methodology. For example, this
+complete small schema adds decisions and an approved queue:
 
 ```toml
+format = 3
+
 [project]
-name = "cairn"
-dir = "cairn/items"       # where item files live
-id_width = 4              # 0001, 0002, …
+name = "my-project"
+dir = "cairn/items"
+default_type = "task"
 default_status = "backlog"
 
 [[type]]
-name = "bug"
-icon = "!"
-color = "red"
-template = """           # seeds the body of every new bug
-## What happens
+name = "task"
 
-## Reproduction
-"""
+[[type]]
+name = "decision"
+
+[[status]]
+name = "backlog"
+category = "open"
+
+[[status]]
+name = "planned"
+category = "open"
 
 [[status]]
 name = "doing"
-label = "in progress"
-category = "active"       # open | active | done | dropped
-color = "yellow"
+category = "active"
 
-[[field]]
-name = "priority"
-kind = "enum"             # enum | text | list | date | number | bool
-values = ["p0", "p1", "p2", "p3"]
-default = "p2"
-column = true             # show it in `cairn list`
-
-[[milestone]]
-name = "v0.1"
-title = "Usable in anger"
-due = "2026-10-15"
+[[status]]
+name = "done"
+category = "done"
 
 [[view]]
-name = "triage"
-filter = "milestone=,category!=done"
-columns = ["id", "type", "title", "created"]
+name = "next"
+filter = "status=planned,blocked=false"
+sort = "id"
 
 [render]
-target = "ROADMAP.md"
-group_by = "milestone"
-include = "category!=dropped"
+group_by = "status"
 ```
 
-Status **order** is meaningful — it is the column order on the board and the
-sort order in listings. Status **category** is what the tool reasons about, so
-you can call your statuses `icebox` and `shipping` and progress bars, default
-filters and checkbox rendering all keep working.
+Status names are yours; their categories (`open`, `active`, `done`,
+`dropped`) tell the program what they mean. Fields can hold text, enums,
+lists, dates, numbers, booleans, or references. Milestones are ordinary items
+of a grouping type, with their own reasoning and history.
 
-Run `cairn config` to see the resolved schema, or `cairn config --json` to feed
-it to something else.
+`cairn config` shows the current schema. `cairn --help` lists commands.
+The [manual](doc/cairn.texi) covers custom identifier renderings, relationships,
+proposals, importing, and the full filter grammar.
 
-## Finding things
+## Agents
 
-Every listing command takes the same filter grammar. Clauses are ANDed with
-commas, alternatives are separated by `|`, and an empty value means *unset*:
+Generate instructions from the project's actual schema:
 
 ```sh
-cairn list --status doing                    # convenience flags
-cairn list --type bug --label auth
-cairn list --filter 'priority=p0|p1,category!=done'
-cairn list --filter 'milestone='             # not scheduled yet
-cairn list --filter 'labels~auth'            # substring / list membership
-cairn list --filter 'updated<2026-06-01'     # lexical and numeric comparison
-cairn list --view triage                     # saved in cairn.toml
-cairn list --sort '-priority,updated'
+cairn agent --write AGENTS.md
 ```
 
-Operators: `=` `!=` `~` `!~` `>` `>=` `<` `<=`. Alongside your own fields,
-`category` resolves through the status table.
-
-For scripting, `--json`, `--ids`, `--count` and `--plain` (tab-separated
-machine values, no header, no colour) are available on `list`, `next` and
-`search` alike. What each of them promises, and what is deliberately left free
-to change, is written down under "Stability" in the manual:
-
-```sh
-cairn list --ids --filter 'priority=p0' | xargs -n1 cairn show
-```
-
-Triage takes the same grammar, so the loop is rarely needed:
-
-```sh
-cairn set 1 2 3 priority=p0
-cairn set --filter 'milestone=v0.1,status=backlog' priority=p1
-```
-
-A filtered write prints what it matched and asks before touching anything,
-unless `--yes` is given.
-
-## Milestones are items
-
-```yaml
----
-id: 42
-key: v0.1
-title: Usable in anger
-type: milestone
-due: 2026-10-15
----
-
-October because the conference is in November.
-```
-
-`milestone: v0.1` in an item names it by key, exactly as it always did. What
-changed in format 2 is where the milestone's *own* information lives: it used to
-be a block in `cairn.toml`, which cannot hold a body or be asked when something
-changed — so a milestone had no reasoning, no history, and needed a bespoke
-ordering rule.
-
-It is deliberately not the same thing as `part_of`: an item belongs to several
-larger efforts and ships in exactly one release.
-
-`cairn migrate` moves an older project. No item file changes.
-
-## How an item got here
-
-The repository is the database, and a repository has one thing a database does
-not:
-
-```sh
-$ cairn log 12
-2026-09-04  oddurs   created
-2026-09-05  claude   status backlog -> doing
-2026-09-05  claude   note added
-2026-09-11  oddurs   status doing -> done
-```
-
-Changes are reported as field transitions rather than as a patch, renames are
-followed so a retitled item keeps its history, and `--patch` hands the job to
-git when you want the diffs. Outside a git repository it explains rather than
-fails: cairn does not require git, and a legitimate setup should not look
-broken.
-
-## The generated roadmap
-
-```console
-$ cairn roadmap --items
-cairn
-A markdown-native roadmap and issue manager that lives in your repository.
-
-v0.1  Usable in anger
-  [--------------------]   0%  0/2   due 2026-10-15
-  Enough to run a real project's roadmap without reaching for anything else.
-    0001  in progress   Publish to crates.io and Homebrew
-    0002  planned       Ship shell completions and a man page
-
-$ cairn render
-wrote ROADMAP.md  7 items
-```
-
-`ROADMAP.md` is a build artefact: sections per milestone, progress bars,
-checkboxes, and whatever header and footer Markdown you point `render.header`
-and `render.footer` at. Never edit it by hand — change the items and re-render.
-
-## Hooks
-
-cairn does not embed a scripting language. It runs yours.
-
-```toml
-[hooks]
-after-create = "cairn render -q"
-after-change = "cairn render -q"
-after-render = "git add ROADMAP.md"
-```
-
-A hook runs from the project root with the event in the environment
-(`CAIRN_EVENT`, `CAIRN_ITEM_ID`, `CAIRN_ITEM_STATUS`, `CAIRN_ITEM_PATH`, and the
-rest) and the complete item as JSON on stdin. It takes one of two forms:
-
-```toml
-# A string runs through the platform shell — convenient, and therefore
-# platform-specific: $VAR on a Unix shell is %VAR% under cmd.exe.
-after-change = "jq -r 'select(.category==\"done\") | .title' | xargs -r notify-send"
-
-# An array is executed directly, with no shell at all — portable.
-after-change = ["python3", "scripts/notify.py"]
-```
-
-Use the array form in any project that has to run on more than one platform;
-the script it names can be written in whatever language you like, and the shell
-never gets a chance to disagree about quoting.
-
-Hooks run *after* the change is on disk, which fixes the contract: a failing
-hook warns and nothing is rolled back, the same as git's `post-` hooks.
-`--no-hooks` and `CAIRN_NO_HOOKS=1` suppress them; the latter is set inside the
-hook's own environment, so a hook can call `cairn` without recursing.
-
-This is the extension point, and deliberately a Unix one rather than an
-embedded interpreter. Replacing cairn's *own* behaviour — a different renderer,
-a custom validator, new subcommands — needs more than that; it's on the roadmap
-as `0008`, with the tradeoffs written down.
-
-## Naming your identifiers
-
-`0001` is the default, not the only option:
-
-```toml
-[project]
-id_format = "MP-{n}"    # MP-1002
-id_start  = 1000        # where an empty project starts counting
-```
-
-`{n}` is the number, `{n:04}` pads it. Files are named to match, and both forms
-are accepted wherever an identifier is: `cairn show MP-1002`, `cairn show 1002`.
-
-The key is a **rendering**, not the identifier. `id` in the frontmatter stays an
-unsigned integer, which is what the specification commits to — so adopting a key
-is a display change rather than a format change, and nothing that refers to an
-item by number breaks. In JSON, `id` is the number and `ref` is the rendered
-form.
-
-Adopting one in an existing project: `cairn check` reports the filenames that no
-longer match and `cairn renumber` fixes them.
-
-## Identifiers, and the one sharp edge
-
-Ids are small integers because people have to type them. That has a cost worth
-stating plainly: allocating "the next" id requires knowing every id in use,
-which requires coordination, which a distributed workflow does not provide. Two
-contributors on two branches each create the next item and both get `0008`. The
-branches merge cleanly — the filenames differ — and you have two items sharing
-an id.
-
-`cairn check` detects it and names both files. `cairn renumber` repairs it:
-
-```console
-$ cairn renumber --dry-run
-  0008 -> 0009  Branch B feature
-$ cairn renumber
-renumbered: 1 item(s)
-```
-
-The older item keeps the contested id and the one that arrived later moves, so
-the repair matches what happened. Because nothing can unambiguously *refer* to
-a duplicated id, existing `depends_on` references are left pointing at the
-retained item and cairn says so rather than guessing.
-
-Gaps left by `remove` are permanent, and that is the design: closing them would
-move every later identifier, silently invalidating every commit message, pull
-request and human memory that referred to one — and cairn has no way to rewrite
-any of those.
-
-Renumbering is never automatic. It rewrites files, and that should happen
-because you asked.
-
-## Agents working the backlog
-
-This is what cairn is for. An agent dropped into the repo needs to answer three
-questions — what should I work on, is anyone else on it, and where do I record
-what I found — and `cairn` answers all three without it having to invent a
-format.
-
-### Over MCP (best)
-
-```sh
-cairn mcp --config      # prints the snippet for .mcp.json, .cursor/mcp.json, …
-```
-
-`cairn mcp` serves the backlog over the Model Context Protocol on stdio: eleven
-tools covering `get_schema`, `next_items`, `list_items`, `search_items`,
-`show_item`, `claim_item`, `create_item`, `update_item`, `add_note`,
-`close_item` and `check`. Tools beat
-instructions because they cannot be forgotten halfway through a task, and a
-rejected write comes back as something the model can act on:
-
-```
-update_item {"id": 1, "fields": {"status": "nope"}}
-→ isError: unknown status `nope`
-  known: backlog, planned, doing, blocked, done, dropped
-```
-
-Every item that crosses the boundary carries `blocked`, `ready` and `blockers`,
-because dependency state is the thing an agent most needs and cannot work out
-from a single item.
-
-### Over the CLI
-
-```sh
-cairn agent --write AGENTS.md    # or CLAUDE.md — generated from your live schema
-```
-
-The block it writes describes the loop, the real statuses and fields, and the
-filter grammar, between `<!-- cairn:begin -->` markers so re-running updates it
-in place. The loop itself:
-
-```console
-$ cairn next
-ID    STATUS       MILESTONE  BLOCKED BY  TITLE
-0001  in progress  v0.1                   Publish to crates.io and Homebrew
-0003  backlog      v0.2       0010        Import issues from GitHub   ← hidden by default
-
-$ cairn claim --next
-claimed 0001  Publish to crates.io and Homebrew
-  claude · doing · cairn/items/0001-publish-to-crates-io-and-homebrew.md
-```
-
-`cairn next` ranks what is actually startable — nothing blocked by an unfinished
-dependency, work already in progress first — and `cairn claim` writes the
-assignment into the item so a second worker gets told:
-
-```console
-$ cairn claim 1
-cairn: 0001 is already claimed by claude
-use --force to take it anyway
-```
-
-That is the whole coordination mechanism: no lock server, no daemon. Two agents
-on two branches merge like any other file, and `cairn check` catches whatever
-the merge could not.
-
-Identity comes from `CAIRN_USER`, falling back to `git config user.name`, so an
-agent can name itself without touching your git config.
-
-### Searching
-
-```sh
-cairn search oauth                          # titles, bodies and labels
-cairn list --filter 'blocked=false,priority=p0'
-cairn list --filter 'body~"acceptance criteria"'
-```
-
-Alongside your own fields, the filter grammar exposes `category`, `blocked`,
-`ready`, `blockers` and `body`.
-
-## Moving a backlog in and out
-
-cairn speaks one documented interchange format, and every integration is an
-adapter over it — so a tracker cairn has never heard of is one `jq` script away.
-
-```sh
-cairn import --from github --repo owner/name --close
-cairn import --from json backlog.json --dry-run
-cairn export --to json --output backlog.json
-```
-
-`--close` closes each imported issue upstream with a comment naming the item it
-became. The repository is the system of record and the tracker is an inbox, so
-the two must not both stay open — the same work in two places diverges from the
-moment it exists. One direction, no reconciliation, and provenance means a
-repeated import has nothing left to close.
-
-The hard part of import is that the incoming vocabulary is not yours: a GitHub
-issue is `open` or `closed`, while your project might call those `icebox` and
-`shipped`. Matching by name fails, so cairn maps by **category** — the one axis
-that means the same thing in every cairn project — and `--map` handles the rest:
-
-```console
-$ cairn import --from json export.json --create-milestones --map type:chore=task
-warning: `Record a terminal demo`: field `effort` is not declared in cairn.toml — dropped
-imported: 13 created, 0 updated, 0 already present
-```
-
-Anything it cannot place is reported rather than silently dropped. Every
-imported item records where it came from in a `source` field, so running the
-same import twice updates instead of duplicating:
-
-```console
-$ cairn import --from json export.json
-imported: 0 created, 0 updated, 13 already present
-```
-
-GitHub is read through the `gh` CLI rather than an HTTP client: no token
-handling inside cairn, no second place for credentials to live, and enterprise
-hosts work because you already configured them.
-
-## In CI## Moving a backlog in and out
-
-cairn speaks one documented interchange format, and every integration is an
-adapter over it — so a tracker cairn has never heard of is one `jq` script away.
-
-```sh
-cairn import --from github --repo owner/name --close
-cairn import --from json backlog.json --dry-run
-cairn export --to json --output backlog.json
-```
-
-`--close` closes each imported issue upstream with a comment naming the item it
-became. The repository is the system of record and the tracker is an inbox, so
-the two must not both stay open — the same work in two places diverges from the
-moment it exists. One direction, no reconciliation, and provenance means a
-repeated import has nothing left to close.
-
-The hard part of import is that the incoming vocabulary is not yours: a GitHub
-issue is `open` or `closed`, while your project might call those `icebox` and
-`shipped`. Matching by name fails, so cairn maps by **category** — the one axis
-that means the same thing in every cairn project — and `--map` handles the rest:
-
-```console
-$ cairn import --from json export.json --create-milestones --map type:chore=task
-warning: `Record a terminal demo`: field `effort` is not declared in cairn.toml — dropped
-imported: 13 created, 0 updated, 0 already present
-```
-
-Anything it cannot place is reported rather than silently dropped. Every
-imported item records where it came from in a `source` field, so running the
-same import twice updates instead of duplicating:
-
-```console
-$ cairn import --from json export.json
-imported: 0 created, 0 updated, 13 already present
-```
-
-GitHub is read through the `gh` CLI rather than an HTTP client: no token
-handling inside cairn, no second place for credentials to live, and enterprise
-hosts work because you already configured them.
-
-## In CI
+CLI output is available as JSON, IDs, or plain tab-separated values. Use
+`--limit`, filters, and targeted `show` calls to keep context small.
+Search finished decisions before proposing something the project may have
+already considered.
+
+For clients using MCP, `cairn mcp --config` prints connection details and
+`cairn mcp` serves the project over stdio. CLI and MCP are interfaces to the
+same files; choose the one your agent uses well.
+
+Set `CAIRN_AGENT` to identify an agent, and `CAIRN_USER` when it needs an
+explicit working identity. The schema can let agents write, propose changes,
+or read particular fields and statuses. These are workflow rules for
+cooperating tools, not a security boundary against a process that can edit
+the files.
+
+## Built to keep
+
+Items are plain Markdown with YAML frontmatter. The
+[standalone specification](spec/README.md), frozen historical fixtures, and
+[independent reader](spec/reader.py) keep the data contract separate from this
+implementation.
+
+Writes use a temporary file, flush, and rename. Mutating commands take a
+local lock; read commands can still show healthy items when another file is
+damaged. Tests exercise interruptions, concurrent writers, old formats, and
+arbitrary inputs.
+
+Small integer IDs are easy to type but can collide across branches.
+`cairn check` detects collisions; `cairn renumber --dry-run` shows a repair.
+Git integration helps reconcile generated output and sequence fields, but
+conflicting decisions still need review. The manual describes exactly what
+merging and recovery guarantee.
+
+Extend the workflow through schema, JSON, import/export, and hooks that run
+your programs. Use the array form of hooks for portable invocation. A hook
+failure warns after the item is saved; it does not undo the change.
+
+Keep validation in CI:
 
 ```yaml
 - run: cairn check --render --strict
 ```
 
-`check` validates every item against the schema: unknown statuses, types and
-milestones, missing required fields, bad enum values and dates, dangling and
-circular dependencies, duplicate ids. With `--render` it also proves the
-committed `ROADMAP.md` matches the items. It exits non-zero on errors, and with
-`--strict` on warnings too.
+## Direction
 
-## Commands
+The next outcome is a daily workflow that people and agents can trust across
+Cairn, Harrow, and Git branches. After that, 1.0 should mean a tested
+compatibility and recovery promise.
 
-| Command | What it does |
-| --- | --- |
-| `cairn init` | Write `cairn.toml` and the item directory |
-| `cairn new` (`add`) | Create an item |
-| `cairn list` (`ls`) | Query items — filters, views, JSON |
-| `cairn next` | What is ready to work on, ranked |
-| `cairn search` (`grep`) | Full-text over titles, bodies and labels |
-| `cairn claim` / `release` | Take or hand back an item |
-| `cairn show` | One item in full |
-| `cairn set` | Change fields: `status=doing`, `labels+=auth`, `assignee=` |
-| `cairn note` | Append to an item's body — why something was decided |
-| `cairn tick` / `untick` | Tick an acceptance criterion: `cairn tick 12 3`, or `--all` |
-| `cairn close` / `reopen` | Move between open and done statuses |
-| `cairn edit` | Open in `$EDITOR`, re-validate afterwards |
-| `cairn remove` (`rm`) | Delete items |
-| `cairn board` | Kanban board on stdout |
-| `cairn roadmap` | Milestones with progress |
-| `cairn render` | Generate the roadmap file |
-| `cairn export` / `import` | Move a backlog in or out |
-| `cairn check` | Validate against the schema |
-| `cairn renumber` | Repair duplicate ids, rewriting references |
-| `cairn config` | Show the resolved schema |
-| `cairn agent` | Instruction block for coding agents |
-| `cairn mcp` | Serve the backlog to agents over MCP |
-| `cairn completions` / `man` | Shell completions and the man page |
-
-`cairn --help` and `cairn <command> --help` have the details, and `info cairn`
-has all of it. `-C DIR` runs as if started elsewhere; `--color` takes `auto`,
-`always` or `never`, and `NO_COLOR` is honoured; `--no-hooks` disables hooks.
-
-## Verifying what you downloaded
-
-Every release carries a checksum for each archive, a source tarball, and a
-GitHub build-provenance attestation saying which workflow and which commit
-produced each file — the one thing a checksum cannot tell you, since the
-checksums come from the same workflow as the binaries.
-
-```sh
-sha256sum -c SHA256SUMS
-gh attestation verify cairn-0.1.0-x86_64-unknown-linux-musl.tar.gz --repo oddurs/cairn
-make dist && sha256sum cairn-0.1.0.tar.gz   # reproduce the source tarball yourself
-```
-
-The source tarball is built with `git archive`, so the one attached to a release
-and the one `make dist` produces from the same tag are the same bytes. The
-binaries are **not** currently reproducible — nobody has established that, and
-claiming it unchecked would be worse than not offering it. See "Verifying a
-release" in the manual for what each check proves and what it does not.
-
-## Durability
-
-The repository is the database, so the write path is the part that has to be
-boring and correct.
-
-**Writes are atomic.** Every file cairn writes — items, `ROADMAP.md`,
-`cairn.toml`, exports — goes to a temporary file beside the target, is flushed
-to the device, and is then renamed over it. A crash, a full disk or a killed
-process leaves either the old file or the new one, never a half-written mixture.
-There is a test that kills cairn mid-write forty times and checks the item is
-still intact.
-
-**Line endings are preserved.** A CRLF item file is written back as CRLF, so a
-checkout with `core.autocrlf` set does not turn every `cairn set` into a
-whole-file diff. New items are LF, and `cairn init` ships a `.gitattributes`
-pinning the item directory to `eol=lf` so a repository has one answer regardless
-of client configuration.
-
-**One broken file does not stop everything.** `list`, `next`, `board`, `search`
-and `roadmap` report the file they could not read and carry on with the rest —
-a backlog should not become unlistable because something left a file mid-write.
-Anything that *writes*, and anything that produces a durable artefact
-(`check`, `render`, `export`, `set`, `renumber`), refuses instead: acting on a
-partial view of the backlog is how data gets lost.
-
-**Concurrent writers are serialised.** Allocating an id means reading the
-highest one in use and adding one, which is only correct while nothing else is
-doing the same. Mutating commands take a lock file in the item directory for the
-duration of the write; reads never take it, so listing a backlog never queues
-behind somebody's write. A lock left behind by a process that died is broken
-after five minutes, with a warning. Forty concurrent `cairn new` calls produce
-forty distinct ids, and twelve agents racing for one item produce exactly one
-holder — both are tests.
-
-The lock is released *before* hooks run, because a hook may itself call cairn and
-the write is already durable by then. There is a test for that ordering too.
-
-**Branches merge without a fight.** Two branches that both add an item conflict
-in `ROADMAP.md` and collide on an id — on the first merge. Neither is really a
-conflict: both files are derived, so the answer is to derive them again.
-
-```sh
-cairn init --git      # safe on an existing project; that is how you adopt it
-```
-
-That registers a merge driver for the generated roadmap and a `post-merge` hook
-that renumbers colliding ids and re-renders. Nothing invents a resolution; both
-files are rebuilt from the items, which were the only authority all along.
-
-The ordering constrains the design and is worth knowing: git resolves paths in
-index order, and `ROADMAP.md` sorts before `cairn/items/…`, so when the merge
-driver runs the items have not been merged yet. It therefore keeps your side —
-a valid rendering of *something* — and the hook replaces it once the items are
-settled. `cairn check --render` in CI is the backstop for the cases a hook does
-not see, such as a merge performed by a forge.
-
-**An interrupted `renumber` recovers itself.** Renumbering moves a file aside
-before writing it back; if that is interrupted, the next command restores it and
-says so.
-
-The frontmatter parser is the trust boundary for three kinds of input — typed,
-model-written, and imported — so it is property-tested: anything cairn writes it
-reads back unchanged, rendering twice is byte-identical, and arbitrary bytes may
-be rejected but never panic.
-
-## Platforms
-
-A tier is a promise about what CI does, not a sentiment.
-
-| Tier | Platforms | What that means |
-| --- | --- | --- |
-| **1** | Linux `x86_64`, `aarch64` (musl, static) | The reference platform. Full test suite plus a musl build and test on every change; release binaries; where behaviour is *defined* when platforms disagree. |
-| **2** | macOS `aarch64` / `x86_64`, Windows `x86_64` | Full test suite on every change; release binaries. Supported — a failure here is a bug, not a caveat. |
-| **3** | Everything else Rust targets | Builds from source. No CI, no binaries, best effort. |
-
-The whole end-to-end suite runs on every Tier 1 and Tier 2 platform. It drives
-the real binary from Rust rather than a shell, precisely so that "works on
-Windows" is something CI checks rather than something the README claims.
-
-Two things are genuinely platform-shaped, and both are documented where they
-bite: hook strings go through the platform shell (use the array form to avoid
-it), and `filename_max` defaults to the POSIX 255 bytes.
-
-## The format is specified
-
-The item format is written down as a [standalone specification](spec/README.md),
-not merely as whatever this program happens to do. A reader can be implemented
-from it without consulting cairn's source, and cairn is its reference
-implementation rather than its definition.
-
-That is deliberate. A backlog kept in a repository outlives the tool that wrote
-it, and somebody has to be able to read those files in ten years with whatever
-software exists then. It also means adopting the convention does not require
-adopting this program: anything that reads Markdown and YAML can read a cairn
-backlog.
-
-The corpus in [`tests/golden`](tests/golden) — which includes files cairn would
-never write, because those are what people and other tools produce — doubles as
-a conformance suite, and there is a second implementation to run against it.
-[`spec/reader.py`](spec/reader.py) is a short reader written from the
-specification alone, permissively licensed so it can be copied into anything,
-and CI checks that it and cairn agree on every case.
-
-That is not ceremony. Writing it found the specification saying scalars follow
-"YAML's own rules" without saying *which* YAML — and 1.1 and 1.2 disagree about
-`no` and `12:30`, two of the three examples the section itself gave. Two
-conforming readers could have reported different content for the same file.
+The [roadmap](ROADMAP.md) contains the selected work. The
+[assessment](cairn/items/0134-give-cairn-a-durable-direction-and-a-working-project-setup.md)
+records the evidence and tradeoffs. New scope should earn its maintenance cost:
+prefer a schema choice, a query, a hook, or an external reader when those solve
+the problem.
 
 ## The promise
-
-The specification above is a promise about the data. This is the promise about
-the project, written down now — while cairn has no users and nothing to sell,
-which is the only moment at which making it costs nothing.
 
 <!-- promise:begin -->
 cairn is free software under the MIT licence, and will remain so.
@@ -772,68 +272,23 @@ So cairn will never grow accounts, authentication, or remotes. The day that
 cairn login exists, this promise has been broken.
 <!-- promise:end -->
 
-It is not a promise never to charge for anything; it is a promise about where
-the line falls, and that the line does not move. The full reasoning, and what it
-means for feature requests, is in [PROMISE.md](PROMISE.md).
+The reasoning is in [PROMISE.md](PROMISE.md).
 
-## Prior art
-
-cairn is not the only tool in this space, and it is not always the right one.
-
-- [**git-bug**](https://github.com/git-bug/git-bug) stores issues as native git
-  objects rather than files in the worktree, and bridges to GitHub and GitLab.
-  Reach for it when you want issues that push and pull like branches, and do not
-  need a planning layer.
-- [**Backlog.md**](https://github.com/MrLesk/Backlog.md) is Markdown-native too,
-  with a web UI and an MCP server, and is a fine choice if you want a board more
-  than a schema.
-- [**todo.txt**](https://github.com/todotxt/todo.txt-cli) and
-  [**dstask**](https://github.com/naggie/dstask) are lighter, task-shaped, and
-  excellent when a roadmap is not what you are after.
-
-cairn's particular bet is the configurable schema and the generated roadmap: the
-structure is declared in one file, enforced by `check`, and rendered into
-something contributors can read.
-
-## The repository
-
-Laid out the way a GNU project is, so the files are where you expect:
-
-| | |
-| --- | --- |
-| `LICENSE` | The MIT licence |
-| `PROMISE.md` | What cairn will always do, and where its boundary is |
-| `AUTHORS` | Who has contributed |
-| `NEWS` | User-visible changes, newest first |
-| `README.md` | This tour |
-| `doc/cairn.texi` | The manual — `info cairn`, or `make html` |
-| `spec/README.md` | The item format, specified. Normative and standalone |
-| `www/` | The website — landing page and docs, built with Astro |
-| `CONTRIBUTING.md` | How to get started; the backlog is the guide |
-| `SECURITY.md` | How to report a vulnerability |
-| `doc/RELEASING.md` | The release checklist |
-| `cairn/items/` | The project's own roadmap, in cairn |
-| `ROADMAP.md` | Generated from it by `cairn render` |
-
-## Contributing
+## Development
 
 ```sh
-cargo test          # unit and end-to-end tests, on any platform
-make check          # the above plus fmt, clippy, and cairn's own roadmap
-make durability     # everything: contention, the long fuzz, every format
-make doc            # build the Info manual (needs texinfo)
+make check          # build, tests, formatting, lints, and the project's own backlog
+make durability     # also contention, long fuzzing, and independent conformance
+make doc            # Info manual; requires Texinfo
 ```
 
-`make check` is what a pull request must pass. It does not exercise concurrency
-— the soak tests are `#[ignore]` and the fuzz pass is short — so
-`make durability` is the one to run before a release, and after touching the
-lock, the write path, identifier allocation or the merge driver.
+See [CONTRIBUTING.md](CONTRIBUTING.md),
+[NEWS](NEWS), [release instructions](doc/RELEASING.md), and
+[SECURITY.md](SECURITY.md).
 
-cairn tracks its own roadmap in `cairn/items/`, so `cairn next` is the
-contribution guide: it shows what is ready to work on, and each item carries the
-reasoning that produced it. See [CONTRIBUTING.md](CONTRIBUTING.md).
+Related approaches include [git-bug](https://github.com/git-bug/git-bug),
+[Backlog.md](https://github.com/MrLesk/Backlog.md),
+[todo.txt](https://github.com/todotxt/todo.txt-cli), and
+[dstask](https://github.com/naggie/dstask).
 
-## License
-
-MIT. See [LICENSE](LICENSE), and
-[PROMISE.md](PROMISE.md) for what that is intended to mean in practice.
+MIT. See [LICENSE](LICENSE).

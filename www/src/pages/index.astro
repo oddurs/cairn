@@ -14,8 +14,8 @@ const guarantees = [
     body: "Every file is written beside its target, flushed, and renamed over it. A crash leaves the old contents or the new ones, never a mixture. There is a test that kills the program mid-write forty times.",
   },
   {
-    title: "Branches merge without a fight",
-    body: "Two branches that both add an item would conflict in the generated roadmap and collide on an identifier. Neither is a real conflict, so cairn teaches git to re-derive both instead.",
+    title: "Work travels with the branch",
+    body: "Review the item beside the code it describes. Git integration helps reconcile generated output and identifier collisions; conflicting decisions remain visible for a person to resolve.",
   },
   {
     title: "The format is specified",
@@ -23,32 +23,37 @@ const guarantees = [
   },
   {
     title: "Concurrent writers are safe",
-    body: "Mutating commands take a lock; reads never do. Forty processes creating items at once produce forty distinct identifiers, and twelve agents racing for one item produce exactly one owner.",
+    body: "Writers sharing an item directory take a lock. Forty processes creating items at once produce forty distinct identifiers. Separate branches and worktrees carry their own state, so assignments still need coordination.",
   },
 ];
 ---
 
 <Base
-  title="cairn — a roadmap that lives in your repository"
-  description="cairn keeps a project's roadmap and issues as Markdown files in the repository, under a schema you define, with tools that let coding agents work the backlog."
+  title="cairn — project memory, versioned with the code"
+  description="Intent, work, and decisions in plain Markdown. A schema you own, a shared workflow for people and agents, and Git carrying the history."
 >
   {/* The artefact is the argument: an item is a file, so lead with the file,
       read off disk rather than typed to look right. */}
   <Band first>
     <Grid cols={2} gap="8" min="26rem">
       <Stack gap="5">
-        <h1>Your backlog is a directory of Markdown files.</h1>
+        <h1>Project memory, versioned with the code.</h1>
         <Lede narrow>
-          cairn keeps a project's roadmap and issues in the repository itself,
-          under a schema you declare. Reviewable in the pull request that closes
-          them. Readable in ten years. No server, no account, no browser.
+          Keep intent, work, and decisions as Markdown in your repository,
+          under a schema you own. People and agents work the same record.
+          Git carries its history. No required server or account.
         </Lede>
         <div class="install">
           <pre><code>curl -fsSL https://raw.githubusercontent.com/oddurs/cairn/main/install.sh | sh</code></pre>
         </div>
         <p class="aside">
-          Or <code>brew tap oddurs/cairn &amp;&amp; brew install cairn</code>.
+          Or <code>brew tap oddurs/cairn &amp;&amp; brew trust oddurs/cairn &amp;&amp; brew install cairn</code>.
           Linux, macOS and Windows.
+        </p>
+        <p class="aside">
+          Use <a href="https://github.com/oddurs/harrow">Harrow</a> beside your
+          editor or agent to watch the work and decide what needs attention.
+          It reads the same files and makes changes through Cairn.
         </p>
         <p class="row">
           <Button href={`${base}/docs`}>Read the docs</Button>

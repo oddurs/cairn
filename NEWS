@@ -6,7 +6,20 @@ See the end of the file for copying conditions.
 Please send bug reports and suggestions through the project's issue tracker.
 
 
-* Noteworthy changes in release 0.2.2 (unreleased)
+* Noteworthy changes in release 0.2.2 (2026-09-23)
+
+** Companion compatibility
+
+Harrow 0.1.0 can read format-3 projects and the existing saved views. Its
+`closed_at` filtering is not yet compatible: use Cairn for completion-date
+queries until the companion contract work in v0.3 lands. A later edit changes
+`updated`, not `closed_at`; do not substitute one date for the other.
+
+** Bare initialization suggests a command that works
+
+`cairn init --bare` no longer suggests creating work under v0.1, which that
+mode deliberately does not create.  The next-command hint names a milestone
+only when initialization actually wrote the example milestones.
 
 ** `cairn set` no longer reports failure for a change it made
 

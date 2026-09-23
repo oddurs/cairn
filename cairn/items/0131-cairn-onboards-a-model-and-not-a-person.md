@@ -1,13 +1,15 @@
 ---
 id: 131
 title: cairn onboards a model and not a person
-type: feature
-status: backlog
-milestone: v1.0
+type: decision
+status: done
+milestone: v0.3
+assignee: codex
 created: 2026-09-19
-updated: 2026-09-19
+updated: 2026-09-23
+closed_at: 2026-09-23
 priority: p2
-area: cli
+area: docs
 effort: s
 ---
 
@@ -62,5 +64,9 @@ worthless for the other.
 
 ## Acceptance criteria
 
-- [ ] Decided, either way, with the reasoning written down
-- [ ] If nothing is built, this item says why, and says it well enough that it is not reopened
+- [x] Decided, either way, with the reasoning written down
+- [x] If nothing is built, this item says why, and says it well enough that it is not reopened
+
+## 2026-09-23
+
+Decision in 0134: do not add a human-mode generator or a new command. The missing pieces were discovery and this project's conventions. README now points contributors to the approved queue and Harrow; CONTRIBUTING defines statuses, views, priorities, the scoped claim command, and clone setup. cairn config remains the live vocabulary reference. Generated agent instructions are still refreshed from the schema. This solves the observed onboarding gap without duplicating human prose in another generated block.

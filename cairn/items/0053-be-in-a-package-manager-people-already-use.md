@@ -3,13 +3,14 @@ id: 53
 title: Be in a package manager people already use
 type: chore
 status: backlog
-milestone: v1.0
-labels:
-- blocked-on-a-release
+milestone: later
+depends_on:
+- 1
 created: 2026-09-05
-updated: 2026-09-06
-priority: p0
+updated: 2026-09-23
+priority: p3
 effort: l
+area: distribution
 ---
 
 ## Problem
@@ -62,3 +63,7 @@ verify either, and this item's own criterion is that each path is verified by
 installing on a machine that has never built cairn.
 
 So: `0001` first, then a release, then these.
+
+## 2026-09-23
+
+Assessment 0134: releases now exist, so the label blocked-on-a-release is stale. Additional package ecosystems are optional reach, not the product's next outcome. The existing all-three criterion still includes crates.io, hence the explicit dependency on 0001. Re-scope with an actual downstream maintainer or user before doing packaging work.

@@ -35,15 +35,15 @@ cairn render                      # regenerate ROADMAP.md
 
 ### Schema
 
-- **Types**: `feature`, `bug`, `chore`, `docs`, `milestone`
-- **Statuses**: `backlog` (open), `planned` (open), `doing` (active), `blocked` (active), `done` (done), `dropped` (dropped)
-- **`priority`**: one of p0, p1, p2, p3 — p0 is a release blocker
+- **Types**: `feature`, `bug`, `chore`, `docs`, `decision`, `milestone`
+- **Statuses**: `backlog` (open), `planned` (open), `doing` (active), `blocked` (open), `done` (done), `dropped` (dropped)
+- **`priority`**: one of p0, p1, p2, p3 — p0: data loss or broken core workflow; p1: next outcome; p2: useful; p3: optional
 - **`effort`**: one of s, m, l, xl — Rough size, not an estimate
-- **`sprint`**: one of s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12 — Durability sprint; see ROADMAP.md
-- **`area`**: free text — Subsystem this touches
-- **`due`**: date, YYYY-MM-DD — when a milestone is meant to land
-- **Milestones**: `v0.1` (due 2026-10-15), `v0.2` (due 2026-12-01), `v1.0` (due 2027-03-01), `later`
-- **Saved views** (`cairn list --view NAME`): `now`, `next`, `sprint`, `triage`
+- **`sprint`**: one of s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12 — Historical durability sprint; retained for old items, not assigned to new work
+- **`area`**: free text — Subsystem: workflow, git, format, integration, cli, docs, distribution, or direction
+- **`due`**: date, YYYY-MM-DD — A committed date, YYYY-MM-DD; leave unset when the release is gated by evidence
+- **Milestones**: `v0.1`, `v0.2`, `v0.3`, `v1.0`, `later`
+- **Saved views** (`cairn list --view NAME`): `now`, `next`, `waiting`, `dependencies`, `triage`, `later`, `decisions`, `history`
 
 ### Rules
 
@@ -53,3 +53,37 @@ cairn render                      # regenerate ROADMAP.md
 4. `cairn check` must pass before the work is considered done.
 
 <!-- cairn:end -->
+
+## Working on Cairn itself
+
+The assessment and direction are in item 0134; decision 0142 records the product
+boundary. Cairn is project memory versioned with the code, and Harrow is its
+terminal counterpart. Prefer schema, queries, hooks, and the documented format
+before adding another core capability.
+
+The generated loop above describes generic dependency readiness. In this
+repository, autonomous selection must use the approved queue:
+
+```sh
+cairn list --view next
+cairn claim --next --filter 'status=planned'
+```
+
+Explicit user assignments can be claimed directly. Resume your existing claim
+before taking another item. Keep at most three engineering items planned, and
+one active item per worker. `backlog` and `later` are not instructions to build;
+`blocked` means a recorded external wait, while the `blocked` query field means
+unfinished dependencies. See CONTRIBUTING.md for the full local workflow.
+
+Set `CAIRN_AGENT` and an explicit working identity. Search finished and dropped
+items with `cairn search --all` before proposing work. Keep reasoning and
+verification evidence in the item; tick only what has been established.
+
+Claims coordinate one item directory, not separate worktrees or clones.
+Coordinate assignments before splitting work and review item changes with code.
+Changing Harrow belongs in its own repository and tracked item.
+
+Run `make check` before handing off code or project changes. Touching the lock,
+write path, identifiers, or merge driver also requires `make durability`.
+After changing the schema, regenerate this block with `cairn agent --write
+AGENTS.md`, run `cairn render`, and finish with `cairn check --render --strict`.

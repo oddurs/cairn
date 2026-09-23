@@ -75,6 +75,15 @@ terms of the MIT licence, the same terms cairn itself is offered under. See the
 @chapter Introduction
 
 @cindex philosophy
+Project memory, versioned with the code. cairn keeps intent, work, decisions,
+and the evidence behind them in ordinary Markdown under a project-owned schema.
+Git carries history, branches, review, and distribution.
+
+@uref{https://github.com/oddurs/harrow, Harrow} is the terminal counterpart:
+it watches and reads the same files, and delegates changes to cairn. Agents
+use the CLI, JSON, or MCP interface. Neither interface needs a separate store
+of project state.
+
 Roadmaps rot because they live somewhere the work does not. A @file{ROADMAP.md}
 maintained by hand drifts from reality within a month. An issue tracker on
 another website is invisible from the terminal, unavailable offline, and cannot
@@ -82,8 +91,9 @@ be reviewed alongside the change that closes it.
 
 cairn takes the position that project state is source. Every item is a plain
 Markdown file with YAML frontmatter, stored in the repository, versioned with
-the code. There is no server, no account, and no network access of any kind;
-the only program cairn ever starts is your editor, and any hooks you configure.
+the code. There is no required server or account. Local work is offline;
+optional forge adapters invoke tools such as @command{gh}. Editors, hooks,
+and Git are ordinary programs cairn invokes when the requested task needs them.
 
 @cindex schema
 What distinguishes cairn from a directory of notes is the schema. A single
@@ -105,10 +115,10 @@ know when it is done --- it lives with the code it describes, and it is worth
 @emph{more} after it closes than before, because it is then the answer to why
 something is the way it is.
 
-That is true of an architecture decision record and false of a ticket. A ticket
-points at a conversation that happened somewhere else, and is worthless the
-moment it is closed. Scheduling --- statuses, milestones, what is ready to start
---- exists here to make the record actionable, not the other way round.
+Small tasks and architecture decisions can both carry useful reasoning. The
+record should explain enough that a later reader can recover the decision
+without its original conversation. Scheduling --- statuses, milestones, what
+is ready to start --- makes that record actionable.
 
 @subsection What follows from it
 
@@ -472,7 +482,8 @@ A line containing exactly @samp{---} or @samp{...} after trailing whitespace is
 removed, the @dfn{closing delimiter}. The @emph{first} such line ends the
 frontmatter; later ones are body text.
 @item
-The @dfn{body}, which is arbitrary text and is never interpreted.
+The @dfn{body}, which is arbitrary text. Its meaning is outside the file-format
+contract; project conventions may interpret acceptance criteria or proposals.
 @end enumerate
 
 A file that does not begin with an opening delimiter, or that has no closing
@@ -1010,17 +1021,19 @@ created cairn/items/
 @end example
 
 @noindent
-@option{--preset minimal} starts from three statuses and nothing else;
-the default, @option{--preset standard}, writes a fully commented schema to
-delete from. Then:
+@option{--preset minimal} starts from three statuses and a milestone type;
+@option{--bare} omits example items and milestones. The default,
+@option{--preset standard}, writes a fully commented schema to adapt. In a
+fresh standard project, the examples occupy identifiers 1 through 4, so the
+next item is 5:
 
 @example
 $ cairn new "Support OAuth login" --type feature --milestone v0.1
-created 0001  Support OAuth login
-$ cairn set 1 status=doing
+created 0005  Support OAuth login
+$ cairn set 5 status=doing
 $ cairn board
 $ cairn render
-wrote ROADMAP.md  1 items
+wrote ROADMAP.md  5 items
 @end example
 
 @noindent
@@ -1777,7 +1790,7 @@ else.
 
 @item MCP tool names and schemas
 @cindex Model Context Protocol
-The eleven tools, their names and their arguments. Arguments may be added.
+The documented tools, their names and their arguments. Arguments may be added.
 Removing a tool, or an argument, is a major release.
 
 @item The interchange document

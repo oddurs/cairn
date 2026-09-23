@@ -2,14 +2,16 @@
 id: 52
 title: Sign releases and ship a source tarball
 type: chore
-status: backlog
+status: blocked
 milestone: v1.0
+owner: oddurs
 labels:
 - needs-a-key
 created: 2026-09-05
-updated: 2026-09-06
-priority: p0
+updated: 2026-09-23
+priority: p2
 effort: m
+area: distribution
 ---
 
 ## Problem
@@ -70,3 +72,7 @@ nobody has established and which it would be worse to imply.
   fingerprint distributed alongside the thing it signs proves nothing.
 - Verifying by hand from a machine that did not build it, which cannot be done
   until a release has been made with a key in place.
+
+## 2026-09-23
+
+Assessment 0134: source archives and provenance are implemented; detached signing and its independent verification remain unfulfilled. Keep this as an explicit maintainer decision before 1.0, not a p0 coding task. Choose and document the long-term verification policy before generating a key. Do not count unverified signatures as completed.

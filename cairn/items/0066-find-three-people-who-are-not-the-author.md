@@ -2,12 +2,13 @@
 id: 66
 title: Find three people who are not the author
 type: chore
-status: backlog
-milestone: v0.1
+status: blocked
+milestone: v1.0
+owner: oddurs
 created: 2026-09-06
-updated: 2026-09-06
-priority: p0
-sprint: s7
+updated: 2026-09-23
+priority: p1
+area: workflow
 effort: m
 ---
 
@@ -54,4 +55,8 @@ rather than depending on their mood.
 - [ ] What each did in their first hour is written down
 - [ ] Everything learned is filed, including anything that contradicts the
       current roadmap
-- [ ] The two-features rule is in CONTRIBUTING
+- [x] The two-features rule is in CONTRIBUTING
+
+## 2026-09-23
+
+Assessment 0134: the author's weeks of daily use are real evidence and supersede the original claim that nobody uses the tool. Independent feedback remains valuable. Recruitment is a human task; waiting here means finding three willing outside projects, not waiting for more features. The two-feature pause is now stated in CONTRIBUTING. Record observations and follow-up items; do not contact anyone automatically.
