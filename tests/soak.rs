@@ -25,7 +25,7 @@ struct Soak {
     rng: Rng,
     /// What the sequence of operations says should be true, kept alongside what
     /// cairn believes so the two can be compared.
-    expected: BTreeMap<u32, String>,
+    expected: BTreeMap<uuid::Uuid, String>,
 }
 
 impl Soak {
@@ -51,12 +51,22 @@ impl Soak {
         out
     }
 
-    fn ids(&self) -> Vec<u32> {
-        self.expect(&["list", "-A", "--ids"])
-            .lines()
+    fn ids(&self) -> Vec<uuid::Uuid> {
+        self.expect(&["list", "-A", "--json"])
+            .json()
+            .as_array()
+            .unwrap()
             .iter()
-            .filter_map(|l| l.trim().trim_start_matches('0').parse().ok())
+            .map(|item| item["id"].as_str().unwrap().parse().unwrap())
             .collect()
+    }
+
+    fn full_id(&self, reference: &str) -> uuid::Uuid {
+        self.expect(&["show", reference, "--json"]).json()["id"]
+            .as_str()
+            .expect("full UUID string")
+            .parse()
+            .expect("UUID")
     }
 }
 
@@ -100,7 +110,7 @@ fn a_long_sequence_of_ordinary_use_leaves_the_backlog_intact() {
             (0..=24, _) | (_, None) => {
                 let title = format!("Item created at step {step}");
                 let out = s.expect(&["new", &title, "-q"]);
-                let id: u32 = out.stdout.trim().parse().expect("an id");
+                let id = s.full_id(out.stdout.trim());
                 s.expected.insert(id, "backlog".into());
                 "new"
             }
@@ -130,9 +140,8 @@ fn a_long_sequence_of_ordinary_use_leaves_the_backlog_intact() {
                 // when everything ready is already taken or finished.
                 let out = s.run(&["claim", "--next", "-q"]);
                 if out.code == 0 {
-                    if let Ok(id) = out.stdout.trim().parse::<u32>() {
-                        s.expected.insert(id, "doing".into());
-                    }
+                    let id = s.full_id(out.stdout.trim());
+                    s.expected.insert(id, "doing".into());
                 } else {
                     assert!(
                         out.stderr.contains("nothing unclaimed"),
@@ -154,7 +163,7 @@ fn a_long_sequence_of_ordinary_use_leaves_the_backlog_intact() {
             }
             (85..=89, Some(id)) => {
                 // A dependency on another live item, never on itself.
-                let others: Vec<u32> = live.iter().copied().filter(|o| *o != id).collect();
+                let others: Vec<uuid::Uuid> = live.iter().copied().filter(|o| *o != id).collect();
                 if let Some(dep) = s.rng.pick(&others).copied() {
                     s.run(&["set", &id.to_string(), &format!("depends_on+={dep}"), "-q"]);
                 }
@@ -172,9 +181,8 @@ fn a_long_sequence_of_ordinary_use_leaves_the_backlog_intact() {
             }
             (95..=97, _) => {
                 s.expect(&["renumber"]);
-                // Identifiers may have moved; the model is keyed by them, so it
-                // is rebuilt from what cairn now reports.
-                s.expected = current_state(&s);
+                // Immutable IDs and status must remain exactly unchanged.
+                assert_eq!(current_state(&s), s.expected);
                 "renumber"
             }
             (98, _) => {
@@ -216,7 +224,7 @@ fn a_long_sequence_of_ordinary_use_leaves_the_backlog_intact() {
                     let existing = s.expect(&["list", "-A", "-t", "milestone", "--json"]);
                     if !existing.stdout.contains(&format!("\"{name}\"")) {
                         let out = s.expect(&["new", &name, "-t", "milestone", "-q"]);
-                        let m: u32 = out.stdout.trim().parse().expect("an id");
+                        let m = s.full_id(out.stdout.trim());
                         s.expect(&["set", &m.to_string(), &format!("key={name}"), "-q"]);
                         s.expected.insert(m, "backlog".into());
                     }
@@ -237,7 +245,7 @@ fn a_long_sequence_of_ordinary_use_leaves_the_backlog_intact() {
                     "--body",
                     body,
                 ]);
-                let id: u32 = out.stdout.trim().parse().expect("an id");
+                let id = s.full_id(out.stdout.trim());
                 s.expected.insert(id, "backlog".into());
 
                 s.expect(&["tick", &id.to_string(), "--all", "-q"]);
@@ -330,8 +338,8 @@ fn a_long_sequence_of_ordinary_use_leaves_the_backlog_intact() {
                 mirror.project.write("in.json", &doc);
                 mirror.expect(&["import", "--from", "json", "in.json", "-q"]);
                 assert_eq!(
-                    mirror.ids().len(),
-                    s.ids().len(),
+                    mirror.ids(),
+                    s.ids(),
                     "an export/import round trip lost items"
                 );
                 mirror.expect(&["check"]);
@@ -382,10 +390,8 @@ fn a_long_sequence_of_ordinary_use_leaves_the_backlog_intact() {
 
 /// Two processes writing at once.
 ///
-/// Identifiers are allocated as one more than the highest in use, which is only
-/// safe because a lock makes the read and the write one step. The unit tests
-/// race the lock directly; this races it through ordinary commands, which is
-/// how it is actually reached.
+/// UUIDs need no shared allocator. Local writes still take a lock so schema,
+/// references, and atomic file replacement remain coherent under contention.
 #[test]
 #[ignore = "long-running; run with --ignored"]
 fn concurrent_writers_leave_one_consistent_backlog() {
@@ -429,10 +435,16 @@ fn concurrent_writers_leave_one_consistent_backlog() {
                     "writer {writer} could not create an item: {}",
                     String::from_utf8_lossy(&out.stderr)
                 );
-                let id: u32 = String::from_utf8_lossy(&out.stdout)
-                    .trim()
-                    .parse()
-                    .expect("an id");
+                let reference = String::from_utf8_lossy(&out.stdout).trim().to_owned();
+                let shown = Command::new(env!("CARGO_BIN_EXE_cairn"))
+                    .args(["show", &reference, "--json"])
+                    .current_dir(&root)
+                    .env("NO_COLOR", "1")
+                    .output()
+                    .expect("reading created identity");
+                assert!(shown.status.success());
+                let item: serde_json::Value = serde_json::from_slice(&shown.stdout).unwrap();
+                let id: uuid::Uuid = item["id"].as_str().unwrap().parse().unwrap();
                 made.push(id);
 
                 // And a write to an item this writer owns, so the lock is
@@ -456,13 +468,13 @@ fn concurrent_writers_leave_one_consistent_backlog() {
         }));
     }
 
-    let mut allocated: Vec<u32> = Vec::new();
+    let mut allocated: Vec<uuid::Uuid> = Vec::new();
     for t in threads {
         allocated.extend(t.join().expect("a writer panicked"));
     }
 
     // The property that matters: no two commands were handed the same id.
-    let unique: std::collections::HashSet<u32> = allocated.iter().copied().collect();
+    let unique: std::collections::HashSet<uuid::Uuid> = allocated.iter().copied().collect();
     assert_eq!(
         unique.len(),
         allocated.len(),
@@ -488,7 +500,7 @@ fn concurrent_writers_leave_one_consistent_backlog() {
 
 /// Read the backlog through the machine interface, which reports status names
 /// rather than the labels a person is shown.
-fn current_state(s: &Soak) -> BTreeMap<u32, String> {
+fn current_state(s: &Soak) -> BTreeMap<uuid::Uuid, String> {
     let rows = s.expect(&["list", "-A", "--json"]);
     let items: serde_json::Value = serde_json::from_str(&rows.stdout).expect("json");
     items
@@ -497,7 +509,7 @@ fn current_state(s: &Soak) -> BTreeMap<u32, String> {
         .iter()
         .map(|i| {
             (
-                i["id"].as_u64().expect("id") as u32,
+                i["id"].as_str().expect("full UUID").parse().expect("UUID"),
                 i["status"].as_str().expect("status").to_string(),
             )
         })

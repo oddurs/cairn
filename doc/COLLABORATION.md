@@ -19,7 +19,7 @@ Resume your claim before selecting another. When handing off, record what the
 next worker needs and make that change available to them:
 
 ```sh
-cairn release 42 --status planned --reason "Reproduction is in tests/example.rs; Windows still needs checking."
+cairn release <ID> --status planned --reason "Reproduction is in tests/example.rs; Windows still needs checking."
 ```
 
 `planned` and `next` here are project conventions. Use your own schema/view.
@@ -44,60 +44,73 @@ Git's [path resolution](https://git-scm.com/docs/git-worktree#_details) handles
 the shared/private directory distinction. A tracked `.gitattributes` declares
 intent, but cannot install an executable merge driver in another person's clone.
 
-## Merge, repair, review
+## Merge and review
 
-A successful local merge runs the installed post-merge hook. It repairs
-duplicate numeric identifiers and regenerates the roadmap. Changes are left
-uncommitted and unstaged. Review them; Cairn never amends a merge commit for you.
+Format 4 allocates random UUIDv4 identities. Two branches can create items
+independently: their IDs and references stay unchanged when Git merges them.
+There is no central allocator, timestamp dependency, or per-branch counter.
 
-Renumbering cannot infer what a duplicated reference meant. If both branches
-created item 42, a later `depends_on: [42]` could refer to either one. The
-retained item keeps 42; **references are not automatically retargeted**.
-Compare each branch's item additions against the merge base and the reported
-renumber mapping. Restore the intended references with `cairn set`:
+The installed post-merge hook regenerates the roadmap after the item merge.
+It still invokes `renumber` for compatibility, but that command changes no
+UUID and retains migrated filenames. Changes remain unstaged and uncommitted.
+
+Sequence additions merge by ancestor-aware union; removals stay removed.
+Conflicting scalar values and body edits stay ordinary Git conflicts. Resolve
+the intended meaning, then validate:
 
 ```sh
-cairn renumber --dry-run
-cairn renumber
-cairn set 57 depends_on=56
 cairn render
 cairn check --render --strict
 git diff
 ```
 
-The IDs above are illustrative: use the actual old/new mapping. Review every
-id-valued reference field, not only `depends_on`, plus prose links and commit
-messages. Key-addressed references are a separate namespace; do not rewrite
-them merely because a numeric ID moved. Validation detects structural problems,
-not a valid reference to the wrong idea. Commit the reviewed repair explicitly.
-
-Scalar conflicts and ambiguous edits stay ordinary Git conflicts. After
-resolving one, run the same repair/validation sequence; `post-merge` is not
-called for a merge that stopped with conflicts.
+A manually duplicated UUID is an error. Determine whether the files are two
+copies of one item or genuinely different work; do not blindly give one a new
+ID and leave its incoming references pointing at the other copy.
 
 ## Rebase, cherry-pick, and forge merges
 
-These do not run Cairn's post-merge repair. Git may apply item files cleanly yet
-leave duplicated IDs or a stale generated roadmap. After the operation finishes,
-run `renumber --dry-run`, inspect, `renumber`, audit references, `render`, and
-`check --render --strict`. Commit the resulting repair. Do not install automatic
-commit rewriting or assume that a clean Git status proves valid Cairn data.
+These operations do not run the successful local merge's post-merge hook.
+Independent UUID creation needs no repair, but the generated roadmap may be
+stale and conflicting edits still need review. Run `render` and
+`check --render --strict` after the operation. Commit resulting changes
+explicitly. CI should run the same validation.
 
-Git documents the [limited post-merge hook](https://git-scm.com/docs/githooks#_post_merge).
-Repository CI should run `cairn check --render --strict`, since a forge merge
-cannot run your local hook.
+Git documents the [post-merge hook's scope](https://git-scm.com/docs/githooks#_post_merge).
+A clean Git status is not validation of the backlog.
+
+## Migrate an existing project once
+
+Upgrade Cairn and its readers, back up the complete project, and stop concurrent
+writers. Preview with `cairn migrate --dry-run`, then run `cairn migrate`.
+Review and commit the config, item frontmatter, and `_legacy-ids.toml`
+together. Migration keeps filenames and body bytes; Git history is not rewritten.
+
+Carry this single migration commit to other branches. Independently migrating
+the same old numeric backlog produces different UUID maps and is not supported.
+First reconcile legacy branches with the old writer, or replay their work
+deliberately against the migrated baseline.
+
+Old numbers remain lookup aliases, including their old prefix rendering.
+New items get no numeric aliases; deleting an item never recycles its alias.
+Keep the map tracked: it also lets history comparisons bridge the migration.
+
+If interrupted, rerun `cairn migrate`. The saved
+`.identity-migration.json` plan is checked against disk before resuming;
+intervening edits are refused. Do not delete that plan to force normal writes.
+To roll back, restore the entire pre-migration backup, not only `cairn.toml`.
 
 ## Review the decision and the code together
 
 ```sh
 cairn log --range main..HEAD
-cairn log 42 --patch
+cairn log <ID> --patch
 git diff main...HEAD
-cairn show 42
+cairn show <ID>
 ```
 
 Use the actual base branch. The item says why, the code shows how, and the
 acceptance criteria say what was verified. History remains ordinary Git history.
 Executable examples live in `tests/collaboration.rs`: local exclusion,
 committed handoff, independent worktree claims, clone setup, hook paths, branch
-collisions with reference repair, rebase, cherry-pick, and review.
+creation without renumbering, rebase, cherry-pick, and review.

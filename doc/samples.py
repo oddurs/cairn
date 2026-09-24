@@ -15,6 +15,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from recording import identity, populate
 
 SGR = re.compile(r"\x1b\[([0-9;]*)m")
 
@@ -75,21 +76,8 @@ def main():
         return (p.stdout + p.stderr).rstrip("\n")
 
     # A project with enough shape to be worth looking at.
-    setup = [
-        'cairn init --name Nimbus --bare',
-        # Milestones are items in format 2, and come first so the roadmap has
-        # something to be about.
-        'cairn new "First usable version" -t milestone --set key=v0.1 --set due=2026-12-01 -q',
-        'cairn new "Hardening" -t milestone --set key=v0.2 --set due=2027-02-01 -q',
-        'cairn new "Support OAuth login" -t feature -m v0.1 --set priority=p0 -q',
-        'cairn new "Rate-limit the public API" -t feature -m v0.2 --set priority=p1 -d 1 -q',
-        'cairn new "Board shears on narrow terminals" -t bug -m v0.1 --set priority=p1 -q',
-        'cairn new "Document the export format" -t docs -m v0.2 --set priority=p2 -q',
-        'cairn set 3 status=doing -q',
-        'cairn set 5 status=planned -q',
-    ]
-    for line in setup:
-        run(line)
+    run('cairn init --name Nimbus --bare')
+    populate(cairn, work, env, extended=True)
 
     samples = {
         "next": {"cmd": "cairn next", "text": run("cairn next")},
@@ -99,10 +87,11 @@ def main():
     }
 
     # The file an item actually is, straight off disk.
-    item = os.path.join(work, "cairn", "items", "0003-support-oauth-login.md")
+    item_path = f"cairn/items/{identity(3)}-support-oauth-login.md"
+    item = os.path.join(work, item_path)
     with open(item, encoding="utf-8") as f:
         samples["item"] = {
-            "path": "cairn/items/0003-support-oauth-login.md",
+            "path": item_path,
             "html": esc(f.read().rstrip("\n")),
         }
 
@@ -111,13 +100,13 @@ def main():
     request = json.dumps({
         "jsonrpc": "2.0", "id": 1, "method": "tools/call",
         "params": {"name": "update_item",
-                   "arguments": {"id": 3, "fields": {"status": "in progress"}}},
+                   "arguments": {"id": identity(3), "fields": {"status": "in progress"}}},
     })
     proc = subprocess.run([cairn, "mcp"], input=request + "\n", cwd=work,
                           env=env, capture_output=True, text=True)
     reply = json.loads(proc.stdout.strip().splitlines()[-1])
     detail = reply["result"]["content"][0]["text"]
-    call = 'update_item {"id": 3, "fields": {"status": "in progress"}}'
+    call = 'update_item ' + json.dumps({"id": identity(3), "fields": {"status": "in progress"}})
     samples["mcp"] = {
         "cmd": "cairn mcp",
         "html": (
@@ -128,8 +117,8 @@ def main():
     }
 
     # A failure, because the errors are half the argument.
-    with open(os.path.join(work, "cairn", "items", "0009-bad.md"), "w") as f:
-        f.write("---\nid: 9\ntitle: Bad\nstatus: nope\n---\n")
+    with open(os.path.join(work, "cairn", "items", f"{identity(9)}-bad.md"), "w") as f:
+        f.write(f"---\nid: {identity(9)}\ntitle: Bad\nstatus: nope\n---\n")
     samples["check"] = {"cmd": "cairn check", "text": run("cairn check", must_pass=False)}
 
     for s in samples.values():

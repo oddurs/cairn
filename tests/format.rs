@@ -25,7 +25,7 @@ fn export_produces_a_self_describing_document() {
     // Four items: three of work and the milestone they are scheduled against.
     // A milestone is an item, so it travels with them.
     let doc = p.json(&["export"]);
-    assert_eq!(doc["cairn"], "1", "the format is versioned");
+    assert_eq!(doc["cairn"], "2", "the format is versioned");
     assert!(
         doc["schema"].is_object(),
         "the schema travels with the items"
@@ -61,8 +61,8 @@ fn foreign_receiver() -> Project {
 #[test]
 fn import_maps_by_category_not_by_name() {
     let source = seeded();
-    source.expect(&["close", "2", "-q"]);
-    source.expect(&["set", "3", "status=doing", "-q"]);
+    source.expect(&["close", &source.id(2), "-q"]);
+    source.expect(&["set", &source.id(3), "status=doing", "-q"]);
     let doc = source.expect(&["export"]).stdout;
 
     let recv = foreign_receiver();
@@ -255,7 +255,7 @@ fn the_golden_corpus_still_parses_the_way_it_always_has() {
         let expected: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(&expected_path).unwrap())
                 .unwrap_or_else(|e| panic!("{}: {e}", expected_path.display()));
-        let id = expected["id"].as_u64().unwrap().to_string();
+        let id = expected["id"].as_str().unwrap().to_string();
 
         let mut actual = p.json(&["show", &id, "--json"]);
         // The only thing allowed to differ is where the file happens to live.
@@ -303,7 +303,7 @@ fn the_golden_corpus_is_valid_against_a_default_schema() {
 #[test]
 fn a_project_from_a_newer_cairn_is_refused_not_misread() {
     let p = Project::new();
-    let toml = p.read("cairn.toml").replace("format = 3", "format = 99");
+    let toml = p.read("cairn.toml").replace("format = 4", "format = 99");
     p.write("cairn.toml", &toml);
     let out = p.fails(&["list"]);
     assert_contains(&out.all(), "format 99", "the format it found");
@@ -332,7 +332,7 @@ fn a_project_without_a_format_key_is_refused_and_told_what_to_run() {
     assert_contains(&out.all(), "cairn migrate", "and what to do about it");
 
     p.expect(&["migrate"]);
-    p.expect(&["new", "Now fine", "-q"]);
+    p.add("Now fine", &[]);
 }
 
 #[test]
@@ -356,13 +356,13 @@ fn unknown_frontmatter_keys_survive_being_rewritten() {
     // The guarantee that lets an older cairn open a newer project without
     // quietly deleting what it did not understand.
     let p = Project::new();
-    p.write(
+    p.write_uuid_fixture(
         "cairn/items/0001-later.md",
         "---\nid: 1\ntitle: Later\nstatus: backlog\nfrom_the_future: keep me\n---\n\nBody.\n",
     );
-    p.expect(&["set", "1", "status=doing", "-q"]);
+    p.expect(&["set", &p.id(1), "status=doing", "-q"]);
     assert_contains(
-        &p.read("cairn/items/0001-later.md"),
+        &p.item_file(&p.id(1)),
         "from_the_future: keep me",
         "an unrecognised key was preserved",
     );
@@ -396,7 +396,7 @@ fn plain_output_reports_names_and_the_table_reports_labels() {
     // The table is for a person, so it shows the label the schema declared.
     let p = Project::new();
     p.add("Something", &[]);
-    p.expect(&["set", "1", "status=doing", "-q"]);
+    p.expect(&["set", &p.id(1), "status=doing", "-q"]);
 
     let plain = p
         .expect(&["list", "--plain", "--columns", "status"])
@@ -413,7 +413,7 @@ fn plain_output_reports_names_and_the_table_reports_labels() {
 /// naming them by the same string they use today.
 fn format_one() -> Project {
     let p = Project::new();
-    let cfg = p.read("cairn.toml").replace("format = 3", "format = 1")
+    let cfg = p.read("cairn.toml").replace("format = 4", "format = 1")
         + "\n[[milestone]]\nname = \"v0.1\"\ntitle = \"First\"\ndue = \"2026-12-01\"\n\
            description = \"The first one.\"\n\n[[milestone]]\nname = \"later\"\n\
            title = \"Someday\"\n";
@@ -508,7 +508,7 @@ fn an_older_project_refuses_writes_and_says_what_to_run() {
 
     // And migrating is the one write that is allowed.
     p.expect(&["migrate"]);
-    p.expect(&["new", "Now allowed", "-q"]);
+    p.add("Now allowed", &[]);
 }
 
 /// The notice goes to standard error, so a script reading `--json` is
@@ -535,7 +535,7 @@ fn a_newer_project_is_still_refused_outright() {
     let p = Project::new();
     p.write(
         "cairn.toml",
-        &p.read("cairn.toml").replace("format = 3", "format = 99"),
+        &p.read("cairn.toml").replace("format = 4", "format = 99"),
     );
 
     let out = p.fails(&["list"]);
@@ -565,6 +565,13 @@ fn every_format_that_has_existed_still_parses() {
         formats += 1;
 
         let p = Project::new();
+        p.write(
+            "cairn.toml",
+            &p.read("cairn.toml").replace(
+                "format = 4",
+                &format!("format = {}", name.trim_start_matches("format-")),
+            ),
+        );
         let mut cases = 0;
         for f in std::fs::read_dir(&dir).expect("format directory").flatten() {
             let path = f.path();
@@ -634,6 +641,7 @@ fn the_frozen_corpora_have_not_been_edited() {
     let recorded = [
         ("format-1", 0x453d_19cd_d0fa_398a_u64),
         ("format-2", 0x0504_26ce_0b59_ae48_u64),
+        ("format-3", 0x9f2b_a900_0266_fdf0_u64),
     ];
 
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden");
@@ -685,54 +693,49 @@ fn the_frozen_corpora_have_not_been_edited() {
 /// carries it to the present without changing what it means, which is the only
 /// reason a format number is allowed to move at all.
 #[test]
-fn migrating_an_older_corpus_produces_the_current_expectations() {
-    let golden = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden");
+fn migrating_an_older_corpus_preserves_every_value_except_identity() {
+    let golden = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden/format-1");
     let p = format_one();
-    // The corpus supplies every item; the seed's would collide on id.
     for f in std::fs::read_dir(p.path("cairn/items")).unwrap().flatten() {
         std::fs::remove_file(f.path()).unwrap();
     }
-
     let mut cases = Vec::new();
-    for f in std::fs::read_dir(golden.join("format-1"))
-        .expect("format-1")
-        .flatten()
-    {
+    for f in std::fs::read_dir(&golden).unwrap().flatten() {
         let path = f.path();
         if path.extension().is_some_and(|e| e == "md")
             && path.file_name().is_some_and(|n| n != "README.md")
         {
             let file = path.file_name().unwrap().to_string_lossy().to_string();
             std::fs::copy(&path, p.path(&format!("cairn/items/{file}"))).unwrap();
-            cases.push(file);
+            cases.push(path.with_extension("json"));
         }
     }
     assert!(!cases.is_empty());
-
     p.expect(&["migrate"]);
-
-    let doc: serde_json::Value = serde_json::from_str(&p.expect(&["export"]).stdout).expect("JSON");
-    let items = doc["items"].as_array().expect("an array");
-
     for case in cases {
-        // The expectation as the *current* corpus states it, not the frozen one.
-        let expected: serde_json::Value = serde_json::from_str(
-            &std::fs::read_to_string(golden.join(case.replace(".md", ".json"))).unwrap(),
-        )
-        .unwrap();
-        let id = expected["id"].as_u64().expect("an id");
-        let got = items
-            .iter()
-            .find(|i| i["id"] == id)
-            .unwrap_or_else(|| panic!("{case}: item {id} did not survive the migration"));
-
-        for (key, want) in expected.as_object().expect("an object") {
-            // `category` and `ref` come from the schema, not the file.
-            if key == "category" || key == "ref" {
+        let expected: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&case).unwrap()).unwrap();
+        let old_id = expected["id"].as_u64().unwrap().to_string();
+        let got = p.json(&["show", &old_id, "--json"]);
+        assert_eq!(
+            uuid::Uuid::parse_str(got["id"].as_str().unwrap())
+                .unwrap()
+                .get_version_num(),
+            4
+        );
+        for (key, want) in expected.as_object().unwrap() {
+            if ["category", "ref", "id", "depends_on"].contains(&key.as_str()) {
                 continue;
             }
-            assert_eq!(&got[key], want, "{case}: `{key}` changed in the migration");
+            assert_eq!(&got[key], want, "{}: {key} changed", case.display());
         }
+        let deps: Vec<_> = expected["depends_on"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|dep| p.json(&["show", &dep.to_string(), "--json"])["id"].clone())
+            .collect();
+        assert_eq!(got["depends_on"], serde_json::json!(deps));
     }
 }
 
@@ -780,14 +783,11 @@ fn a_dry_run_says_what_it_will_touch_in_files() {
     assert_contains(&out, "rewritten", "the configuration is named");
     assert_contains(&out, "cairn.toml", "by name");
     assert_contains(&out, "created    2 new item(s)", "one item per milestone");
+    assert_contains(&out, "UUID", "the identity migration is disclosed");
     assert_contains(
         &out,
-        "nothing already in the item directory will be changed.",
-        "and the sentence that matters, because here it is true",
-    );
-    assert!(
-        !out.contains("careful:"),
-        "nothing is being rewritten, so nothing to be careful about: {out}"
+        "_legacy-ids.toml",
+        "the frozen alias map is disclosed",
     );
 
     // A dry run that changed something would be the worst defect this command
@@ -895,7 +895,7 @@ fn malformed_github_issues_do_not_produce_malformed_items() {
 #[test]
 fn a_date_that_is_not_a_date_is_reported() {
     let p = Project::new();
-    p.write(
+    p.write_uuid_fixture(
         "cairn/items/0009-odd.md",
         "---\nid: 9\ntitle: Odd\nstatus: backlog\ncreated: yesterday\n---\nbody\n",
     );
@@ -981,7 +981,11 @@ fn an_imported_body_containing_a_delimiter_round_trips() {
     assert!(out.ok(), "{}", out.all());
     assert!(p.run(&["check"]).ok(), "{}", p.run(&["check"]).all());
 
-    let shown = p.expect(&["show", "1"]).stdout;
+    let id = p.json(&["list", "-A", "--json"])[0]["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let shown = p.expect(&["show", &id]).stdout;
     assert_contains(&shown, "not an item", "the body survived intact");
     assert_eq!(
         p.expect(&["list", "-A", "--count"]).trimmed(),
@@ -996,7 +1000,7 @@ fn an_imported_body_containing_a_delimiter_round_trips() {
 #[test]
 fn history_survives_a_commit_message_that_looks_like_data() {
     let p = repository();
-    p.expect(&["set", "1", "priority=p0"]);
+    p.expect(&["set", &p.id(1), "priority=p0"]);
     git(&p, &["add", "-A"]);
     // A message carrying every shape the parser looks for.
     git(
@@ -1004,14 +1008,14 @@ fn history_survives_a_commit_message_that_looks_like_data() {
         &["commit", "-qm", "start\n\nid: 999\nstatus: done\n---\n"],
     );
 
-    p.expect(&["set", "1", "assignee=someone"]);
+    p.expect(&["set", &p.id(1), "assignee=someone"]);
     git(&p, &["add", "-A"]);
     git(&p, &["commit", "-qm", "0001|0002|---|id: 1"]);
 
-    let out = p.expect(&["log", "1"]);
+    let out = p.expect(&["log", &p.id(1)]);
     assert!(out.ok(), "{}", out.all());
     let json: serde_json::Value =
-        serde_json::from_str(&p.expect(&["log", "1", "--json"]).stdout).expect("JSON");
+        serde_json::from_str(&p.expect(&["log", &p.id(1), "--json"]).stdout).expect("JSON");
     let revisions = json["revisions"].as_array().map_or(0, Vec::len);
     assert!(
         revisions >= 2,
@@ -1028,7 +1032,7 @@ fn history_in_an_empty_repository_explains_itself() {
     p.expect(&["init", "--bare", "--name", "Fresh"]);
     p.add("Unversioned", &[]);
 
-    let out = p.run(&["log", "1"]);
+    let out = p.run(&["log", &p.id(1)]);
     assert!(
         !out.all().contains("panicked"),
         "an empty repository brought cairn down: {}",
@@ -1051,12 +1055,12 @@ fn history_follows_an_item_through_two_renames_in_one_commit() {
     git(&p, &["add", "-A"]);
     git(&p, &["commit", "-qm", "one"]);
 
-    p.expect(&["set", "1", "title=Second title"]);
-    p.expect(&["set", "1", "title=Third title"]);
+    p.expect(&["set", &p.id(1), "title=Second title"]);
+    p.expect(&["set", &p.id(1), "title=Third title"]);
     git(&p, &["add", "-A"]);
     git(&p, &["commit", "-qm", "renamed twice in one commit"]);
 
-    let out = p.expect(&["log", "1"]);
+    let out = p.expect(&["log", &p.id(1)]);
     assert!(out.ok(), "{}", out.all());
     assert_contains(&out.stdout, "title", "the retitle is in the history");
     // And it did not wander into a different item on the way.
@@ -1072,26 +1076,30 @@ fn history_follows_an_item_through_two_renames_in_one_commit() {
 #[test]
 fn renaming_a_key_moves_references_by_key_and_not_by_id() {
     let p = Project::new();
-    p.expect(&["new", "First release", "-t", "milestone", "-q"]);
-    p.expect(&["set", "1", "key=v0.1"]);
+    p.add("First release", &["-t", "milestone"]);
+    p.expect(&["set", &p.id(1), "key=v0.1"]);
     p.add("Scheduled", &["-m", "v0.1"]);
-    p.add("Blocked by the milestone", &["-d", "1"]);
+    p.add("Blocked by the milestone", &["-d", &p.id(1)]);
 
-    let out = p.expect(&["set", "1", "key=v1.0"]).all();
-    assert_contains(&out, "also 0002", "it says which references it moved");
+    let out = p.expect(&["set", &p.id(1), "key=v1.0"]).all();
+    assert_contains(
+        &out,
+        &format!("also {}", p.reference(2)),
+        "it says which references it moved",
+    );
 
     let scheduled: serde_json::Value =
-        serde_json::from_str(&p.expect(&["show", "2", "--json"]).stdout).unwrap();
+        serde_json::from_str(&p.expect(&["show", &p.id(2), "--json"]).stdout).unwrap();
     assert_eq!(
         scheduled["milestone"], "v1.0",
         "a reference by key was not moved"
     );
 
     let blocked: serde_json::Value =
-        serde_json::from_str(&p.expect(&["show", "3", "--json"]).stdout).unwrap();
+        serde_json::from_str(&p.expect(&["show", &p.id(3), "--json"]).stdout).unwrap();
     assert_eq!(
         blocked["depends_on"],
-        serde_json::json!([1]),
+        serde_json::json!([p.id(1)]),
         "a reference by id names the item, not its handle, and did not change"
     );
     assert!(p.run(&["check"]).ok(), "{}", p.run(&["check"]).all());

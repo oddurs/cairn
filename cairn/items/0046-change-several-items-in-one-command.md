@@ -1,5 +1,5 @@
 ---
-id: 46
+id: f25611ff-428b-4b25-90e9-174a0e23a435
 title: Change several items in one command
 type: bug
 status: done

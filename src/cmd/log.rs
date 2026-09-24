@@ -1,3 +1,4 @@
+use crate::identity::Id;
 // cairn — an item's history, read from the repository it lives in.
 //
 // Copyright (c) 2026 Oddur Sigurdsson. MIT licensed; see LICENSE.
@@ -115,7 +116,7 @@ pub fn run(args: Args) -> Result<i32> {
         return raw_patches(&cfg.root, &relative, args.max_count);
     }
 
-    let mut revisions = history(&cfg.root, &relative, item.id)?;
+    let mut revisions = history(&cfg, &relative, item.id)?;
     if revisions.is_empty() {
         return report_nothing(
             &cfg,
@@ -333,7 +334,8 @@ fn differs_from_head(root: &Path, relative: &str) -> bool {
 /// detection cheerfully concludes that item 2 was renamed from item 1 and
 /// follows into a different item's history. The correction is cairn's own data:
 /// each revision says which item it is, and the trail is cut where that changes.
-fn history(root: &Path, relative: &str, wanted: u32) -> Result<Vec<Revision>> {
+fn history(cfg: &Config, relative: &str, wanted: Id) -> Result<Vec<Revision>> {
+    let root = &cfg.root;
     // \x01 separates commits and \0 separates fields, because either could
     // otherwise appear in an author name and neither can appear in one here.
     let out = Command::new("git")
@@ -387,9 +389,10 @@ fn history(root: &Path, relative: &str, wanted: u32) -> Result<Vec<Revision>> {
     // need to parse a diff to say what changed.
     let mut kept: Vec<(Revision, Option<Item>)> = Vec::new();
     for rev in newest_first {
-        let parsed = at_revision(root, &rev.hash, &rev.path);
+        let parsed =
+            at_revision(root, &rev.hash, &rev.path).map(|item| canonical_history(cfg, item));
         if let Some(id) = parsed.as_ref().map(|i| i.id).or_else(|| id_in(&rev.path))
-            && id != wanted
+            && cfg.canonical_id(id) != wanted
         {
             break;
         }
@@ -415,10 +418,48 @@ fn history(root: &Path, relative: &str, wanted: u32) -> Result<Vec<Revision>> {
 /// The id in an item's filename, for a revision too damaged to parse. The
 /// filename is a rendering of the id rather than the id itself, so this is a
 /// fallback and not the answer.
-fn id_in(path: &str) -> Option<u32> {
+fn id_in(path: &str) -> Option<Id> {
     let name = path.rsplit('/').next()?;
+    if let Some(prefix) = name.get(..36)
+        && let Ok(id) = prefix.parse::<Id>()
+        && id.is_uuid()
+    {
+        return Some(id);
+    }
     let digits: String = name.chars().take_while(char::is_ascii_digit).collect();
     digits.parse().ok()
+}
+
+/// The migration bridge lets history keep its original bytes while comparisons
+/// name the same logical item on either side of the migration commit.
+fn canonical_history(cfg: &Config, mut item: Item) -> Item {
+    item.id = cfg.canonical_id(item.id);
+    item.meta.id = Some(item.id);
+    item.meta.depends_on = item
+        .meta
+        .depends_on
+        .iter()
+        .map(|id| cfg.canonical_id(*id))
+        .collect();
+    for def in cfg
+        .all_ref_fields()
+        .iter()
+        .filter(|f| f.by == crate::config::Addressing::Id && f.name != "depends_on")
+    {
+        let values = crate::refs::values(&item, def);
+        if let Ok(ids) = values
+            .iter()
+            .map(|v| v.parse::<Id>().map(|id| cfg.canonical_id(id)))
+            .collect::<Result<Vec<_>>>()
+        {
+            if crate::refs::is_many(def) {
+                item.set_extra_ids(&def.name, &ids);
+            } else {
+                item.set_extra_id(&def.name, ids.first().copied());
+            }
+        }
+    }
+    item
 }
 
 fn at_revision(root: &Path, hash: &str, path: &str) -> Option<Item> {
@@ -547,8 +588,8 @@ fn describe(before: &Item, after: &Item) -> Vec<Change> {
     out
 }
 
-fn join_ids(ids: &[u32]) -> String {
-    ids.iter().map(u32::to_string).collect::<Vec<_>>().join(" ")
+fn join_ids(ids: &[Id]) -> String {
+    ids.iter().map(Id::to_string).collect::<Vec<_>>().join(" ")
 }
 
 /// `--patch` hands the job to git, which already formats diffs better than
@@ -640,8 +681,8 @@ fn range_report(cfg: &Config, store: &Store, range: &str, json: bool) -> Result<
         );
     }
 
-    let mut before: std::collections::HashMap<u32, Item> = std::collections::HashMap::new();
-    let mut after: std::collections::HashMap<u32, Item> = std::collections::HashMap::new();
+    let mut before: std::collections::HashMap<Id, Item> = std::collections::HashMap::new();
+    let mut after: std::collections::HashMap<Id, Item> = std::collections::HashMap::new();
     for line in String::from_utf8_lossy(&out.stdout).lines() {
         let mut parts = line.split('\t');
         let _code = parts.next();
@@ -653,20 +694,22 @@ fn range_report(cfg: &Config, store: &Store, range: &str, json: bool) -> Result<
                 continue;
             }
             if let Some(i) = at_revision(&cfg.root, &from, path) {
+                let i = canonical_history(cfg, i);
                 before.insert(i.id, i);
             }
             if let Some(i) = at_revision(&cfg.root, &to, path) {
+                let i = canonical_history(cfg, i);
                 after.insert(i.id, i);
             }
         }
     }
 
-    let mut ids: Vec<u32> = before.keys().chain(after.keys()).copied().collect();
+    let mut ids: Vec<Id> = before.keys().chain(after.keys()).copied().collect();
     ids.sort_unstable();
     ids.dedup();
 
-    let mut found: Vec<(u32, String, Outcome)> = Vec::new();
-    let mut found_status: std::collections::HashMap<u32, String> = std::collections::HashMap::new();
+    let mut found: Vec<(Id, String, Outcome)> = Vec::new();
+    let mut found_status: std::collections::HashMap<Id, String> = std::collections::HashMap::new();
     for id in ids {
         let (b, a) = (before.get(&id), after.get(&id));
         let outcome = match (b, a) {
@@ -828,20 +871,20 @@ fn status_of(cfg: &Config, status: Option<&String>) -> Option<String> {
 /// heuristic, and a narrow one: both sides must be in the same range, the
 /// identifiers must differ, and the titles must match exactly.
 fn pair_renumbered(
-    found: &mut Vec<(u32, String, Outcome)>,
-    before: &std::collections::HashMap<u32, Item>,
-    after: &std::collections::HashMap<u32, Item>,
+    found: &mut Vec<(Id, String, Outcome)>,
+    before: &std::collections::HashMap<Id, Item>,
+    after: &std::collections::HashMap<Id, Item>,
 ) -> usize {
-    let removed: Vec<(u32, String)> = found
+    let removed: Vec<(Id, String)> = found
         .iter()
-        .filter(|(_, _, o)| matches!(o, Outcome::Removed))
+        .filter(|(id, _, o)| !id.is_uuid() && matches!(o, Outcome::Removed))
         .map(|(id, t, _)| (*id, t.clone()))
         .collect();
-    let mut paired: Vec<u32> = Vec::new();
+    let mut paired: Vec<Id> = Vec::new();
     for (gone_id, title) in &removed {
-        let arrived = found
-            .iter()
-            .find(|(id, t, o)| matches!(o, Outcome::New) && t == title && id != gone_id);
+        let arrived = found.iter().find(|(id, t, o)| {
+            !id.is_uuid() && matches!(o, Outcome::New) && t == title && id != gone_id
+        });
         if let Some((new_id, _, _)) = arrived {
             // Only when the work itself did not change, so a delete and an
             // unrelated create that happen to share a title are left alone.

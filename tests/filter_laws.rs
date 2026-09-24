@@ -86,7 +86,7 @@ fn negation_partitions_the_backlog() {
                 "`{key}={value}` and `{key}!={value}` both match {both:?}"
             );
 
-            let union: BTreeSet<u32> = yes.union(&no).copied().collect();
+            let union: BTreeSet<String> = yes.union(&no).cloned().collect();
             let missing: Vec<_> = all.difference(&union).collect();
             assert!(
                 missing.is_empty(),
@@ -107,7 +107,7 @@ fn alternation_is_union() {
                 let left = p.matching(&format!("{key}={a}"));
                 let right = p.matching(&format!("{key}={b}"));
                 let together = p.matching(&format!("{key}={a}|{b}"));
-                let expected: BTreeSet<u32> = left.union(&right).copied().collect();
+                let expected: BTreeSet<String> = left.union(&right).cloned().collect();
                 assert_eq!(
                     together, expected,
                     "`{key}={a}|{b}` is not the union of its alternatives"
@@ -129,7 +129,7 @@ fn a_comma_is_intersection_and_does_not_care_about_order() {
             let b = format!("type={kind}");
             let left = p.matching(&a);
             let right = p.matching(&b);
-            let expected: BTreeSet<u32> = left.intersection(&right).copied().collect();
+            let expected: BTreeSet<String> = left.intersection(&right).cloned().collect();
 
             let forwards = p.matching(&format!("{a},{b}"));
             let backwards = p.matching(&format!("{b},{a}"));
@@ -154,7 +154,7 @@ fn an_empty_value_selects_exactly_the_items_without_the_field() {
         let unset = p.matching(&format!("{key}="));
 
         // Everything with any real value, gathered by hand.
-        let mut set: BTreeSet<u32> = BTreeSet::new();
+        let mut set: BTreeSet<String> = BTreeSet::new();
         for value in values {
             set.extend(p.matching(&format!("{key}={value}")));
         }
@@ -163,7 +163,7 @@ fn an_empty_value_selects_exactly_the_items_without_the_field() {
             unset.intersection(&set).next().is_none(),
             "an item is both unset and set for `{key}`"
         );
-        let union: BTreeSet<u32> = unset.union(&set).copied().collect();
+        let union: BTreeSet<String> = unset.union(&set).cloned().collect();
         assert_eq!(
             union, all,
             "`{key}=` plus every value does not account for the whole backlog"

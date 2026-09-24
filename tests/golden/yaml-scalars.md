@@ -1,5 +1,5 @@
 ---
-id: 11
+id: 0000000b-0000-4000-8000-00000000000b
 title: Scalars YAML resolves before cairn sees them
 status: backlog
 assignee: no

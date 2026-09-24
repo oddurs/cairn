@@ -88,14 +88,13 @@ which is what a stalled item looks like. An empty value means unset.
 
 ```sh
 cairn check
-cairn renumber --dry-run
-cairn renumber
+cairn render
+cairn check --render --strict
 ```
 
-Two branches that each created an item allocate the same identifier, because no
-branch can know what the other did. `renumber` repairs it, keeping the
-identifier on the side that was already published. The dry run first, always —
-this rewrites files.
+Independent UUID creation needs no renumbering. Resolve conflicting edits,
+regenerate the roadmap, and validate. Manually duplicated UUIDs need explicit
+reconciliation, including incoming references; `renumber` will not guess.
 
 ## Keep a personal backlog that is not a code project
 

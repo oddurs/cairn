@@ -37,7 +37,7 @@ fn blocked_and_ready_resolve_through_the_dependency_graph() {
     let listed = p
         .expect(&["list", "--columns", "id,blockers", "--plain"])
         .stdout;
-    assert_contains(&listed, "1", "blockers resolve to ids");
+    assert_contains(&listed, &p.id(1), "blockers resolve to full identities");
 
     p.expect(&["close", &blocker, "-q"]);
     assert_eq!(
@@ -52,7 +52,7 @@ fn blocked_and_ready_resolve_through_the_dependency_graph() {
 fn a_dependency_on_a_missing_item_does_not_block() {
     // A typo elsewhere should be a `check` error, not a reason to hide work.
     let p = Project::new();
-    p.write(
+    p.write_uuid_fixture(
         "cairn/items/0001-lonely.md",
         "---\nid: 1\ntitle: Lonely\nstatus: backlog\ndepends_on: [42]\n---\nbody\n",
     );
@@ -85,10 +85,11 @@ fn next_reports_dependency_state_in_json() {
 #[test]
 fn next_puts_work_already_under_way_first() {
     let p = seeded();
-    p.expect(&["set", "3", "status=doing", "-q"]);
+    p.expect(&["set", &p.id(3), "status=doing", "-q"]);
     let ids = p.expect(&["next", "--ids"]).lines();
     assert_eq!(
-        ids[0], "0003",
+        ids[0],
+        p.reference(3),
         "finishing something beats starting something"
     );
 }
@@ -112,11 +113,11 @@ fn claiming_assigns_the_item_and_starts_it() {
 #[test]
 fn an_item_someone_else_holds_is_refused() {
     let p = seeded();
-    p.expect(&["claim", "1", "--as", "somebody", "-q"]);
-    let out = p.fails(&["claim", "1"]);
+    p.expect(&["claim", &p.id(1), "--as", "somebody", "-q"]);
+    let out = p.fails(&["claim", &p.id(1)]);
     assert_contains(&out.all(), "already claimed by somebody", "who holds it");
-    p.expect(&["claim", "1", "--force", "-q"]);
-    assert_eq!(p.json(&["show", "1", "--json"])["assignee"], "tester");
+    p.expect(&["claim", &p.id(1), "--force", "-q"]);
+    assert_eq!(p.json(&["show", &p.id(1), "--json"])["assignee"], "tester");
 }
 
 #[test]
@@ -130,9 +131,9 @@ fn blocked_work_cannot_be_claimed_by_accident() {
 #[test]
 fn releasing_hands_an_item_back() {
     let p = seeded();
-    p.expect(&["claim", "1", "-q"]);
-    p.expect(&["release", "1", "-q"]);
-    let item = p.json(&["show", "1", "--json"]);
+    p.expect(&["claim", &p.id(1), "-q"]);
+    p.expect(&["release", &p.id(1), "-q"]);
+    let item = p.json(&["show", &p.id(1), "--json"]);
     assert_eq!(item["assignee"], serde_json::Value::Null);
     assert_eq!(item["category"], "open");
 }
@@ -206,7 +207,7 @@ fn a_scalar_field_refuses_a_list_assignment_and_says_which_field() {
         ("updated", "2026-01-01"),
     ] {
         for op in ["+=", "-="] {
-            let out = p.run(&["set", "1", &format!("{field}{op}{value}")]);
+            let out = p.run(&["set", &p.id(1), &format!("{field}{op}{value}")]);
             assert!(
                 !out.ok(),
                 "`{field}{op}{value}` was accepted; a scalar field took an append"
@@ -220,7 +221,7 @@ fn a_scalar_field_refuses_a_list_assignment_and_says_which_field() {
     }
 
     // And the item is untouched by any of it.
-    let shown = p.expect(&["show", "1"]).stdout;
+    let shown = p.expect(&["show", &p.id(1)]).stdout;
     assert_missing(&shown, "alice", "a refused assignment was written anyway");
 }
 
@@ -242,7 +243,7 @@ fn a_scalar_field_refuses_a_list_assignment_and_says_which_field() {
 fn two_items_cannot_be_given_the_same_key() {
     let p = seeded();
     let second = p.add("Another release", &["-t", "milestone"]);
-    p.expect(&["set", "4", "key=shared", "-q"]);
+    p.expect(&["set", &p.id(4), "key=shared", "-q"]);
 
     let out = p.run(&["set", &second, "key=shared"]);
     assert!(!out.ok(), "a second item took a key that was already taken");

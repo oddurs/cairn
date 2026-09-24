@@ -3,6 +3,7 @@
 // Copyright (c) 2026 Oddur Sigurdsson. MIT licensed; see LICENSE.
 // cairn init — write the schema and the item directory.
 use crate::config::{CONFIG_FILE, Config};
+use crate::identity::Id;
 use crate::store;
 use crate::style;
 use anyhow::{Result, bail};
@@ -130,8 +131,9 @@ pub fn run(args: Args) -> Result<i32> {
     // items of a type it does not declare would hand somebody a new project
     // that fails its own `cairn check`.
     let has_milestones = cfg.schedule_type().is_some();
+    let mut previous = None;
     if !args.bare && has_milestones {
-        for (n, (key, title, due, why)) in [
+        for (key, title, due, why) in [
             (
                 "v0.1",
                 "First usable version",
@@ -145,11 +147,10 @@ pub fn run(args: Args) -> Result<i32> {
                 "Documented, tested, and safe to depend on.",
             ),
             ("later", "Someday", None, "Good ideas without a date yet."),
-        ]
-        .into_iter()
-        .enumerate()
-        {
-            let path = write_milestone(&cfg, &items_dir, n as u32 + 1, key, title, due, why)?;
+        ] {
+            let id = Id::new()?;
+            let path = write_milestone(&cfg, &items_dir, id, previous, key, title, due, why)?;
+            previous = Some(id);
             println!(
                 "{} {}",
                 style::green("created"),
@@ -160,11 +161,8 @@ pub fn run(args: Args) -> Result<i32> {
 
     if !args.bare {
         // After the milestones, and pointing at the first of them.
-        let (id, milestone) = if has_milestones {
-            (4, Some("v0.1"))
-        } else {
-            (1, None)
-        };
+        let id = Id::new()?;
+        let milestone = has_milestones.then_some("v0.1");
         let path = write_example(&cfg, &items_dir, id, milestone)?;
         println!(
             "{} {}",
@@ -181,7 +179,7 @@ pub fn run(args: Args) -> Result<i32> {
         println!(
             "{}",
             style::dim(
-                "Tip: `cairn init --git` teaches git to resolve the roadmap and renumber\n                      colliding ids when branches merge."
+                "Tip: `cairn init --git` teaches git to merge item fields and regenerate\n                      the roadmap when branches merge."
             )
         );
     }
@@ -201,7 +199,7 @@ pub fn run(args: Args) -> Result<i32> {
     Ok(0)
 }
 
-fn write_example(cfg: &Config, dir: &Path, id: u32, milestone: Option<&str>) -> Result<PathBuf> {
+fn write_example(cfg: &Config, dir: &Path, id: Id, milestone: Option<&str>) -> Result<PathBuf> {
     let today = store::today();
     let kind = cfg
         .project
@@ -267,12 +265,11 @@ const STANDARD: &str = r#"# cairn.toml — the schema for this project's roadmap
 
 # On-disk format version. cairn refuses to open a project written in a format it
 # does not know, rather than misreading it. See "Compatibility" in the manual.
-format = 3
+format = 4
 
 [project]
 name = "{{name}}"
 dir = "{{dir}}"           # where item files live, relative to this file
-id_width = 4              # 0001, 0002, ...
 default_type = "feature"
 default_status = "backlog"
 # filename_max = 255      # longest filename your filesystem accepts, in bytes;
@@ -501,7 +498,7 @@ const MINIMAL: &str = r#"# cairn.toml — roadmap and issue schema.
 # Start here and add types, fields, milestones and views as you need them.
 # See `cairn init --preset standard` for a fully commented example.
 
-format = 3
+format = 4
 
 [project]
 name = "{{name}}"
@@ -552,7 +549,8 @@ group_by = "milestone"
 fn write_milestone(
     cfg: &Config,
     items_dir: &std::path::Path,
-    id: u32,
+    id: Id,
+    previous: Option<Id>,
     key: &str,
     title: &str,
     due: Option<&str>,
@@ -575,9 +573,7 @@ fn write_milestone(
     );
     item.meta.status = Some(cfg.initial_status().to_string());
     item.meta.created = Some(crate::store::today());
-    if id > 1 {
-        item.meta.depends_on = vec![id - 1];
-    }
+    item.meta.depends_on = previous.into_iter().collect();
     if let Some(d) = due.filter(|_| cfg.field("due").is_some()) {
         item.set_extra("due", Some(crate::item::Field::Text(d.to_string())));
     }

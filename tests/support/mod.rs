@@ -34,6 +34,10 @@ pub fn bin() -> &'static str {
     env!("CARGO_BIN_EXE_cairn")
 }
 
+pub fn fixture_id(n: usize) -> String {
+    format!("{n:08x}-0000-4000-8000-{n:012x}")
+}
+
 /// A `PATH` with the binary's directory first, so a hook or a merge driver that
 /// runs `cairn` finds the one being tested rather than an installed one.
 pub fn path_with_binary() -> std::ffi::OsString {
@@ -638,7 +642,7 @@ impl Schema {
     /// status.
     pub fn bare() -> Schema {
         Schema {
-            format: Some(3),
+            format: Some(4),
             name: "Testbed".into(),
             description: None,
             dir: "cairn/items".into(),
@@ -941,6 +945,7 @@ impl Schema {
 
 pub struct Project {
     pub dir: tempfile::TempDir,
+    created: std::sync::Mutex<std::collections::BTreeMap<usize, String>>,
 }
 
 impl Project {
@@ -948,6 +953,7 @@ impl Project {
     pub fn empty() -> Project {
         Project {
             dir: tempfile::tempdir().expect("temporary directory"),
+            created: Default::default(),
         }
     }
 
@@ -1113,14 +1119,38 @@ impl Project {
     pub fn add(&self, title: &str, extra: &[&str]) -> String {
         let mut args = vec!["new", title, "-q"];
         args.extend_from_slice(extra);
-        self.expect(&args).trimmed()
+        let reference = self.expect(&args).trimmed();
+        let id = self.json(&["show", &reference, "--json"])["id"]
+            .as_str()
+            .expect("UUID identity")
+            .to_string();
+        let mut created = self.created.lock().unwrap();
+        let next = created.keys().next_back().copied().unwrap_or(0) + 1;
+        created.insert(next, id);
+        reference
+    }
+
+    /// The full identity of the Nth item created by this fixture (one-based).
+    /// This is a fixture handle, not a numeric identifier accepted by Cairn.
+    pub fn id(&self, n: usize) -> String {
+        self.created
+            .lock()
+            .unwrap()
+            .get(&n)
+            .cloned()
+            .unwrap_or_else(|| fixture_id(n))
+    }
+
+    pub fn reference(&self, n: usize) -> String {
+        self.json(&["show", &self.id(n), "--json"])["ref"]
+            .as_str()
+            .unwrap()
+            .into()
     }
 
     /// Create a milestone with a key, which is how anything refers to one.
     pub fn milestone(&self, key: &str, due: Option<&str>) -> String {
-        let id = self
-            .expect(&["new", key, "-t", "milestone", "-q"])
-            .trimmed();
+        let id = self.add(key, &["-t", "milestone"]);
         self.expect(&["set", &id, &format!("key={key}")]);
         if let Some(d) = due {
             self.expect(&["set", &id, &format!("due={d}")]);
@@ -1164,21 +1194,18 @@ impl Project {
 
     /// The identifiers a filter selects, as numbers, for the set algebra the
     /// filter laws check.
-    pub fn matching(&self, expr: &str) -> BTreeSet<u32> {
-        self.expect(&["list", "-A", "--ids", "--filter", expr])
-            .lines()
+    pub fn matching(&self, expr: &str) -> BTreeSet<String> {
+        self.json(&["list", "-A", "--json", "--filter", expr])
+            .as_array()
+            .unwrap()
             .iter()
-            .filter_map(|l| l.trim().trim_start_matches('0').parse().ok())
+            .map(|item| item["id"].as_str().expect("UUID identity").to_string())
             .collect()
     }
 
     /// Every identifier in the project, as numbers.
-    pub fn every_id(&self) -> BTreeSet<u32> {
-        self.expect(&["list", "-A", "--ids"])
-            .lines()
-            .iter()
-            .filter_map(|l| l.trim().trim_start_matches('0').parse().ok())
-            .collect()
+    pub fn every_id(&self) -> BTreeSet<String> {
+        self.matching("")
     }
 
     pub fn ids(&self) -> Vec<String> {
@@ -1195,9 +1222,91 @@ impl Project {
         std::fs::write(path, contents).expect("writing");
     }
 
+    /// A synthetic current-format fixture, using small local handles in its
+    /// declaration for readability. Only identity fields are expanded; the
+    /// body is preserved byte for byte. `write` remains raw for malformed and
+    /// historical-format tests. Neither helper changes command arguments or
+    /// command output.
+    pub fn write_uuid_fixture(&self, rel: &str, contents: &str) {
+        use serde_yaml_ng::Value;
+        let eol = if contents.contains("\r\n") {
+            "\r\n"
+        } else {
+            "\n"
+        };
+        let (front, tail) = contents
+            .strip_prefix(&format!("---{eol}"))
+            .expect("opening delimiter")
+            .split_once(&format!("{eol}---"))
+            .expect("closing delimiter");
+        let mut fields: serde_yaml_ng::Mapping =
+            serde_yaml_ng::from_str(front).expect("fixture YAML");
+        let number = fields["id"].as_u64().expect("fixture handle") as usize;
+        let id = self.id(number);
+        self.created.lock().unwrap().insert(number, id.clone());
+        fields.insert("id".into(), Value::String(id));
+        let cfg: toml::Value = toml::from_str(&self.read("cairn.toml")).unwrap();
+        let mut names = vec!["depends_on".to_string()];
+        if let Some(declared) = cfg.get("field").and_then(toml::Value::as_array) {
+            names.extend(
+                declared
+                    .iter()
+                    .filter(|f| {
+                        f.get("kind").and_then(toml::Value::as_str) == Some("ref")
+                            && f.get("by").and_then(toml::Value::as_str) != Some("key")
+                    })
+                    .filter_map(|f| {
+                        f.get("name")
+                            .and_then(toml::Value::as_str)
+                            .map(str::to_string)
+                    }),
+            );
+        }
+        for name in names {
+            if let Some(value) = fields.get_mut(Value::String(name)) {
+                let values = match &*value {
+                    Value::Sequence(values) => values.clone(),
+                    Value::String(text) if text.contains(',') => text
+                        .split(',')
+                        .map(|s| Value::String(s.trim().into()))
+                        .collect(),
+                    Value::Null => continue,
+                    value => vec![value.clone()],
+                };
+                let mapped: Vec<Value> = values
+                    .into_iter()
+                    .map(|value| {
+                        let n = value
+                            .as_u64()
+                            .map(|n| n as usize)
+                            .or_else(|| {
+                                value
+                                    .as_str()
+                                    .and_then(|s| s.trim_start_matches('#').parse().ok())
+                            })
+                            .expect("reference fixture handle");
+                        Value::String(self.id(n))
+                    })
+                    .collect();
+                *value = Value::Sequence(mapped);
+            }
+        }
+        let yaml = serde_yaml_ng::to_string(&fields)
+            .unwrap()
+            .replace('\n', eol);
+        self.write(rel, &format!("---{eol}{yaml}---{tail}"));
+    }
+
     /// Write an item file directly, for the shapes no command produces.
     pub fn write_item(&self, name: &str, frontmatter: &str, body: &str) {
         self.write(
+            &format!("cairn/items/{name}"),
+            &format!("---\n{}\n---\n{body}", frontmatter.trim()),
+        );
+    }
+
+    pub fn write_uuid_item(&self, name: &str, frontmatter: &str, body: &str) {
+        self.write_uuid_fixture(
             &format!("cairn/items/{name}"),
             &format!("---\n{}\n---\n{body}", frontmatter.trim()),
         );
@@ -1431,13 +1540,13 @@ pub fn seed(p: &Project) {
     // test below names. A milestone is an item in format 2, so it has to exist
     // before anything can point at it — the same as a dependency.
     p.milestone("v0.1", Some("2026-12-01"));
-    p.expect(&["set", "1", "milestone=v0.1", "-q"]);
+    p.expect(&["set", &p.id(1), "milestone=v0.1", "-q"]);
 }
 
 /// A milestone to point at. In format 2 a milestone is an item, so it has to
 /// exist before anything can name it — the same as a dependency.
 pub fn milestone(p: &Project, key: &str, due: Option<&str>) -> String {
-    let id = p.expect(&["new", key, "-t", "milestone", "-q"]).trimmed();
+    let id = p.add(key, &["-t", "milestone"]);
     p.expect(&["set", &id, &format!("key={key}")]);
     if let Some(d) = due {
         p.expect(&["set", &id, &format!("due={d}")]);
@@ -1525,7 +1634,7 @@ pub fn merge(p: &Project, branch: &str) -> Out {
 /// naming them by the same string they use today.
 pub fn format_one() -> Project {
     let p = Project::new();
-    let cfg = p.read("cairn.toml").replace("format = 3", "format = 1")
+    let cfg = p.read("cairn.toml").replace("format = 4", "format = 1")
         + "\n[[milestone]]\nname = \"v0.1\"\ntitle = \"First\"\ndue = \"2026-12-01\"\n\
            description = \"The first one.\"\n\n[[milestone]]\nname = \"later\"\n\
            title = \"Someday\"\n";
@@ -1715,7 +1824,7 @@ mod harness {
         // And it is a project you can actually work in.
         p.add("Something", &[]);
         p.milestone("v0.1", Some("2026-12-01"));
-        p.expect(&["set", "1", "milestone=v0.1"]);
+        p.expect(&["set", &p.id(1), "milestone=v0.1"]);
         assert!(p.run(&["check"]).ok());
     }
 

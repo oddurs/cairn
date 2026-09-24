@@ -80,18 +80,18 @@ In a new project:
 
 ```sh
 cairn init --preset minimal --bare
-cairn new "Document how to build this project"
-cairn claim 1
-cairn edit 1
-cairn note 1 "Verified the instructions from a clean checkout."
-cairn close 1
+item=$(cairn new "Document how to build this project" -q)
+cairn claim "$item"
+cairn edit "$item"
+cairn note "$item" "Verified the instructions from a clean checkout."
+cairn close "$item"
 cairn render
 cairn check
 ```
 
 Add your problem, approach, and acceptance criteria when editing the item.
-Tick criteria as they become true with `cairn tick 1 1`; check them with
-`cairn show 1 --criteria`.
+Tick criteria as they become true with `cairn tick "$item" 1`; check them with
+`cairn show "$item" --criteria`.
 
 The minimal preset is a starting point. `cairn init --bare` uses the richer
 standard schema; `cairn init --from ../another-project/cairn.toml --bare`
@@ -111,12 +111,12 @@ describe. Cairn does not commit for you.
 ```sh
 cairn next                         # ranked, unfinished, dependency-ready work
 cairn claim --next                 # atomically choose and claim in this working copy
-cairn show 12
-cairn set 12 priority=p1
-cairn note 12 "Kept the old representation to preserve existing references."
-cairn release 12 --reason "Needs a reproduction on Windows."
+cairn show <ID>
+cairn set <ID> priority=p1
+cairn note <ID> "Kept the old representation to preserve existing references."
+cairn release <ID> --reason "Needs a reproduction on Windows."
 cairn search --all "representation" # include finished and dropped reasoning
-cairn log 12                       # the item's history in Git
+cairn log <ID>                     # the item's history in Git
 ```
 
 `next` means dependency-ready, not necessarily approved by your project.
@@ -155,7 +155,7 @@ These are project choices, not a prescribed methodology. For example, this
 complete small schema adds decisions and an approved queue:
 
 ```toml
-format = 3
+format = 4
 
 [project]
 name = "my-project"
@@ -200,7 +200,7 @@ lists, dates, numbers, booleans, or references. Milestones are ordinary items
 of a grouping type, with their own reasoning and history.
 
 `cairn config` shows the current schema. `cairn --help` lists commands.
-The [manual](doc/cairn.texi) covers custom identifier renderings, relationships,
+The [manual](doc/cairn.texi) covers immutable identities, relationships,
 proposals, importing, and the full filter grammar.
 
 ## Agents
@@ -238,11 +238,17 @@ local lock; read commands can still show healthy items when another file is
 damaged. Tests exercise interruptions, concurrent writers, old formats, and
 arbitrary inputs.
 
-Small integer IDs are easy to type but can collide across branches.
-`cairn check` detects collisions; `cairn renumber --dry-run` shows a repair.
-Git integration helps reconcile generated output and sequence fields, but
-conflicting decisions still need review. The manual describes exactly what
-merging and recovery guarantee.
+Format 4 gives every item an immutable UUIDv4, without a server or shared
+counter. Type an unambiguous prefix (at least eight hex digits); store full
+IDs in scripts and references. Independently created work merges without
+renumbering. Conflicting edits to the same item still need review.
+
+This development line is **1.0.0-alpha.1**, not the stable 0.3 release.
+Upgrade Harrow before migrating a live project. `cairn migrate --dry-run`
+previews the change; migration retains old numeric lookup aliases, filenames,
+bodies, and Git history. Commit the migration once and carry it to other
+branches; do not migrate them independently. See the
+[migration contract](spec/README.md) and [collaboration guide](doc/COLLABORATION.md).
 
 Extend the workflow through schema, JSON, import/export, and hooks that run
 your programs. Use the array form of hooks for portable invocation. A hook

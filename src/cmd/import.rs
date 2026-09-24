@@ -1,3 +1,4 @@
+use crate::identity::Id;
 // cairn — importing a backlog from elsewhere.
 //
 // Copyright (c) 2026 Oddur Sigurdsson. MIT licensed; see LICENSE.
@@ -106,7 +107,7 @@ pub fn run(args: Args) -> Result<i32> {
         return Ok(0);
     }
 
-    let by_source: HashMap<String, u32> = existing
+    let by_source: HashMap<String, Id> = existing
         .iter()
         .filter_map(|i| i.meta.source.clone().map(|s| (s, i.id)))
         .collect();
@@ -115,9 +116,43 @@ pub fn run(args: Args) -> Result<i32> {
     let mut updated = 0usize;
     let mut skipped = 0usize;
     let mut warnings: Vec<String> = Vec::new();
-    let mut next_id = store.next_id(&existing);
-    // Incoming ids are not local ids; dependencies are rewritten through this.
-    let mut id_map: HashMap<u32, u32> = HashMap::new();
+    // UUIDs cross project boundaries unchanged. Legacy adapter numbers are
+    // local to the document and receive a new identity once, before fields
+    // resolve, so forward references work in every declared id-ref field.
+    let mut id_map: HashMap<Id, Id> = HashMap::new();
+    let mut destinations = Vec::new();
+    let mut seen_destinations = HashSet::new();
+    for inc in &incoming {
+        let source = inc
+            .source
+            .clone()
+            .or_else(|| inc.id.map(|id| format!("{origin}#{id}")));
+        let from_source = source.as_ref().and_then(|s| by_source.get(s)).copied();
+        let id = match inc.id.filter(|id| id.is_uuid()) {
+            Some(id) => {
+                if from_source.is_some_and(|old| old != id) {
+                    bail!(
+                        "source {source:?} already belongs to a different UUID; refusing to conflate identities"
+                    );
+                }
+                id
+            }
+            None => match from_source {
+                Some(id) => id,
+                None => store.next_id(&existing)?,
+            },
+        };
+        if !seen_destinations.insert(id) {
+            bail!("import names identity {id} more than once");
+        }
+        if let Some(old) = inc.id
+            && id_map.insert(old, id).is_some()
+        {
+            bail!("duplicate incoming identifier {old}");
+        }
+        cfg.remember_id(id);
+        destinations.push(id);
+    }
     // Each created item is kept beside the index of the incoming record that
     // produced it. Matching them up afterwards by any *field* is what broke
     // this before: the obvious key, `source`, is absent on a cairn export and
@@ -152,17 +187,23 @@ pub fn run(args: Args) -> Result<i32> {
             .or_else(|| inc.id.map(|n| format!("{origin}#{n}")));
 
         // Already here?
-        if let Some(source) = &source
-            && let Some(local) = by_source.get(source)
-        {
+        let local = existing
+            .iter()
+            .find(|item| item.id == destinations[index])
+            .map(|item| item.id);
+        if let Some(local) = local {
             if let Some(old) = inc.id {
-                id_map.insert(old, *local);
+                id_map.insert(old, local);
             }
             if !args.update {
                 skipped += 1;
                 continue;
             }
-            let mut item = store.find(*local)?;
+            let mut item = existing
+                .iter()
+                .find(|i| i.id == local)
+                .expect("existing destination")
+                .clone();
             apply_fields(
                 &mut item,
                 &cfg,
@@ -173,13 +214,9 @@ pub fn run(args: Args) -> Result<i32> {
                 &title,
                 &milestones,
                 &arriving,
+                &id_map,
             )?;
             item.meta.updated = inc.updated.clone().or_else(|| Some(today()));
-            if !args.dry_run {
-                item.save()?;
-                let renamed = store.sync_path(&mut item)?;
-                crate::cmd::note_if_blocked(&store, &item, &renamed);
-            }
             if !args.quiet {
                 println!(
                     "  {} {}  {}",
@@ -189,11 +226,12 @@ pub fn run(args: Args) -> Result<i32> {
                 );
             }
             updated += 1;
+            written.push((index, item));
             continue;
         }
 
-        let id = next_id;
-        next_id += 1;
+        let id = destinations[index];
+        cfg.remember_id(id);
         if let Some(old) = inc.id {
             id_map.insert(old, id);
         }
@@ -222,6 +260,7 @@ pub fn run(args: Args) -> Result<i32> {
             &title,
             &milestones,
             &arriving,
+            &id_map,
         )?;
 
         if args.create_milestones
@@ -247,13 +286,17 @@ pub fn run(args: Args) -> Result<i32> {
     // one that appears later in the document.
     for (index, item) in &mut written {
         let inc = &incoming[*index];
-        if inc.depends_on.is_empty() {
-            continue;
-        }
-        let mapped: Vec<u32> = inc
+        let mapped: Vec<Id> = inc
             .depends_on
             .iter()
-            .filter_map(|d| id_map.get(d).copied())
+            .filter_map(|d| {
+                id_map.get(d).copied().or_else(|| {
+                    existing
+                        .iter()
+                        .find(|i| i.id == *d && d.is_uuid())
+                        .map(|i| i.id)
+                })
+            })
             .collect();
         let lost = inc.depends_on.len() - mapped.len();
         if lost > 0 {
@@ -265,13 +308,42 @@ pub fn run(args: Args) -> Result<i32> {
         item.meta.depends_on = mapped;
     }
 
+    // Resolve against the proposed complete state before the first write.
+    let mut universe = existing.clone();
+    for (_, item) in &written {
+        if let Some(old) = universe.iter_mut().find(|i| i.id == item.id) {
+            *old = item.clone();
+        } else {
+            universe.push(item.clone());
+        }
+    }
+    for (_, item) in &written {
+        if let Some(problem) = crate::refs::key_problem(&cfg, &universe, item) {
+            bail!("{problem}");
+        }
+        for def in cfg
+            .all_ref_fields()
+            .iter()
+            .filter(|f| f.by == crate::config::Addressing::Id)
+        {
+            for value in crate::refs::values(item, def) {
+                if crate::refs::resolve(&universe, def, &value).is_none() {
+                    bail!("{}: unresolved {} reference {value}", item.id, def.name);
+                }
+                if def.acyclic && crate::refs::would_cycle(&universe, def, item.id, &value) {
+                    bail!("{}: {} closes a cycle", item.id, def.name);
+                }
+            }
+        }
+    }
     if args.dry_run {
         report(&warnings, created, updated, skipped, true);
         return Ok(0);
     }
-
-    for (_, item) in &written {
+    for (_, item) in &mut written {
         item.save()?;
+        let renamed = store.sync_path(item)?;
+        crate::cmd::note_if_blocked(&store, item, &renamed);
     }
     // After the items, not before, and re-checked against what is now on disk.
     // A milestone is an item, so the document may well have carried it — and
@@ -382,12 +454,19 @@ fn apply_fields(
     title: &str,
     milestones: &crate::refs::Milestones,
     arriving: &HashSet<String>,
+    id_map: &HashMap<Id, Id>,
 ) -> Result<()> {
     item.meta.title = Some(title.to_string());
     item.meta.key = inc.key.clone().filter(|k| !k.trim().is_empty());
 
     let status = resolve_status(cfg, inc, map, warnings, title);
     apply(item, cfg, "status", Assign::Set(status))?;
+    if let Some(closed_at) = &inc.closed_at {
+        apply(item, cfg, "closed_at", Assign::Set(closed_at.clone()))?;
+    }
+    if let Some(body) = &inc.body {
+        item.set_body(body);
+    }
 
     if let Some(kind) = &inc.kind {
         match lookup(map, "type", kind).or_else(|| cfg.item_type(kind).map(|t| t.name.clone())) {
@@ -460,11 +539,31 @@ fn apply_fields(
             ));
             continue;
         }
-        let text = match value {
+        let mut text = match value {
             serde_json::Value::String(s) => s.clone(),
             serde_json::Value::Null => continue,
+            serde_json::Value::Array(values) => values
+                .iter()
+                .map(|v| v.as_str().map_or_else(|| v.to_string(), str::to_string))
+                .collect::<Vec<_>>()
+                .join(","),
             other => other.to_string().trim_matches('"').to_string(),
         };
+        if cfg.field(&name).is_some_and(|f| {
+            f.kind == crate::config::FieldKind::Ref && f.by == crate::config::Addressing::Id
+        }) {
+            text = crate::item::split_list(&text)
+                .iter()
+                .map(|raw| {
+                    let id = raw.parse::<Id>()?;
+                    Ok(id_map.get(&id).copied().unwrap_or(id).to_string())
+                })
+                .collect::<Result<Vec<_>>>()?
+                .join(",");
+            // Invalid identity references must never be silently dropped.
+            apply(item, cfg, &name, Assign::Set(text))?;
+            continue;
+        }
         if let Err(e) = apply(item, cfg, &name, Assign::Set(text)) {
             warnings.push(format!("`{title}`: {e}"));
         }
@@ -591,7 +690,7 @@ fn read_github(args: &Args) -> Result<(Vec<Incoming>, String)> {
                 .unwrap_or("OPEN")
                 .to_lowercase();
             Incoming {
-                id: Some(number),
+                id: Some(Id::Legacy(number)),
                 title: v.get("title").and_then(|t| t.as_str()).map(str::to_string),
                 status: Some(state.clone()),
                 category: Some(if state == "closed" {
@@ -670,7 +769,8 @@ fn which(program: &str) -> Option<std::path::PathBuf> {
 /// which is also why there is no longer a `milestone add` command to call.
 fn create_milestones(cfg: &Config, store: &Store, names: &[&String]) -> Result<()> {
     let mut items = store.load_all()?;
-    for (next, name) in (store.next_id(&items)..).zip(names.iter()) {
+    for name in names {
+        let next = store.next_id(&items)?;
         let mut item = Item {
             id: next,
             meta: Default::default(),

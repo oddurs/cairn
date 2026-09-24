@@ -1,11 +1,11 @@
 ---
-id: 80
+id: 7b7d327e-c011-4dab-b601-66b892c79dca
 title: Merge sequence fields by union
 type: feature
 status: done
 milestone: v1.0
 depends_on:
-- 72
+- a7146df0-b225-4c8c-8b0c-c91c741588bc
 created: 2026-09-07
 updated: 2026-09-07
 priority: p1

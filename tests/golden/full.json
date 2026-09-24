@@ -6,12 +6,12 @@
   "created": "2026-01-02",
   "created_by": null,
   "depends_on": [
-    1
+    "00000001-0000-4000-8000-000000000001"
   ],
   "fields": {
     "priority": "p0"
   },
-  "id": 2,
+  "id": "00000002-0000-4000-8000-000000000002",
   "key": null,
   "labels": [
     "auth",
@@ -19,7 +19,7 @@
   ],
   "milestone": "v0.1",
   "owner": null,
-  "ref": "0002",
+  "ref": "00000002",
   "source": "github:owner/repo#42",
   "status": "doing",
   "title": "Every documented key at once",

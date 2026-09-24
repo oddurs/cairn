@@ -1,3 +1,4 @@
+use crate::identity::Id;
 // cairn — src/cmd/check.rs
 //
 // Copyright (c) 2026 Oddur Sigurdsson. MIT licensed; see LICENSE.
@@ -137,7 +138,7 @@ fn collect_inner(
     // format keeps somewhere other than the item directory.
     let universe = crate::refs::universe(cfg, items);
 
-    let mut by_id: HashMap<u32, Vec<&Item>> = HashMap::new();
+    let mut by_id: HashMap<Id, Vec<&Item>> = HashMap::new();
     for i in items {
         by_id.entry(i.id).or_default().push(i);
     }
@@ -151,17 +152,22 @@ fn collect_inner(
                     it,
                     "id",
                     format!(
-                        "id {} is used by {} files ({}) — run `cairn renumber`",
+                        "id {} is used by {} files ({}) — {}",
                         cfg.format_id(*id),
                         dupes.len(),
-                        others.join(", ")
+                        others.join(", "),
+                        if id.is_uuid() {
+                            "reconcile the duplicate copies; identities are immutable"
+                        } else {
+                            "repair with a legacy Cairn before migrating"
+                        }
                     ),
                 );
             }
         }
     }
 
-    let known_ids: HashSet<u32> = items.iter().map(|i| i.id).collect();
+    let known_ids: HashSet<Id> = items.iter().map(|i| i.id).collect();
     // Declared fields, plus the one each grouping type implies — a type that
     // says `groups` gives items a key of its own name without a [[field]].
     let implied: Vec<String> = cfg.grouping_types().map(|t| t.name.clone()).collect();
@@ -385,7 +391,7 @@ fn collect_inner(
             .file_name()
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_default();
-        if actual != expected {
+        if actual != expected && !cfg.is_legacy_filename(item) {
             r.warn(
                 &at,
                 // Not necessarily the title: the identifier's rendering is in
@@ -417,12 +423,12 @@ fn collect_inner(
 
 /// Depth-first search over `depends_on`, returning one representative path per
 /// cycle found.
-fn find_cycles(items: &[Item]) -> Vec<Vec<u32>> {
-    let graph: HashMap<u32, Vec<u32>> = items
+fn find_cycles(items: &[Item]) -> Vec<Vec<Id>> {
+    let graph: HashMap<Id, Vec<Id>> = items
         .iter()
         .map(|i| (i.id, i.meta.depends_on.clone()))
         .collect();
-    let mut seen: HashSet<u32> = HashSet::new();
+    let mut seen: HashSet<Id> = HashSet::new();
     let mut cycles = Vec::new();
 
     for start in graph.keys() {
@@ -431,7 +437,7 @@ fn find_cycles(items: &[Item]) -> Vec<Vec<u32>> {
         }
         let mut stack = vec![(*start, 0usize)];
         let mut path = vec![*start];
-        let mut on_path: HashSet<u32> = HashSet::from([*start]);
+        let mut on_path: HashSet<Id> = HashSet::from([*start]);
         while let Some((node, idx)) = stack.pop() {
             let deps = graph.get(&node).cloned().unwrap_or_default();
             if idx < deps.len() {

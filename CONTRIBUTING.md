@@ -20,7 +20,8 @@ item's body does not tell you enough to start, that is a bug in the item; say so
 Cairn is project memory versioned with the code. Harrow is the human interface
 for watching and triaging it; Git carries history and review. Keep the core
 small: try a schema choice, query, hook, or external reader before expanding
-the program. The next engineering slice is 0136–0138 in milestone `v0.3`.
+the program. Item 0067 records the format-4 identity decision and its migration;
+use the selected queue for the next engineering slice.
 
 | Status | Meaning here |
 | --- | --- |
@@ -90,7 +91,7 @@ branches, linked worktrees, or clones, coordinate the assignments before
 splitting. Commit the item and code together, review both, and run `cairn check`
 after merging. Do not infer distributed exclusion from a successful claim.
 Follow [the tested collaboration workflow](doc/COLLABORATION.md), including
-reference review after identifier repair and explicit checks after rebase or
+identity and reference checks after migration and explicit checks after rebase or
 cherry-pick. A successful Git operation is not itself validation of the backlog.
 
 ## While you work
@@ -186,9 +187,9 @@ schema would not do. What it costs if you get it wrong is in the manual, under
 > same pull request, before the code.
 
 A specification written after the code is a description. Written before it, it
-is a design tool — and it has already earned that: writing down that `id` is an
-unsigned integer is what made a later identifier design obviously wrong, by
-ruling out the answer that looked right.
+is a design tool. The format-4 identity decision began with the full stored UUID,
+short command reference, frozen legacy alias, and recovery contracts; each had
+to be expressible without referring to a particular implementation.
 
 Two things follow from doing it in that order. Somebody has to decide whether
 the change is additive, and therefore free under the compatibility rules,

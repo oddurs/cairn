@@ -1,23 +1,23 @@
 {
   "assignee": null,
-  "body": "K\u00f6rper mit \u00dcmlauten. \u4e2d\u6587\u6bb5\u843d\u3002\n",
+  "body": "Körper mit Ümlauten. 中文段落。\n",
   "category": "open",
   "claimed": null,
   "created": null,
   "created_by": null,
   "depends_on": [],
   "fields": {},
-  "id": 5,
+  "id": "00000005-0000-4000-8000-000000000005",
   "key": null,
   "labels": [
-    "\u65e5\u672c\u8a9e"
+    "日本語"
   ],
   "milestone": null,
   "owner": null,
-  "ref": "0005",
+  "ref": "00000005",
   "source": null,
   "status": "backlog",
-  "title": "\u65e5\u672c\u8a9e and emoji \ud83c\udfaf and \u00dcn\u00efc\u00f6d\u00e9",
+  "title": "日本語 and emoji 🎯 and Ünïcödé",
   "type": null,
   "updated": null,
   "closed_at": null

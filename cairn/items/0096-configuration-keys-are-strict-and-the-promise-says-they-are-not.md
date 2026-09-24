@@ -1,11 +1,11 @@
 ---
-id: 96
+id: 9a3947ff-cce0-4e54-836c-d621373bf2b9
 title: Configuration keys are strict, and the promise says they are not
 type: docs
 status: done
 milestone: v0.1
 depends_on:
-- 88
+- 16b12332-e3f3-4d6b-bfcf-15720e67f8f7
 created: 2026-09-07
 updated: 2026-09-07
 priority: p1

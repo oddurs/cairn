@@ -1,11 +1,11 @@
 ---
-id: 89
+id: 3523a9ab-3735-4c7a-b0a7-06a26ec66b92
 title: Decide whether a field name is a promise or a default
 type: docs
 status: done
 milestone: v1.0
 depends_on:
-- 88
+- 16b12332-e3f3-4d6b-bfcf-15720e67f8f7
 created: 2026-09-07
 updated: 2026-09-11
 priority: p2

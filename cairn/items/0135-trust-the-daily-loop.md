@@ -1,5 +1,5 @@
 ---
-id: 135
+id: f13ddc5e-9c3d-4b36-bd2e-52476b97db8b
 key: v0.3
 title: Trust the daily loop
 type: milestone
@@ -8,7 +8,7 @@ assignee: codex
 owner: oddurs
 created_by: codex
 depends_on:
-- 82
+- 6088a6f0-71c4-465a-8a55-bc1053949b09
 created: 2026-09-23
 updated: 2026-09-23
 closed_at: 2026-09-23

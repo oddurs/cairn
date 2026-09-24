@@ -5,6 +5,7 @@ mod cmd;
 mod config;
 mod filter;
 mod hooks;
+mod identity;
 mod interchange;
 mod item;
 mod lock;
@@ -178,7 +179,7 @@ enum Command {
     /// Validate every item against the schema
     Check(cmd::check::Args),
 
-    /// Repair duplicate item ids, rewriting references
+    /// Check identities; immutable UUIDs are never renumbered
     Renumber(cmd::renumber::Args),
 
     /// Bring a project up to the current on-disk format

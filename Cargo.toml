@@ -2,7 +2,7 @@
 # `cairn` and `cairn-cli` are both taken on crates.io by unrelated crates, so the
 # package is published as `cairn-md`. The binary it installs is still `cairn`.
 name = "cairn-md"
-version = "0.3.0"
+version = "1.0.0-alpha.1"
 edition = "2024"
 # let-chains (`if let ... && let ...`) stabilised in 1.88; edition 2024 alone
 # would only need 1.85.
@@ -35,6 +35,8 @@ terminal_size = "0.4.4"
 toml = "1.1.5"
 toml_edit = "0.25.13"
 unicode-width = "0.2.2"
+getrandom = "0.4.3"
+uuid = "1.26.1"
 
 [profile.release]
 lto = true

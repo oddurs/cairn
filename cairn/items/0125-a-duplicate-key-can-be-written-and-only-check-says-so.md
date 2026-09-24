@@ -1,5 +1,5 @@
 ---
-id: 125
+id: 69aaab9a-587b-43b0-8795-8536e76f497b
 title: A duplicate key can be written, and only check says so
 type: bug
 status: done

@@ -22,12 +22,12 @@ use std::process::{Command, Stdio};
 #[test]
 fn line_endings_are_preserved_on_rewrite() {
     let p = Project::new();
-    p.write(
+    p.write_uuid_fixture(
         "cairn/items/0001-crlf.md",
         "---\r\nid: 1\r\ntitle: CRLF\r\nstatus: backlog\r\n---\r\n\r\nBody line\r\nSecond line\r\n",
     );
-    p.expect(&["set", "1", "status=doing", "-q"]);
-    let after = p.read("cairn/items/0001-crlf.md");
+    p.expect(&["set", &p.id(1), "status=doing", "-q"]);
+    let after = p.item_file(&p.id(1));
     assert!(after.contains("\r\n"), "the file is still CRLF");
     assert!(
         !after.replace("\r\n", "").contains('\n'),
@@ -42,11 +42,11 @@ fn line_endings_are_preserved_on_rewrite() {
 #[test]
 fn ticking_preserves_line_endings() {
     let p = Project::new();
-    p.write(
+    p.write_uuid_fixture(
         "cairn/items/0001-crlf.md",
         "---\r\nid: 1\r\ntitle: CRLF\r\nstatus: backlog\r\n---\r\n\r\n         ## Acceptance criteria\r\n\r\n- [ ] one\r\n- [ ] two\r\n",
     );
-    p.expect(&["tick", "1", "1", "-q"]);
+    p.expect(&["tick", &p.id(1), "1", "-q"]);
     let after = p.read("cairn/items/0001-crlf.md");
     assert!(after.contains("- [x] one"), "the box moved:\n{after:?}");
     assert!(after.contains("\r\n"), "the file is still CRLF");
@@ -81,7 +81,7 @@ fn init_pins_item_line_endings_for_the_repository() {
 #[test]
 fn writing_leaves_no_temporary_files_behind() {
     let p = seeded();
-    p.expect(&["set", "1", "status=doing", "-q"]);
+    p.expect(&["set", &p.id(1), "status=doing", "-q"]);
     p.expect(&["render", "-q"]);
     milestone(&p, "v9.9", None);
     for dir in ["cairn/items", "."] {
@@ -102,7 +102,7 @@ fn an_interrupted_write_never_truncates_an_item() {
     // the rename either happened or it did not.
     let p = Project::new();
     p.add("Survives interruption", &["--body", "important content"]);
-    let original = p.read("cairn/items/0001-survives-interruption.md");
+    let original = p.read(&format!("cairn/items/{}-survives-interruption.md", p.id(1)));
 
     for n in 0..40 {
         let status = if n % 2 == 0 {
@@ -111,7 +111,7 @@ fn an_interrupted_write_never_truncates_an_item() {
             "status=backlog"
         };
         let mut child = Command::new(bin())
-            .args(["set", "1", status, "-q"])
+            .args(["set", &p.id(1), status, "-q"])
             .current_dir(p.root())
             .env("NO_COLOR", "1")
             .stdout(Stdio::null())
@@ -121,7 +121,7 @@ fn an_interrupted_write_never_truncates_an_item() {
         let _ = child.kill();
         let _ = child.wait();
 
-        let current = p.read("cairn/items/0001-survives-interruption.md");
+        let current = p.read(&format!("cairn/items/{}-survives-interruption.md", p.id(1)));
         assert!(!current.is_empty(), "the item vanished on iteration {n}");
         assert!(
             current.starts_with("---"),
@@ -130,7 +130,7 @@ fn an_interrupted_write_never_truncates_an_item() {
     }
     assert!(p.expect(&["check"]).ok(), "the corpus is still valid");
     assert_contains(
-        &p.read("cairn/items/0001-survives-interruption.md"),
+        &p.read(&format!("cairn/items/{}-survives-interruption.md", p.id(1))),
         "important content",
         "the body survived",
     );
@@ -179,15 +179,15 @@ fn an_interrupted_renumber_is_recovered() {
     let before = p.count();
     // Exactly what a crash between renumber's two phases leaves behind.
     std::fs::rename(
-        p.path("cairn/items/0001-first-item.md"),
-        p.path("cairn/items/0001-first-item.md.renumber"),
+        p.path(&format!("cairn/items/{}-first-item.md", p.id(1))),
+        p.path(&format!("cairn/items/{}-first-item.md.renumber", p.id(1))),
     )
     .unwrap();
 
     let out = p.expect(&["list", "--count"]);
     assert_eq!(out.trimmed(), before.to_string(), "the item came back");
     assert_contains(&out.stderr, "interrupted renumber", "and said so");
-    assert!(p.exists("cairn/items/0001-first-item.md"));
+    assert!(p.exists(&format!("cairn/items/{}-first-item.md", p.id(1))));
     p.expect(&["check"]);
 }
 
@@ -195,15 +195,15 @@ fn an_interrupted_renumber_is_recovered() {
 fn a_staged_file_is_never_restored_over_a_real_one() {
     let p = seeded();
     std::fs::copy(
-        p.path("cairn/items/0001-first-item.md"),
-        p.path("cairn/items/0001-first-item.md.renumber"),
+        p.path(&format!("cairn/items/{}-first-item.md", p.id(1))),
+        p.path(&format!("cairn/items/{}-first-item.md.renumber", p.id(1))),
     )
     .unwrap();
 
     let out = p.expect(&["list"]);
     assert_contains(&out.stderr, "already exists", "it refuses and explains");
     assert!(
-        p.exists("cairn/items/0001-first-item.md.renumber"),
+        p.exists(&format!("cairn/items/{}-first-item.md.renumber", p.id(1))),
         "the staged file is left for a person to deal with"
     );
 }
@@ -222,12 +222,12 @@ fn a_new_project_keeps_its_roadmap_current_without_being_told_to() {
     );
     assert_contains(&p.read("ROADMAP.md"), "First", "and it has the item in it");
 
-    p.expect(&["set", "1", "status=doing", "-q"]);
+    p.expect(&["set", &p.id(1), "status=doing", "-q"]);
     p.expect(&["render", "--check", "-q"]);
 
     p.add("Second", &[]);
     p.expect(&["render", "--check", "-q"]);
-    p.expect(&["remove", "1", "--force"]);
+    p.expect(&["remove", &p.id(1), "--force"]);
     p.expect(&["render", "--check", "-q"]);
 }
 
@@ -241,23 +241,29 @@ fn a_dependency_cycle_is_refused_rather_than_reported_later() {
     p.add("A", &[]);
     p.add("B", &[]);
     p.add("C", &[]);
-    p.expect(&["set", "2", "depends_on=1", "-q"]);
-    p.expect(&["set", "3", "depends_on=2", "-q"]);
+    p.expect(&["set", &p.id(2), &format!("depends_on={}", p.id(1)), "-q"]);
+    p.expect(&["set", &p.id(3), &format!("depends_on={}", p.id(2)), "-q"]);
 
-    let out = p.fails(&["set", "1", "depends_on=3"]);
+    let out = p.fails(&["set", &p.id(1), &format!("depends_on={}", p.id(3))]);
     assert_contains(&out.all(), "would create a cycle", "the reason");
     assert_contains(
         &out.all(),
-        "0001 -> 0003 -> 0002 -> 0001",
+        &format!(
+            "{} -> {} -> {} -> {}",
+            p.reference(1),
+            p.reference(3),
+            p.reference(2),
+            p.reference(1)
+        ),
         "the path round it",
     );
     p.expect(&["check"]);
 
-    p.fails(&["set", "1", "depends_on=1"]);
-    p.fails(&["set", "1", "depends_on+=3"]);
+    p.fails(&["set", &p.id(1), &format!("depends_on={}", p.id(1))]);
+    p.fails(&["set", &p.id(1), &format!("depends_on+={}", p.id(3))]);
     // A dependency that does not close a cycle is still fine.
-    p.expect(&["set", "1", "depends_on=", "-q"]);
-    p.expect(&["new", "D", "-d", "1", "-q"]);
+    p.expect(&["set", &p.id(1), "depends_on=", "-q"]);
+    p.expect(&["new", "D", "-d", &p.id(1), "-q"]);
     p.expect(&["check"]);
 }
 
@@ -272,9 +278,9 @@ fn dropped_work_does_not_count_against_progress() {
     for n in 0..4 {
         p.add(&format!("Idea {n}"), &["--milestone", "someday"]);
     }
-    p.expect(&["close", "2", "-q"]);
-    for id in ["3", "4", "5"] {
-        p.expect(&["set", id, "status=dropped", "-q"]);
+    p.expect(&["close", &p.id(2), "-q"]);
+    for id in [p.id(3), p.id(4), p.id(5)] {
+        p.expect(&["set", &id, "status=dropped", "-q"]);
     }
 
     let listed = p.expect(&["roadmap"]).stdout;
@@ -311,12 +317,12 @@ fn renaming_onto_an_existing_file_never_overwrites_it() {
     p.add("Original title", &[]);
 
     // A real item, in a file named after a different one.
-    p.write(
-        "cairn/items/0001-taken.md",
+    p.write_uuid_fixture(
+        &format!("cairn/items/{}-taken.md", p.id(1)),
         "---\nid: 99\ntitle: Taken\nstatus: backlog\n---\n\nkept by hand\n",
     );
 
-    let out = p.run(&["set", "1", "title=Taken"]);
+    let out = p.run(&["set", &p.id(1), "title=Taken"]);
     assert!(
         out.ok(),
         "a change that was written was reported as a failure:\n{}",
@@ -331,21 +337,27 @@ fn renaming_onto_an_existing_file_never_overwrites_it() {
 
     // A retry is not a new failure, which is what a script keying off the exit
     // status used to see forever.
-    assert!(p.run(&["set", "1", "title=Taken"]).ok());
+    assert!(p.run(&["set", &p.id(1), "title=Taken"]).ok());
 
-    let occupant = std::fs::read_to_string(p.path("cairn/items/0001-taken.md")).unwrap();
-    assert_contains(&occupant, "id: 99", "the item in the way was overwritten");
+    let occupant =
+        std::fs::read_to_string(p.path(&format!("cairn/items/{}-taken.md", p.id(1)))).unwrap();
+    assert_contains(
+        &occupant,
+        &format!("id: {}", p.id(99)),
+        "the item in the way was overwritten",
+    );
     assert_contains(&occupant, "kept by hand", "its body was overwritten");
 
     // Whatever the exit status claims, the item and its file agree with each
     // other: the title is the new one and the old file still holds it.
     assert_contains(
-        &p.expect(&["show", "1"]).stdout,
+        &p.expect(&["show", &p.id(1)]).stdout,
         "Taken",
         "the item is in neither state",
     );
     assert_contains(
-        &std::fs::read_to_string(p.path("cairn/items/0001-original-title.md")).unwrap(),
+        &std::fs::read_to_string(p.path(&format!("cairn/items/{}-original-title.md", p.id(1))))
+            .unwrap(),
         "title: Taken",
         "the file on disk disagrees with what cairn reports",
     );

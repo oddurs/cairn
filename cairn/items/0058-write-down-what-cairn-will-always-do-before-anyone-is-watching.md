@@ -1,5 +1,5 @@
 ---
-id: 58
+id: 04547d5d-69c6-4a35-a362-64525e51874d
 title: Write down what cairn will always do, before anyone is watching
 type: docs
 status: done

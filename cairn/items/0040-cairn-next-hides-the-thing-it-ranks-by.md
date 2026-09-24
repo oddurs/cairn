@@ -1,5 +1,5 @@
 ---
-id: 40
+id: d93357c5-5c84-4f68-a754-39b4baa6ca4a
 title: cairn next hides the thing it ranks by
 type: bug
 status: done

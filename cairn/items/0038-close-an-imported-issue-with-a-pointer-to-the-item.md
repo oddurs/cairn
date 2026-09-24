@@ -1,5 +1,5 @@
 ---
-id: 38
+id: 6b06b8ee-b45f-4a4d-8ac8-ae7aaa545f57
 title: Close an imported issue with a pointer to the item
 type: feature
 status: done

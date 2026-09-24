@@ -1,5 +1,5 @@
 ---
-id: 51
+id: 08c35e87-0e81-4e8e-af6c-dcf5f3786ec8
 title: Review the command surface before 1.0 freezes it
 type: chore
 status: done

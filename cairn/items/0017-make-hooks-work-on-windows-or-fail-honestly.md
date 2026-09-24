@@ -1,5 +1,5 @@
 ---
-id: 17
+id: 60a87cac-5d61-4230-be74-e82e8f829ea3
 title: Make hooks work on Windows, or fail honestly
 type: bug
 status: done

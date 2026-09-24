@@ -6,11 +6,11 @@
   "created": null,
   "created_by": null,
   "depends_on": [
-    1,
-    2
+    "00000001-0000-4000-8000-000000000001",
+    "00000002-0000-4000-8000-000000000002"
   ],
   "fields": {},
-  "id": 4,
+  "id": "00000004-0000-4000-8000-000000000004",
   "key": null,
   "labels": [
     "auth",
@@ -19,7 +19,7 @@
   ],
   "milestone": null,
   "owner": null,
-  "ref": "0004",
+  "ref": "00000004",
   "source": null,
   "status": "backlog",
   "title": "Labels written as a bare string",

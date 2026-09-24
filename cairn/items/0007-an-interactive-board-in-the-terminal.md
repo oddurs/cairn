@@ -1,5 +1,5 @@
 ---
-id: 7
+id: 02e09cf9-039a-4af9-b7f6-7134de18d616
 title: An interactive board in the terminal
 type: feature
 status: dropped

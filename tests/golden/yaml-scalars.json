@@ -7,7 +7,7 @@
   "created_by": null,
   "depends_on": [],
   "fields": {},
-  "id": 11,
+  "id": "0000000b-0000-4000-8000-00000000000b",
   "key": null,
   "labels": [
     "12:30",
@@ -16,7 +16,7 @@
   ],
   "milestone": null,
   "owner": null,
-  "ref": "0011",
+  "ref": "0000000b",
   "source": null,
   "status": "backlog",
   "title": "Scalars YAML resolves before cairn sees them",

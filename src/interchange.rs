@@ -1,3 +1,4 @@
+use crate::identity::Id;
 // cairn — the interchange format.
 //
 // Copyright (c) 2026 Oddur Sigurdsson. MIT licensed; see LICENSE.
@@ -22,7 +23,7 @@ use serde_json::{Value, json};
 
 /// Interchange format version. Bumped only for changes a consumer must know
 /// about; new optional keys do not bump it.
-pub const FORMAT_VERSION: &str = "1";
+pub const FORMAT_VERSION: &str = "2";
 
 /// Build the interchange document for a set of items.
 pub fn document(cfg: &Config, store: &Store, items: &[Item], today: &str) -> Value {
@@ -41,7 +42,7 @@ pub fn document(cfg: &Config, store: &Store, items: &[Item], today: &str) -> Val
         .collect();
 
     json!({
-        "cairn": FORMAT_VERSION,
+        "cairn": if cfg.format() >= 4 { FORMAT_VERSION } else { "1" },
         "exported": today,
         "project": {
             "name": cfg.project.name,
@@ -60,7 +61,7 @@ pub fn document(cfg: &Config, store: &Store, items: &[Item], today: &str) -> Val
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct Incoming {
     #[serde(default)]
-    pub id: Option<u32>,
+    pub id: Option<Id>,
     #[serde(default)]
     pub title: Option<String>,
     /// The handle a key-addressed reference names. Without it a milestone
@@ -97,7 +98,9 @@ pub struct Incoming {
     #[serde(default)]
     pub updated: Option<String>,
     #[serde(default)]
-    pub depends_on: Vec<u32>,
+    pub closed_at: Option<String>,
+    #[serde(default)]
+    pub depends_on: Vec<Id>,
     #[serde(default)]
     pub source: Option<String>,
     #[serde(default)]
@@ -110,6 +113,11 @@ pub struct Incoming {
 /// item. Being liberal here costs nothing and saves every adapter author a
 /// wrapper.
 pub fn items_from(doc: &Value) -> anyhow::Result<Vec<Incoming>> {
+    if let Some(version) = doc.get("cairn")
+        && !matches!(version.as_str(), Some("1" | "2"))
+    {
+        anyhow::bail!("unsupported interchange version {version}; expected 1 or 2");
+    }
     let raw = match doc {
         Value::Object(o) if o.contains_key("items") => o.get("items").cloned().unwrap_or(json!([])),
         Value::Object(_) => json!([doc]),

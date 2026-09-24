@@ -1,3 +1,4 @@
+use crate::identity::Id;
 // cairn — proposing a change somebody else decides.
 //
 // Copyright (c) 2026 Oddur Sigurdsson. MIT licensed; see LICENSE.
@@ -56,7 +57,7 @@ pub struct ListArgs {
 /// One proposal, as it was written down.
 #[derive(Debug, Clone)]
 pub struct Proposal {
-    pub id: u32,
+    pub id: Id,
     pub field: String,
     pub from: String,
     pub to: String,
@@ -162,7 +163,7 @@ pub fn of(item: &Item) -> Vec<Proposal> {
 }
 
 /// `Proposed priority: p2 -> p0 (claude, 2026-09-08)`
-fn parse_heading(id: u32, heading: &str) -> Option<Proposal> {
+fn parse_heading(id: Id, heading: &str) -> Option<Proposal> {
     let rest = heading.trim().strip_prefix(HEADING)?.trim();
     let (change, who_when) = rest.rsplit_once('(')?;
     let who_when = who_when.trim_end_matches(')');

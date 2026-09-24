@@ -1,3 +1,4 @@
+use crate::identity::Id;
 // cairn — the item: one Markdown file with YAML frontmatter.
 //
 // Copyright (c) 2026 Oddur Sigurdsson. MIT licensed; see LICENSE.
@@ -77,7 +78,7 @@ impl Field {
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct Meta {
     #[serde(default)]
-    pub id: Option<u32>,
+    pub id: Option<Id>,
     #[serde(default)]
     pub title: Option<String>,
     /// A short human handle, unique among items of this type.
@@ -118,7 +119,7 @@ pub struct Meta {
     #[serde(default, deserialize_with = "de_string_list")]
     pub labels: Vec<String>,
     #[serde(default, deserialize_with = "de_id_list")]
-    pub depends_on: Vec<u32>,
+    pub depends_on: Vec<Id>,
     #[serde(default)]
     pub created: Option<String>,
     #[serde(default)]
@@ -176,7 +177,7 @@ pub struct Criterion {
 
 #[derive(Debug, Clone)]
 pub struct Item {
-    pub id: u32,
+    pub id: Id,
     pub meta: Meta,
     pub body: String,
     pub path: PathBuf,
@@ -235,7 +236,7 @@ impl Item {
             "updated" => opt(self.meta.updated.as_deref()),
             "source" => opt(self.meta.source.as_deref()),
             "labels" | "label" => Field::List(self.meta.labels.clone()),
-            "depends_on" => Field::List(self.meta.depends_on.iter().map(u32::to_string).collect()),
+            "depends_on" => Field::List(self.meta.depends_on.iter().map(Id::to_string).collect()),
             "body" => Field::Text(self.body.clone()),
             other => match self.meta.extra.get(Value::String(other.to_string())) {
                 Some(v) => value_to_field(v),
@@ -251,25 +252,25 @@ impl Item {
     /// An id is a number, and writing it as `'1'` would both look wrong beside
     /// `depends_on: [1, 2]` and rewrite a hand-written `part_of: [1, 4]` into
     /// quoted strings on the next save — turning an unchanged item into a diff.
-    pub fn set_extra_ids(&mut self, key: &str, ids: &[u32]) {
+    pub fn set_extra_ids(&mut self, key: &str, ids: &[Id]) {
         let k = Value::String(key.to_string());
         if ids.is_empty() {
             self.meta.extra.remove(&k);
             return;
         }
-        let values: Vec<Value> = ids.iter().map(|n| Value::Number((*n).into())).collect();
+        let values: Vec<Value> = ids.iter().map(|n| n.yaml()).collect();
         self.meta.extra.insert(k, Value::Sequence(values));
     }
 
     /// The same, for a field that holds exactly one identifier.
-    pub fn set_extra_id(&mut self, key: &str, id: Option<u32>) {
+    pub fn set_extra_id(&mut self, key: &str, id: Option<Id>) {
         let k = Value::String(key.to_string());
         match id {
             None => {
                 self.meta.extra.remove(&k);
             }
             Some(n) => {
-                self.meta.extra.insert(k, Value::Number(n.into()));
+                self.meta.extra.insert(k, n.yaml());
             }
         }
     }
@@ -461,7 +462,7 @@ impl Item {
             .or_else(|| id_from_filename(path))
             .or_else(|| {
                 let name = path.file_name()?.to_str()?;
-                format?.id_in_filename(name)
+                format?.id_in_filename(name).map(Id::Legacy)
             })
             .ok_or_else(|| {
                 let expected = match format {
@@ -514,7 +515,7 @@ impl Item {
         let mut put = |k: &str, v: Value| {
             m.insert(Value::String(k.to_string()), v);
         };
-        put("id", Value::Number(self.id.into()));
+        put("id", self.id.yaml());
         if let Some(v) = &self.meta.key {
             put("key", Value::String(v.clone()));
         }
@@ -558,13 +559,7 @@ impl Item {
         if !self.meta.depends_on.is_empty() {
             put(
                 "depends_on",
-                Value::Sequence(
-                    self.meta
-                        .depends_on
-                        .iter()
-                        .map(|i| Value::Number((*i).into()))
-                        .collect(),
-                ),
+                Value::Sequence(self.meta.depends_on.iter().map(|i| i.yaml()).collect()),
             );
         }
         if let Some(v) = &self.meta.created {
@@ -720,7 +715,7 @@ pub fn split_frontmatter(text: &str) -> Option<(String, String)> {
     None
 }
 
-fn id_from_filename(path: &Path) -> Option<u32> {
+fn id_from_filename(path: &Path) -> Option<Id> {
     let stem = path.file_stem()?.to_str()?;
     let digits: String = stem.chars().take_while(char::is_ascii_digit).collect();
     digits.parse().ok()
@@ -825,12 +820,12 @@ fn de_string_list<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<String>, D::Err
     })
 }
 
-fn de_id_list<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<u32>, D::Error> {
+fn de_id_list<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<Id>, D::Error> {
     let raw = de_string_list(d)?;
     let mut out = Vec::new();
     for s in raw {
         let t = s.trim().trim_start_matches('#');
-        match t.parse::<u32>() {
+        match t.parse::<Id>() {
             Ok(n) => out.push(n),
             Err(_) => {
                 return Err(serde::de::Error::custom(format!(
@@ -1017,7 +1012,7 @@ mod properties {
                 let title = title.replace("\r\n", "\n");
                 let body = body.replace("\r\n", "\n");
                 let mut meta = Meta {
-                    id: Some(id),
+                    id: Some(id.into()),
                     title: Some(title),
                     kind,
                     status: Some(status),
@@ -1026,7 +1021,7 @@ mod properties {
                 };
                 meta.created = Some("2026-01-01".into());
                 Item {
-                    id,
+                    id: id.into(),
                     meta,
                     body,
                     path: PathBuf::from(format!("{id:04}-x.md")),

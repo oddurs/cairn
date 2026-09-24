@@ -1,0 +1,22 @@
+{
+  "assignee": null,
+  "body": "Body.\n",
+  "category": "open",
+  "claimed": null,
+  "created": null,
+  "created_by": null,
+  "depends_on": [],
+  "fields": {},
+  "id": "0000000a-0000-4000-8000-00000000000a",
+  "key": null,
+  "labels": [],
+  "milestone": null,
+  "owner": null,
+  "ref": "0000000a",
+  "source": null,
+  "status": "backlog",
+  "title": "An explicit identity, independent of filename",
+  "type": null,
+  "updated": null,
+  "closed_at": null
+}

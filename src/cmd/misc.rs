@@ -234,11 +234,17 @@ fn describe_field(f: &crate::config::FieldDef) -> String {
 pub fn schema_json(cfg: &Config, milestones: &crate::refs::Milestones) -> serde_json::Value {
     use serde_json::json;
     json!({
+        "format": cfg.format(),
+        "identity": {
+            "kind": if cfg.format() >= 4 { "uuidv4" } else { "integer" },
+            "immutable": cfg.format() >= 4,
+            "minimum_prefix": if cfg.format() >= 4 { Some(8) } else { None },
+        },
         "project": {
             "name": cfg.project.name,
             "description": cfg.project.description,
             "dir": cfg.project.dir,
-            "id_width": cfg.project.id_width,
+            "id_width": if cfg.format() < 4 { Some(cfg.project.id_width) } else { None },
             "default_type": cfg.project.default_type,
             "default_status": cfg.initial_status(),
             "root": cfg.root.display().to_string(),
@@ -439,6 +445,14 @@ selection policy. Regenerate these instructions with `cairn agent{scope} --write
         "Claims coordinate writers in the same item directory, not separate branches, \
 worktrees, or clones. Agree on assignments before splitting work.\n\n",
     );
+    if cfg.format() >= 4 {
+        s.push_str(
+            "Item identities are immutable UUIDv4 strings. Use full `id` values from JSON \
+for durable references; commands also accept unambiguous prefixes of at least 8 hex digits. \
+Store full identities in ID-reference fields, never prefixes. Migrated legacy numbers \
+remain lookup aliases; new items do not receive numbers.\n\n",
+        );
+    }
     s.push_str("### Schema\n\n");
     if !cfg.types.is_empty() {
         s.push_str(&format!(

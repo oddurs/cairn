@@ -1,5 +1,5 @@
 ---
-id: 66
+id: e30c4a7d-858e-43fb-b4cd-7a3e575a0bdb
 title: Find three people who are not the author
 type: chore
 status: blocked

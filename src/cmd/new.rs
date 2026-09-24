@@ -74,7 +74,7 @@ pub fn run(args: Args) -> Result<i32> {
     // is only correct while nothing else is doing the same.
     let lock = Lock::acquire(&cfg)?;
     let existing = store.load_all()?;
-    let id = store.next_id(&existing);
+    let id = store.next_id(&existing)?;
     let now = today();
 
     let mut item = Item {
@@ -174,7 +174,7 @@ pub fn run(args: Args) -> Result<i32> {
                 item.title()
             );
         }
-        if cfg.id_format().read(&key).is_ok() {
+        if cfg.looks_like_id(&key) {
             bail!(
                 "a `{kind}` is named by its key, and `{key}` would read as an \
                  identifier — {advice}"

@@ -36,6 +36,7 @@ import json
 import os
 import re
 import sys
+import uuid
 
 import yaml  # §6: YAML resolves unquoted scalars, so a YAML parser is required.
 
@@ -134,9 +135,28 @@ def as_list(value):
     return [part.strip() for part in str(value).split(",") if part.strip()]
 
 
-def as_ids(value):
-    """§4: like as_list, but integers, each with an optional leading `#`."""
-    return [int(str(v).lstrip("#").strip()) for v in as_list(value)]
+def identity(value, format):
+    """§4.2: full UUIDv4 in format 4; unsigned numbers in historical files."""
+    if format >= 4:
+        if not isinstance(value, str) or not re.fullmatch(
+            r"(?:[0-9a-fA-F]{32}|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})", value
+        ):
+            raise NotAnItem("a stored identity must be a full UUIDv4")
+        parsed = uuid.UUID(value)
+        if parsed.version != 4 or parsed.variant != uuid.RFC_4122:
+            raise NotAnItem("identity is not RFC 9562 UUIDv4")
+        return str(parsed)
+    try:
+        number = int(str(value).lstrip("#").strip())
+    except ValueError as e:
+        raise NotAnItem("legacy identity is not an integer") from e
+    if not 0 <= number <= 4294967295:
+        raise NotAnItem("legacy identity is outside u32")
+    return number
+
+
+def as_ids(value, format):
+    return [identity(v, format) for v in as_list(value)]
 
 
 def id_from_filename(path):
@@ -147,7 +167,7 @@ def id_from_filename(path):
     return int(digits.group()) if digits else None
 
 
-def read(path, text=None):
+def read(path, text=None, format=4):
     """Parse one item file into a dictionary of its documented keys."""
     if text is None:
         with open(path, "rb") as f:
@@ -161,17 +181,17 @@ def read(path, text=None):
         raise NotAnItem("frontmatter is not a mapping")
 
     ident = meta.get("id")
-    if ident is None:
+    if ident is None and format < 4:
         ident = id_from_filename(path)
     if ident is None:
-        raise NotAnItem("no `id` and no leading digits in the filename")
+        raise NotAnItem("no full identity in frontmatter (only legacy formats allow filename fallback)")
 
     def text_or_none(key):
         value = meta.get(key)
         return None if value is None else str(value)
 
     return {
-        "id": int(ident),
+        "id": identity(ident, format),
         "key": text_or_none("key"),
         "title": text_or_none("title"),
         "type": text_or_none("type"),
@@ -182,7 +202,7 @@ def read(path, text=None):
         "owner": text_or_none("owner"),
         "created_by": text_or_none("created_by"),
         "labels": as_list(meta.get("labels")),
-        "depends_on": as_ids(meta.get("depends_on")),
+        "depends_on": as_ids(meta.get("depends_on"), format),
         "created": text_or_none("created"),
         "updated": text_or_none("updated"),
         "closed_at": text_or_none("closed_at"),

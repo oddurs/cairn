@@ -169,38 +169,41 @@ fn a_clone_must_opt_into_its_own_executable_integration() {
 fn claims_exclude_local_writers_but_do_not_reserve_other_worktrees() {
     let p = unintegrated();
     let linked = worktree(&p, "independent");
-    p.expect(&["claim", "1", "--as", "first"]);
+    p.expect(&["claim", &p.id(1), "--as", "first"]);
     assert_contains(
-        &p.fails(&["claim", "1", "--as", "second"]).all(),
+        &p.fails(&["claim", &p.id(1), "--as", "second"]).all(),
         "already claimed",
         "same-directory exclusion",
     );
-    linked.expect(&["claim", "1", "--as", "second"]);
-    assert_eq!(p.json(&["show", "1", "--json"])["assignee"], "first");
-    assert_eq!(linked.json(&["show", "1", "--json"])["assignee"], "second");
+    linked.expect(&["claim", &p.id(1), "--as", "second"]);
+    assert_eq!(p.json(&["show", &p.id(1), "--json"])["assignee"], "first");
+    assert_eq!(
+        linked.json(&["show", &p.id(1), "--json"])["assignee"],
+        "second"
+    );
 }
 
 #[test]
 fn a_committed_assignment_and_explicit_release_support_handoff_and_review() {
     let p = unintegrated();
-    p.expect(&["claim", "1", "--as", "first"]);
+    p.expect(&["claim", &p.id(1), "--as", "first"]);
     commit(&p, "agree on the assignment before splitting");
     let linked = worktree(&p, "implementation");
-    linked.fails(&["claim", "1", "--as", "second"]);
+    linked.fails(&["claim", &p.id(1), "--as", "second"]);
     linked.expect(&[
         "release",
-        "1",
+        &p.id(1),
         "--reason",
         "The reproduction is in feature.txt",
     ]);
-    linked.expect(&["claim", "1", "--as", "second"]);
+    linked.expect(&["claim", &p.id(1), "--as", "second"]);
     linked.write(
         "feature.txt",
         "reproduction and code travel with the item\n",
     );
     linked.expect(&[
         "note",
-        "1",
+        &p.id(1),
         "Kept the reproduction with the implementation.",
     ]);
     commit(&linked, "implement with the reasoning");
@@ -213,64 +216,74 @@ fn a_committed_assignment_and_explicit_release_support_handoff_and_review() {
         "branch summary",
     );
     assert_contains(
-        &linked.expect(&["log", "1"]).all(),
+        &linked.expect(&["log", &p.id(1)]).all(),
         "assignee first -> second",
         "item history",
     );
     linked.expect(&["check", "--render", "--strict"]);
 }
 
-fn id_with_title(p: &Project, title: &str) -> u64 {
+fn id_with_title(p: &Project, title: &str) -> String {
     p.json(&["list", "--all", "--json"])
         .as_array()
         .unwrap()
         .iter()
         .find(|i| i["title"] == title)
         .unwrap()["id"]
-        .as_u64()
+        .as_str()
         .unwrap()
+        .to_string()
 }
 
 #[test]
-fn colliding_branch_references_are_reviewed_instead_of_guessed() {
+fn independent_branch_creation_preserves_identity_and_references_without_repair() {
     let p = repository();
     git(&p, &["checkout", "-qb", "branch-a"]);
     let parent = p.add("Parent A", &[]);
     p.add("Dependent A", &["-d", &parent]);
+    let a = (
+        id_with_title(&p, "Parent A"),
+        id_with_title(&p, "Dependent A"),
+    );
     commit(&p, "a with references");
     git(&p, &["checkout", "-q", "main"]);
     let parent = p.add("Parent B", &[]);
     p.add("Dependent B", &["-d", &parent]);
+    let b = (
+        id_with_title(&p, "Parent B"),
+        id_with_title(&p, "Dependent B"),
+    );
+    assert_ne!(a.0, b.0);
+    assert_ne!(a.1, b.1);
     commit(&p, "b with references");
     git(&p, &["merge", "--no-edit", "branch-a"]);
-    // Renumber cannot know which branch a bare reference meant. Its mapping
-    // and each branch's diff let the reviewer restore intent explicitly.
-    for side in ["A", "B"] {
-        let parent = id_with_title(&p, &format!("Parent {side}"));
-        let child = id_with_title(&p, &format!("Dependent {side}"));
-        p.expect(&["set", &child.to_string(), &format!("depends_on={parent}")]);
+    for (parent, child) in [a, b] {
         assert_eq!(
-            p.json(&["show", &child.to_string(), "--json"])["depends_on"],
+            p.json(&["show", &child, "--json"])["depends_on"],
             serde_json::json!([parent])
         );
     }
     assert_eq!(p.count_all(), 5);
     p.expect(&["check", "--render", "--strict"]);
     assert!(
-        !git(&p, &["status", "--porcelain"]).trim().is_empty(),
-        "review and commit the repair"
+        git(&p, &["diff", "--name-only", "HEAD", "--", "cairn/items"])
+            .trim()
+            .is_empty(),
+        "merging does not rewrite item identities or references"
     );
 }
 
 #[test]
-fn rebase_and_cherry_pick_require_explicit_post_operation_repair() {
+fn rebase_and_cherry_pick_keep_independent_identities_without_repair() {
     for operation in ["rebase", "cherry-pick"] {
         let p = repository();
         git(&p, &["checkout", "-qb", "topic"]);
         p.add("From topic", &[]);
+        let topic_id = id_with_title(&p, "From topic");
         commit(&p, "topic work");
         git(&p, &["checkout", "-q", "main"]);
         p.add("From main", &[]);
+        let main_id = id_with_title(&p, "From main");
         commit(&p, "main work");
         if operation == "rebase" {
             git(&p, &["checkout", "-q", "topic"]);
@@ -278,9 +291,9 @@ fn rebase_and_cherry_pick_require_explicit_post_operation_repair() {
         } else {
             git(&p, &["cherry-pick", "topic"]);
         }
-        p.fails(&["check"]); // post-merge is not a general history hook
-        assert_contains(&p.expect(&["renumber", "--dry-run"]).all(), "->", operation);
-        p.expect(&["renumber"]);
+        p.expect(&["check"]);
+        assert_eq!(id_with_title(&p, "From topic"), topic_id);
+        assert_eq!(id_with_title(&p, "From main"), main_id);
         p.expect(&["render"]);
         p.expect(&["check", "--render", "--strict"]);
         assert_eq!(p.count_all(), 3, "{operation}: nothing was lost");

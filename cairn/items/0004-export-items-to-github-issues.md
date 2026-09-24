@@ -1,11 +1,11 @@
 ---
-id: 4
+id: be6cb414-7bf2-4fe8-9255-e36d94c20533
 title: Export items to GitHub issues
 type: feature
 status: dropped
 milestone: v0.2
 depends_on:
-- 10
+- 5a557b09-d0d2-4662-bb6f-43bd131a35f3
 created: 2026-09-04
 updated: 2026-09-05
 priority: p2

@@ -1,5 +1,5 @@
 ---
-id: 94
+id: 9d675940-e881-4194-bec9-3ce1851f4f48
 title: A renamed milestone field empties the roadmap without a word
 type: bug
 status: done

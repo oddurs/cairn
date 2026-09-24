@@ -235,9 +235,9 @@ fn b(a: &Value, key: &str) -> bool {
 /// An agent may send `12` or `"MP-1002"`, and both mean the same item. The
 /// schema says integer, but a model that has seen the rendered form in output
 /// will send the rendered form, and refusing it teaches nothing.
-fn require_id(cfg: &Config, a: &Value) -> Result<u32> {
+fn require_id(cfg: &Config, a: &Value) -> Result<crate::identity::Id> {
     match a.get("id") {
-        Some(Value::Number(v)) => Ok(v.as_u64().unwrap_or(0) as u32),
+        Some(Value::Number(v)) => cfg.parse_id(&v.to_string()),
         Some(Value::String(v)) => cfg.parse_id(v),
         _ => bail!("`id` is required"),
     }
@@ -301,7 +301,7 @@ fn list_items(a: &Value) -> Result<String> {
         }
     }
     if let Some(expr) = s(a, "filter") {
-        filter = filter.and(Filter::parse(&expr)?);
+        filter = filter.and(crate::filter::parse_checked(&cfg, &expr, "filter")?);
     }
     if let Some(since) = s(a, "since") {
         filter.push(
@@ -418,7 +418,7 @@ fn create_item(a: &Value) -> Result<String> {
     };
 
     let similar = crate::item::near_duplicates(&title, &existing);
-    let id = store.next_id(&existing);
+    let id = store.next_id(&existing)?;
     let now = today();
     let mut item = Item {
         id,
@@ -485,12 +485,13 @@ fn create_item(a: &Value) -> Result<String> {
     if !item.meta.depends_on.is_empty() {
         crate::cmd::set::check_no_cycle(&store, &item)?;
     }
+    crate::refs::validate_on_write(&cfg, &store, &item)?;
     item.save()?;
     drop(lock);
     hooks::item(&cfg, &store, hooks::Event::AfterCreate, &item);
 
     let mut out = json!({
-        "created": cfg.format_id(item.id),
+        "created": item.id,
         "id": item.id,
         "path": store.rel(&item.path),
     });
@@ -534,6 +535,7 @@ fn update_item(a: &Value) -> Result<String> {
         item.set_body(body);
     }
     item.touch(&today());
+    crate::refs::validate_on_write(&cfg, &store, &item)?;
     item.save()?;
     // In the reply rather than on stderr, which no agent reads. The write has
     // already happened, so this is news about the filename and not a failure:
@@ -638,7 +640,7 @@ fn claim_item(a: &Value) -> Result<String> {
     hooks::item(&cfg, &store, hooks::Event::AfterChange, &item);
 
     pretty(&json!({
-        "claimed": cfg.format_id(item.id),
+        "claimed": item.id,
         "id": item.id,
         "title": item.title(),
         "assignee": who,
@@ -666,7 +668,7 @@ fn add_note(a: &Value) -> Result<String> {
     drop(lock);
     hooks::item(&cfg, &store, hooks::Event::AfterChange, &item);
 
-    pretty(&json!({ "noted": cfg.format_id(item.id), "body": item.body }))
+    pretty(&json!({ "noted": item.id, "body": item.body }))
 }
 
 /// Tick or untick acceptance criteria, by the numbers `show_item` reports.
@@ -754,7 +756,8 @@ fn tick_criteria(a: &Value) -> Result<String> {
 
     let now = item.criteria_list(section);
     pretty(&json!({
-        "id": cfg.format_id(item.id),
+        "id": item.id,
+        "ref": cfg.format_id(item.id),
         "done": now.iter().filter(|c| c.ticked).count(),
         "total": now.len(),
         "criteria": now
@@ -809,7 +812,7 @@ fn propose_change(a: &Value) -> Result<String> {
     hooks::item(&cfg, &store, hooks::Event::AfterChange, &item);
 
     pretty(&json!({
-        "proposed": cfg.format_id(item.id),
+        "proposed": item.id,
         "field": field,
         "from": from,
         "to": value,
@@ -845,7 +848,7 @@ fn release_item(a: &Value) -> Result<String> {
     hooks::item(&cfg, &store, hooks::Event::AfterChange, &item);
 
     pretty(&json!({
-        "released": cfg.format_id(item.id),
+        "released": item.id,
         "status": item.status(),
     }))
 }
@@ -890,7 +893,7 @@ fn close_item(a: &Value) -> Result<String> {
     // rather than to say what is still true.
     let c = item.criteria(cfg.project.criteria_section.as_deref());
     let mut out = json!({
-        "closed": cfg.format_id(item.id),
+        "closed": item.id,
         "status": item.status(),
     });
     if c.any() {
@@ -1126,7 +1129,7 @@ fn tools() -> Vec<Value> {
             "description": "One item in full, including its Markdown body, its dependencies \
         and whether it is blocked.",
             "inputSchema": obj(json!({
-                "id": id_prop("Item id, as a number or in the project's rendered form"),
+                "id": id_prop("Full UUIDv4, unambiguous prefix (at least 8 hex digits), or migrated legacy number"),
                 "fields": json!({
                     "type": "array", "items": {"type": "string"},
                     "description": "Return only these keys, to spend less of your context. \

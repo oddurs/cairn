@@ -1,5 +1,5 @@
 ---
-id: 97
+id: e2600293-783b-4da3-9f83-25fa87a567c8
 title: Adopt a schema instead of retyping it
 type: feature
 status: done
