@@ -5,9 +5,12 @@ Project memory, versioned with the code. Plain Markdown, a schema you own, and a
 Cairn keeps intent, work, and decisions beside the code. Harrow is the terminal
 interface for watching that work and deciding what needs attention.
 
-The next outcome is **a daily workflow we can trust across people, agents, and
-Git branches**. Then we make the compatibility promise of 1.0. Releases follow
-evidence, not placeholder dates. The assessment and design boundaries are in
+The v0.3 daily loop is complete: approved work, agreement with Harrow, and
+tested Git collaboration. The next outcome is **safe to keep for years**:
+recover old reasoning, establish long-lived data and recovery evidence, and
+settle the compatibility promise of 1.0. That work is not yet selected for an
+autonomous queue. Releases follow evidence, not placeholder dates. The
+assessment and design boundaries are in
 [0134](cairn/items/0134-give-cairn-a-durable-direction-and-a-working-project-setup.md).
 
 This page shows unfinished work. `planned` means selected for the next cycle;
