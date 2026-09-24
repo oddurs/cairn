@@ -1,3 +1,4 @@
+use crate::identity::Id;
 // cairn — src/cmd/set.rs
 //
 // Copyright (c) 2026 Oddur Sigurdsson. MIT licensed; see LICENSE.
@@ -78,7 +79,7 @@ pub fn run(args: Args) -> Result<i32> {
         .map(|raw| parse_assignment(raw))
         .collect::<Result<_>>()?;
 
-    let targets: Vec<u32> = match &args.filter {
+    let targets: Vec<Id> = match &args.filter {
         None => ids
             .iter()
             .map(|raw| cfg.parse_id(raw))
@@ -452,7 +453,7 @@ pub fn apply(item: &mut Item, cfg: &Config, key: &str, assign: Assign) -> Result
                 // The same rule identifier prefixes obey: a key that reads as a
                 // number would make a reference ambiguous, and two spellings
                 // must not be able to name different items.
-                if cfg.id_format().read(&v).is_ok() {
+                if cfg.looks_like_id(&v) {
                     bail!(
                         "key `{v}` reads as an identifier; a reference to it \
                          could not be told from a number"
@@ -557,7 +558,7 @@ pub fn apply(item: &mut Item, cfg: &Config, key: &str, assign: Assign) -> Result
         "depends_on" => {
             // Through the project's own format, so `depends_on+=MP-1002` works
             // wherever `cairn show MP-1002` does.
-            let parse = |v: &str| -> Result<Vec<u32>> {
+            let parse = |v: &str| -> Result<Vec<Id>> {
                 split_list(v).iter().map(|s| cfg.parse_id(s)).collect()
             };
             let list = &mut item.meta.depends_on;
@@ -612,6 +613,24 @@ fn apply_custom(item: &mut Item, cfg: &Config, key: &str, assign: Assign) -> Res
         // Checked here rather than in `validate_scalar`, which sees only the
         // definition: whether a name resolves is a question about the backlog.
         FieldKind::Ref => {
+            // Resolve command shorthand before list add/remove comparisons;
+            // only full identities ever enter the stored representation.
+            let assign = if def.by == crate::config::Addressing::Id {
+                let canonical = |value: &str| -> Result<String> {
+                    split_list(value)
+                        .iter()
+                        .map(|v| cfg.parse_id(v).map(|id| id.to_string()))
+                        .collect::<Result<Vec<_>>>()
+                        .map(|v| v.join(","))
+                };
+                match assign {
+                    Assign::Set(v) => Assign::Set(canonical(&v)?),
+                    Assign::Add(v) => Assign::Add(canonical(&v)?),
+                    Assign::Remove(v) => Assign::Remove(canonical(&v)?),
+                }
+            } else {
+                assign
+            };
             let mut current = match item.get(key) {
                 Field::List(v) => v,
                 Field::Text(t) if !t.is_empty() => vec![t],
@@ -637,12 +656,12 @@ fn apply_custom(item: &mut Item, cfg: &Config, key: &str, assign: Assign) -> Res
             // An id-addressed ref stores numbers, so that it reads the way
             // `depends_on` does and a hand-written `part_of: [1, 4]` survives a
             // save unchanged.
-            let numeric: Option<Vec<u32>> = (def.by == crate::config::Addressing::Id)
+            let numeric: Option<Vec<Id>> = (def.by == crate::config::Addressing::Id)
                 .then(|| {
                     current
                         .iter()
-                        .map(|v| v.trim().trim_start_matches('#').parse::<u32>().ok())
-                        .collect::<Option<Vec<u32>>>()
+                        .map(|v| v.trim().trim_start_matches('#').parse::<Id>().ok())
+                        .collect::<Option<Vec<Id>>>()
                 })
                 .flatten();
             match (numeric, crate::refs::is_many(def)) {

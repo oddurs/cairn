@@ -31,9 +31,12 @@ Safe to keep: an explicit compatibility contract, tested recovery, useful retrie
 
 ### not committed
 
-- [ ] [`0067`](https://github.com/oddurs/cairn/blob/main/cairn/items/0067-decide-whether-identifiers-should-be-collision-free-by-construction.md) Decide whether identifiers should be collision-free by construction <sup>decision · p1</sup>
 - [ ] [`0139`](https://github.com/oddurs/cairn/blob/main/cairn/items/0139-recover-the-reason-for-a-change-after-a-long-absence.md) Recover the reason for a change after a long absence <sup>feature · p1</sup>
 - [ ] [`0140`](https://github.com/oddurs/cairn/blob/main/cairn/items/0140-exercise-years-of-history-and-interrupted-work.md) Exercise years of history and interrupted work <sup>chore · p1</sup>
+
+### in progress
+
+- [ ] [`0067`](https://github.com/oddurs/cairn/blob/main/cairn/items/0067-decide-whether-identifiers-should-be-collision-free-by-construction.md) Decide whether identifiers should be collision-free by construction <sup>decision · p1</sup>
 
 ### waiting
 

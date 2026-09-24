@@ -221,7 +221,11 @@ pub fn run(args: Args) -> Result<i32> {
     let available = term.saturating_sub(gap * n.saturating_sub(1));
     // A column narrower than an id plus an ellipsis shows nothing at all, so a
     // requested width is clamped rather than obeyed literally.
-    let floor = cfg.project.id_width + 4;
+    let floor = items
+        .iter()
+        .map(|i| cfg.format_id(i.id).len() + 4)
+        .max()
+        .unwrap_or(12);
     let widths: Vec<usize> = if let Some(w) = args.width {
         vec![w.max(floor); n]
     } else if want.iter().sum::<usize>() <= available {

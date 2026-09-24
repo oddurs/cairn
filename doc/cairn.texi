@@ -67,7 +67,7 @@ terms of the MIT licence, the same terms cairn itself is offered under. See the
 * Hooks::                   Running your own programs on events.
 * Coding agents::           Keeping generated work inside the schema.
 * Continuous integration::  Validating in CI.
-* Identifiers::             Ids, collisions, and repair.
+* Identifiers::             Immutable identity, short handles, and migration.
 * Index::
 @end menu
 
@@ -83,6 +83,13 @@ Git carries history, branches, review, and distribution.
 it watches and reads the same files, and delegates changes to cairn. Agents
 use the CLI, JSON, or MCP interface. Neither interface needs a separate store
 of project state.
+
+This development line writes format 4. New items have immutable UUIDv4 ids;
+commands accept their unique prefixes of at least eight hexadecimal digits.
+Use the id returned by @command{new} or @command{list} in examples. Numeric
+command examples below describe preserved legacy aliases in migrated projects,
+not a counter allocated to new items. Files and machine output always use full
+UUIDs; @xref{Identifiers}.
 
 Roadmaps rot because they live somewhere the work does not. A @file{ROADMAP.md}
 maintained by hand drifts from reality within a month. An issue tracker on
@@ -277,10 +284,9 @@ item, or allocating an id that a broken file already holds.
 @cindex locking
 @cindex concurrency
 @cindex agents, concurrent
-Allocating an identifier means reading every one in use and adding one, which is
-correct only while nothing else is doing the same thing. That was a safe
-assumption while the writer was a person at a terminal. It stopped being one
-when two agents sharing a backlog became an ordinary arrangement.
+UUIDv4 identities are generated from operating-system randomness, without
+a shared counter. Local writers still need exclusion: validation, references,
+and file replacement must observe one coherent backlog.
 
 Commands that write take a lock — a file created in the item directory with an
 operation that fails if it already exists, which is an atomic test-and-set
@@ -306,111 +312,48 @@ reaches the repository.
 @cindex merging
 @cindex git integration
 @cindex merge driver
-Two branches that each add an item conflict in the rendered roadmap and collide
-on an identifier, on the first merge. Neither is really a conflict. The roadmap
-is generated, so reconciling two renderings of different inputs is meaningless;
-the identifiers collide because allocation reads the highest in use, which no
-branch can know.
+Format 4 creates immutable UUIDv4 identities. Independent branches create
+different identities without consulting each other. Merging those items does
+not rename them or retarget their references.
 
 @example
 cairn init --git
 @end example
 
-@noindent
-registers a merge driver for the generated file and installs a @code{post-merge}
-hook that renumbers any collision and renders again. It is safe on a project
-that already exists --- that is how one adopts it --- and doing it twice changes
-nothing.
+This registers the merge drivers and installs a @code{post-merge} hook.
+The roadmap driver retains one side until items have merged; the hook then
+regenerates the roadmap. It also invokes @command{renumber}, which makes no
+changes in a valid format-4 project. Nothing is staged or committed for you.
 
-@cindex index order, and merging
-The order git works in constrains the design. Paths are resolved in index order,
-and @file{ROADMAP.md} sorts before @file{cairn/items/}, so when the merge driver
-runs the items it would render from are still unmerged. The driver therefore
-does not pretend to know the answer: it keeps our side, which is a valid
-rendering of a real state, and the hook replaces it with the right one once the
-items are settled.
+Git resolves the hook location, including @code{core.hooksPath}. Linked
+worktrees normally share hooks; a relative hooks path is relative to each
+working tree. Run setup in every clone and wherever a relative hook is needed.
+Tracked @file{.gitattributes} declares intent but cannot install an executable
+driver in another clone. @command{check} warns when that setup is missing.
 
-@cindex hooks, not cloned
-@cindex merge driver, not cloned
-Three consequences worth knowing. Git resolves the hook location, including
-@code{core.hooksPath}; linked worktrees normally share the common hook directory.
-A relative hooks path is relative to each working tree, so run setup there too.
-Git does not clone the default hooks directory. Nor does it clone the driver:
-git deliberately refuses
-to take an executable name from a file in the repository, so @file{.gitattributes}
-can say @emph{use the cairn driver} and only per-clone configuration can say what
-that is. Each working copy therefore runs @command{cairn init --git} once, and
-running it again on a copy that has it is a no-op that says so.
+A claim excludes writers in the same item directory, not separate branches,
+worktrees, or clones. Agree on assignments before splitting. Publish the claim
+and reasoning with the code; use @command{release --reason} for a handoff.
 
-That asymmetry used to be silent, and silent in the worst direction: it worked for
-whoever set the project up, so the one person who could fix it was the one person
-who could not see it. Everybody else had @file{.gitattributes} asking for a driver
-git had never heard of, git merged the item files itself, and two branches that
-had both allocated an identifier kept it. @command{cairn check} now reports the
-mismatch, before the duplicate identifiers it causes --- because @command{cairn
-renumber} repairs those every time and the next merge produces them again.
+Rebase, cherry-pick, forge merges, and merges stopped by conflicts do not run
+the successful local merge hook. Review the result, run @command{cairn render}
+and @command{cairn check --render --strict}, and commit any changes explicitly.
+No automatic commit rewriting or distributed reservation is implied.
 
-And a merge performed by a forge rather than locally runs no hook at all, which is
-why @command{cairn check --render} belongs in continuous integration regardless.
-
-Anything the hook changed is left for a person to commit; a hook that amended
-the merge commit would be doing something nobody asked it to.
-
-@subsection Worktrees, handoff, and operations without a post-merge hook
-
-A claim excludes another writer only in the same item directory. Agree on
-assignments in a shared base or through an explicit coordinator before splitting
-into worktrees or clones. Publish the assignment through your normal review
-workflow. To hand it back, @command{cairn release --reason} records what the
-next worker needs; they read that note before claiming it.
-
-Rebase, cherry-pick, forge merges, and a merge stopped by conflicts do not run
-the successful local merge's repair hook. After finishing the operation, inspect
-@command{cairn renumber --dry-run}, run @command{cairn renumber}, audit references,
-run @command{cairn render}, and finish with @command{cairn check --render --strict}.
-Commit repairs explicitly. The hook also leaves repairs unstaged and uncommitted.
-
-If both branches created the same id, renumbering cannot know which item an
-existing reference meant. Compare branch additions against the merge base and
-the reported id mapping, then restore intended references with @command{cairn
-set}. Audit all id-valued reference fields and prose, not just
-@code{depends_on}. A structurally valid link can still name the wrong idea.
-
-Review both @command{cairn log --range main..HEAD} and
-@command{git diff main...HEAD}; use @command{cairn log ID --patch} for the
-item's reasoning over time. Substitute your actual base branch.
-
-@section Which side keeps a contested identifier
+@section Duplicate identities
 
 @cindex merge collision
 @cindex renumber
-Two branches that each create an item allocate the same identifier, because
-allocation is one more than the highest in use and no branch can know what the
-other did. When they meet, one of the two has to move.
+A duplicate UUID means ambiguous data, not an allocation queue to compact.
+@command{cairn check} reports it; @command{renumber} refuses to invent a new
+identity for either file. Reconcile the copies and their incoming references
+deliberately. If they are genuinely different work, record a new item and
+review which references belong to it.
 
-They are not equals. One side has been published --- it is on the branch people
-pull, and anybody may have written its identifier into a commit message or a
-link --- and the other is arriving. Renaming the published one churns history
-and breaks those references, so the published one keeps its number.
-
-cairn asks the repository which is which. If the current commit is a merge, its
-@emph{first parent} is the branch the merge was made on, and an item whose file
-was added on that side was already published. If a merge is in progress and has
-not been committed, @code{HEAD} is that side.
-
-Asking whether @code{HEAD} is a merge @emph{before} asking whether one is in
-progress matters, because the @code{post-merge} hook runs after the merge commit
-exists but while @file{.git/MERGE_HEAD} is still on disk. Asking the other way
-round picks the merge commit, which contains both sides, and concludes that both
-were published.
-
-Neither the creation date nor the depth of history distinguishes them: two
-branch commits made a moment apart tie on the first, and siblings tie on the
-second. Both were tried.
-
-Outside a repository, or on an ordinary commit, the older item keeps the
-identifier and the filename breaks a tie --- which is what cairn did before, and
-is the best that can be done with no history to consult.
+Legacy numeric collisions must be repaired using the legacy writer before
+migration. Migrate one shared baseline once, then carry that migration commit
+to other branches. Independent migrations of the same numeric items allocate
+different identities and must not be combined blindly.
 
 @section What a merge resolves, and what it does not
 
@@ -425,8 +368,8 @@ Re-derived. Two renderings of different inputs cannot be reconciled, and there
 is nothing in it that is not in the items.
 
 @item Identifiers
-Repaired by @command{renumber}, keeping the number on the side already
-published. @xref{Identifiers}.
+Preserved. Independently created UUIDs need no renumbering. Duplicate copies
+of one UUID require review. @xref{Identifiers}.
 
 @item Item files
 Resolved only where the disagreement has an answer.
@@ -459,13 +402,17 @@ scratch; an item cannot be rebuilt, so the bar for resolving anything in one is
 higher rather than lower. A driver that resolved too much would lose an edit
 somebody meant, silently, which is worse than any conflict.
 
-@section Interrupted renumbering
+@section Interrupted migration
 
-@command{cairn renumber} moves a file aside before writing it back under its new
-id. If it is interrupted in between, the staged file is all that remains of the
-item. The next command to read the backlog restores it and says so. If something
-already occupies the original name, cairn refuses to overwrite it and reports
-both paths.
+Format-4 identity migration records a complete before/after plan in
+@file{.identity-migration.json} before changing item identities. Ordinary
+commands refuse a pending migration. Rerun @command{cairn migrate}: it accepts
+only the planned original or already-written bytes, refuses intervening edits,
+and writes the format declaration last. Keep a complete pre-migration backup;
+restoring only the configuration would produce a mixed-format project.
+
+Historical @file{.renumber} staging files are still recovered on reads, without
+overwriting a file that already occupies the original path.
 
 @section What is tested
 
@@ -525,8 +472,9 @@ The frontmatter is a YAML mapping. Every key is optional except as noted.
 
 @table @code
 @item id
-Unsigned integer, unique within a project. Required, except that a reader may
-take it from a leading run of digits in the filename when the key is absent.
+Full UUIDv4 string, immutable and unique within a project. Required explicitly;
+format 4 never infers identity from a filename. Historical formats 1--3 retain
+their numeric identity and filename-fallback reading rules.
 @item title
 String. Required in practice: an item without one is reported by
 @command{cairn check}.
@@ -542,9 +490,9 @@ String.
 Sequence of strings. A reader must also accept a single string, splitting it on
 commas and discarding surrounding whitespace.
 @item depends_on
-Sequence of unsigned integers. A reader must also accept a single string of
-comma-separated integers, and must accept each element with an optional leading
-@samp{#}.
+Sequence of full UUIDv4 strings. Readers accept the documented scalar sequence
+form; every stored reference must still be a full identity, never a command
+prefix. Historical numeric references are supported only in formats 1--3.
 @item created
 @itemx updated
 Date as @samp{YYYY-MM-DD}.
@@ -594,7 +542,7 @@ Data outlives the program that wrote it. A project records the format it uses,
 and this is the promise attached to that number.
 
 @example
-format = 1
+format = 4
 @end example
 
 @section The rules
@@ -637,7 +585,7 @@ Written down so it is decided rather than discovered.
 
 @multitable @columnfractions .55 .45
 @headitem Change @tab Cost
-@item @code{id} stops being an unsigned integer
+@item Changing the meaning or representation of @code{id}
 @tab @strong{every item file, every project}
 @item Removing @code{milestone} or @code{depends_on} as documented keys
 @tab configuration only, as format 2 was
@@ -677,9 +625,9 @@ Of the item-shaped changes, only the first is expensive, and it is the only one
 whose cost grows with adoption. Everything else is either free or shaped like format 2, which touched
 no item file at all.
 
-That asymmetry is why the identifier question is a decision to settle rather
-than a feature to schedule: the cheapest moment to change what an identifier is
-was yesterday, and the second cheapest is today.
+Format 4 pays that cost deliberately: identities are UUIDv4 strings, and every
+numeric identity and id-addressed reference is migrated. Legacy numeric lookup
+survives through a frozen map, not through a second allocator.
 
 @section Roles: a decision taken by not taking it
 
@@ -839,9 +787,8 @@ round trip --- and checks after every single step that the backlog still holds
 together. It prints its seed, and a failure is reproduced by passing that seed
 back.
 
-A second test races several processes writing at once, because identifiers are
-allocated as one more than the highest in use and that is only safe while a lock
-makes the read and the write one step.
+A second test races several processes writing at once, checking distinct
+identities and coherent writes under contention.
 
 @example
 make soak
@@ -1051,13 +998,13 @@ created cairn/items/
 @option{--preset minimal} starts from three statuses, ordinary tasks and a milestone type;
 @option{--bare} omits example items and milestones. The default,
 @option{--preset standard}, writes a fully commented schema to adapt. In a
-fresh standard project, the examples occupy identifiers 1 through 4, so the
-next item is 5:
+fresh standard project, examples and new work each receive a UUID.
+Use the reference printed by your own command; the value below is illustrative:
 
 @example
 $ cairn new "Support OAuth login" --type feature --milestone v0.1
-created 0005  Support OAuth login
-$ cairn set 5 status=doing
+created a47c3bd2  Support OAuth login
+$ cairn set a47c3bd2 status=doing
 $ cairn board
 $ cairn render
 wrote ROADMAP.md  5 items
@@ -1078,7 +1025,7 @@ frontmatter, a closing @samp{---}, and a free-form body.
 
 @example
 ---
-id: 1
+id: a47c3bd2-8f6b-4e92-b108-35b01d5e842a
 title: Support OAuth login
 type: feature
 status: doing
@@ -1086,7 +1033,7 @@ milestone: v0.1
 labels:
   - auth
 depends_on:
-  - 3
+  - 972ab460-5dd1-480c-9e83-6470bf1528ac
 created: 2026-09-04
 updated: 2026-09-11
 priority: p0
@@ -1102,7 +1049,7 @@ Everything below it is yours; cairn never rewrites the body.
 
 @table @code
 @item id
-An integer, unique within the project. @xref{Identifiers}.
+An immutable UUIDv4 string. @xref{Identifiers}.
 
 @item title
 Required. The filename tracks it: renaming the title renames the file.
@@ -1114,7 +1061,7 @@ One of the @code{[[type]]} blocks in @file{cairn.toml}, or absent.
 Required. One of the @code{[[status]]} blocks.
 
 @item milestone
-The @code{name} of a @code{[[milestone]]} block, or absent.
+The @code{key} of a milestone item, or absent.
 
 @item labels
 A list. A bare string is accepted and split on commas, so
@@ -1160,7 +1107,8 @@ Where item files live, relative to @file{cairn.toml}. Default
 @file{cairn/items}.
 
 @item id_width
-Zero-padding width for displayed ids. Default 4, giving @samp{0001}.
+Legacy numeric display width, used only when reading formats 1--3. Format 4
+uses unambiguous UUID prefixes and removes this setting during migration.
 
 @item default_type
 @itemx default_status
@@ -1331,7 +1279,7 @@ A milestone is an item.
 
 @example
 ---
-id: 42
+id: a83f26b1-0000-4000-8000-000000000042
 key: v0.1
 title: Usable in anger
 type: milestone
@@ -1437,10 +1385,9 @@ finished work as unfinished. Nothing about it is visibly wrong.
 schema never presents a guess as a decision.
 
 Requiring it would be better, and it is not free: making an optional key
-required needs a format number and a migration (@pxref{Compatibility}). Format 3
-is not worth spending on one key, so the requirement waits for a number that is
-being spent anyway. The rule survives its first inconvenient instance, which is
-the only test a rule like that ever gets.
+required needs a format number and a migration (@pxref{Compatibility}).
+Format 4 changes identity only; it does not bundle an unrelated workflow
+requirement into that migration. Missing categories remain visible diagnostics.
 
 @section What the configuration does not promise
 
@@ -1697,11 +1644,15 @@ cairn import --from github --repo owner/name
 
 @section The document
 
-A JSON object with four keys: @code{cairn}, the format version;
+A JSON object with @code{cairn}, the interchange version;
 @code{exported}, the date; @code{project}; @code{schema}, the exporting
 project's types, statuses, fields and milestones; and @code{items}. Each item
 carries its fields, its Markdown body, its dependencies, and its
-@code{category}.
+@code{category}. Format-4 exports carry @code{"cairn":"2"} and full UUID strings
+in @code{id} and id-addressed references. Native imports preserve those
+identities. Historical format exports retain interchange version 1 and numeric
+ids; the importer maps external numeric records to new UUIDs and preserves
+their internal reference relationships.
 
 @cindex category, in interchange
 That last one is load-bearing. Statuses are named per project, so an importer
@@ -2422,7 +2373,7 @@ declares.
 @vindex key
 @example
 ---
-id: 42
+id: a83f26b1-0000-4000-8000-000000000042
 key: v0.1
 title: Usable in anger
 type: milestone
@@ -2431,7 +2382,7 @@ type: milestone
 
 @noindent
 A key is what keeps @code{milestone: v0.1} readable in a file instead of
-becoming @code{milestone: 42}. That readability is a large part of why this
+becoming a full UUID reference. That readability is a large part of why this
 format is worth having, and it would be a poor trade for internal tidiness.
 
 @cindex identity
@@ -2468,9 +2419,9 @@ updated 0001  Version one
 @end example
 
 @noindent
-Leaving them behind would orphan every reference silently, which is the failure
-this exists to prevent. @command{renumber} already does exactly this when an
-identifier moves; this is the same job one level up.
+Leaving them behind would orphan every reference silently. Key-addressed
+references follow the renamed key; id-addressed references stay unchanged
+because the item's identity did not move.
 
 @section Containers
 
@@ -3002,16 +2953,15 @@ nobody, which is what a stalled item looks like. An empty value means unset.
 @cindex merge
 @example
 cairn check
-cairn renumber --dry-run
-cairn renumber
 cairn render
+cairn check --render --strict
 @end example
 
 @noindent
-Two branches that each created an item allocate the same identifier, because no
-branch can know what the other did. @command{renumber} repairs it, keeping the
-identifier on the side that was already published. The dry run first, always:
-this rewrites files. @xref{Identifiers}.
+Independent UUID creation needs no renumbering. Resolve conflicting edits
+deliberately, then regenerate and validate the roadmap. A duplicate UUID is
+ambiguous data to reconcile, not an invitation to invent a new identity.
+@xref{Identifiers}.
 
 @section Find out what happened to an item
 
@@ -3090,7 +3040,8 @@ somebody else's.
 @item The ones that write something @command{set} cannot
 @command{note} appends to the body under a dated heading. @command{milestone}
 edits @file{cairn.toml} rather than an item. @command{init} writes a schema.
-@command{render} writes the roadmap. @command{renumber} repairs identifiers.
+@command{render} writes the roadmap. @command{renumber} is a compatibility
+command that leaves immutable identities unchanged.
 
 @item Three views of one query
 @command{list}, @command{board} and @command{roadmap} could in principle be one
@@ -3314,12 +3265,13 @@ new one because two short items look alike to a similarity heuristic, and
 reported the pair as a retitle. Identity is not something cairn has to guess.
 
 @cindex renumber, in a range
-A renumber is the exception, and is counted rather than listed. It moves
+Historical numeric renumbering is the exception, and is counted rather than listed. It moves
 identifiers and the filenames follow, so a range sees a deletion and an addition
 for each: reported as they arrive, repairing fifty identifiers reads as fifty
 items gone and fifty arrived, which buries whatever else the branch did. The pair
 is matched on an unchanged title, status and body, so a deletion and an unrelated
-creation that happen to share a title are left alone.
+creation that happen to share a title are left alone. UUID identities are never
+paired by this heuristic: two UUIDs are two items even when their prose matches.
 
 @section cairn tick, cairn untick
 @cindex ticking criteria
@@ -3486,14 +3438,18 @@ saved view nobody uses must not stop @command{cairn show} from working. The
 exception is a filter that does not parse, which cannot be what anybody meant.
 
 @section cairn renumber
-Repairs duplicate ids. @xref{Identifiers}.
+A compatibility command: valid UUID projects need no renumbering. It refuses
+duplicate identities and preserves migrated filenames. @xref{Identifiers}.
 
 @section cairn migrate
 Brings a project to the current on-disk format, rewriting @file{cairn.toml}.
 @option{--dry-run} reports what would change and writes nothing;
 @option{--check} exits non-zero if the project is not already current, which is
-what a continuous integration job runs. The migration to format 3 does not touch
-item files. @xref{Compatibility}.
+what a continuous integration job runs. Format 4 rewrites item identities and
+id-addressed references, adds a frozen legacy map, and preserves body bytes and
+filenames. Interrupted identity migration resumes from its saved plan.
+Back up the complete project, stop writers, and share one migration commit.
+@xref{Compatibility}.
 
 @section cairn config
 Prints the resolved schema, @option{--json} for machine use, @option{--path}
@@ -3551,7 +3507,10 @@ Absolute path to the project root.
 @item CAIRN_CONFIG
 Absolute path to @file{cairn.toml}.
 @item CAIRN_ITEM_ID
-@itemx CAIRN_ITEM_PATH
+Full canonical identity, never a display prefix.
+@item CAIRN_ITEM_REF
+The short, currently unambiguous display reference.
+@item CAIRN_ITEM_PATH
 @itemx CAIRN_ITEM_TITLE
 @itemx CAIRN_ITEM_STATUS
 @itemx CAIRN_ITEM_TYPE
@@ -3611,145 +3570,80 @@ forge; it is one command in whatever runs your tests.
 @node Identifiers
 @chapter Identifiers
 
-@section How an identifier is written
+@section Identity and display
 
-@cindex project key
-@cindex id_format
-@vindex id_format
-By default an identifier reads @code{0001}. A project can say otherwise:
+Every format-4 item has a UUIDv4 generated from operating-system randomness.
+It is independent of the title, filename, date, branch, and other items.
+No service, machine registration, shared counter, or clock is needed.
+The identity stays fixed through edits, retitles, Git operations, and native
+export/import.
 
-@example
-[project]
-id_format = "@{n:04@}"           # 0001         --- the default
-id_format = "MP-@{n@}"           # MP-1002
-id_format = "A@{n@}"             # A24
-id_format = "CAIRN-TOOLS-@{n@}"  # CAIRN-TOOLS-24
-@end example
+Frontmatter and every id-addressed reference store the full lowercase,
+hyphenated UUID. JSON @code{id} and hook @env{CAIRN_ITEM_ID} use that same value.
+Readers accept full compact or uppercase spellings and writers normalize them.
 
-@noindent
-@code{@{n@}} is the number and @code{@{n:04@}} pads it, which is the syntax the
-audience already knows from every format string they use. One template rather
-than three settings for key, separator and padding: three would express the same
-thing less clearly and would allow combinations nobody wants, while a template
-shows you what it produces.
+@code{ref}, tables, and @option{--ids} use an unambiguous prefix, normally eight
+hex digits. More digits are shown when needed. That short reference may grow
+as the backlog grows: do not store it as an external permanent identity.
+Machine consumers should use @option{--json} and retain @code{id}.
 
-@subsection The key is a rendering, not the identifier
+@section Typing an identity
 
-@cindex rendering
-This is the whole design, and it is worth being explicit about because the
-obvious reading of ``I want @code{MP-1002}'' is the wrong answer.
-
-Putting @code{MP-1002} in the frontmatter would make @code{id} not an unsigned
-integer, which the specification commits to --- so it would be a new format
-number and a migration for every existing project. It would also break the
-machinery that depends on identifiers being numbers: allocation is
-@code{max + 1}, @command{renumber} compares and reassigns, @code{depends_on} is
-a list of integers, and import maps identifiers across projects.
-
-So @code{id} stays an integer and the project declares how it is @emph{written}.
-That is not a compromise forced by the format; it is the better design, and the
-format promise is what made it obvious. A project changing its key changes how
-things are displayed, not what anything is, and nothing that refers to an item
-by number breaks.
-
-In JSON, @code{id} is the number and @code{ref} carries the rendered form.
-
-@subsection Typing one
-
-Both forms are accepted, in every place an identifier is taken:
+Commands and equality filters accept full UUIDs, unambiguous prefixes of at
+least eight hex digits, and preserved legacy aliases. Ambiguous input fails
+with an explanation; it never chooses the first match.
 
 @example
-cairn show MP-1002
-cairn show 1002
-cairn show mp-1002
-cairn set MP-1002 depends_on+=MP-1000
+cairn show a47c3bd2
+cairn show a47c3bd2-8f6b-4e92-b108-35b01d5e842a
+cairn set a47c3bd2 depends_on+=972ab460
 @end example
 
-@noindent
-Requiring a prefix somebody already knows is friction for nothing, and every
-reference written before a project adopted a key is a bare number. Prefix
-matching is case-insensitive.
+The examples use illustrative identities; use those printed by your project.
+A full unknown UUID may be parsed as an identity but cannot target missing
+work. Item keys remain a separate namespace. Numeric-looking keys and UUID-like
+prefixes are reserved to prevent ambiguous lookups.
 
-A prefix cannot begin with a digit, and cairn refuses one that does: it would
-make the rendered form indistinguishable from a plain number, and two spellings
-must not be able to mean different items.
+@section Migrating numeric projects
 
-@subsection Where to start counting
-
-@vindex id_start
-Allocation is one more than the highest identifier in use, so an empty project's
-first item is @code{1}. A team wanting @code{MP-1002} would otherwise have to
-create a thousand items.
+Formats 1--3 remain readable. Writes require @command{cairn migrate}.
+Upgrade Harrow and other readers first, back up the entire project, and stop
+concurrent writers. Preview before changing anything:
 
 @example
-[project]
-id_start = 1000
+cairn migrate --dry-run
+cairn migrate
+cairn render
+cairn check --render --strict
 @end example
 
-@noindent
-This applies to an empty project and nowhere else. Lowering it later does
-nothing, because allocation still takes the maximum --- which is the right
-behaviour, and is said here rather than left to be discovered.
+Migration gives each old item a UUID, rewrites declared id-addressed
+references, and records the correspondence in @file{_legacy-ids.toml} in the
+item directory. Key-addressed references and prose are not rewritten.
+Existing filenames, body bytes, and historical Git commits are retained.
+@command{cairn log} uses the map to bridge old and new identities.
 
-@subsection Adopting a format in an existing project
+Commit the config, items, and map together as one migration. Share that commit,
+rather than migrating separate copies of the same numeric backlog.
+Old aliases such as @code{42}, @code{0042}, or @code{MP-42} keep resolving using
+the frozen old rendering. New items receive no numeric alias. Removed aliases
+are never reused, and the map must remain tracked even after their item is gone.
 
-Filenames carry the rendered identifier, so changing the format means every file
-should be renamed. @command{cairn check} reports each mismatch, and
-@command{cairn renumber} fixes them; @option{--dry-run} shows what it would do.
+@code{id_format}, @code{id_width}, and @code{id_start} belong to the historical
+numeric format and are removed from the project configuration by migration.
+Format 4 has no configurable allocator and does not infer identity from a
+filename. New filenames contain the full UUID; migrated old names remain valid.
 
-@example
-cairn check                 # filename does not match the item ...
-cairn renumber --dry-run
-cairn renumber
-@end example
+@section Recovery and conflicts
 
-@noindent
-Renaming is the same job as repairing a duplicate identifier --- making the
-identifiers on disk say what they mean --- which is why it lives in the same
-command rather than a new one.
+An interrupted migration leaves @file{.identity-migration.json}. Rerun
+@command{cairn migrate}; do not delete the journal to bypass the guard.
+Intervening edits are refused rather than overwritten. Restore the entire
+pre-migration backup if you need to roll back.
 
-@subsection Reading an identifier out of a filename
-
-@cindex filename fallback
-The specification allows a reader to take @code{id} from a leading run of digits
-when the key is absent. @file{MP-1002-slug.md} has no leading digits, so that
-fallback alone would make a hand-written file in such a project unreadable ---
-and silently, which is the wrong failure. cairn also tries the project's own
-rendering, which §4.2 of the specification permits.
-
-
-@cindex ids
-@cindex merge conflicts
-Item ids are small integers because people have to type them. That choice has
-a cost, and it is worth stating plainly.
-
-A sequential id is allocated as one more than the highest in use, which
-requires knowing every id in use --- that is, it requires coordination. A
-distributed workflow does not provide any. Two contributors on two branches
-each create @dfn{the next} item and both get the same number. The branches
-merge cleanly, because the filenames differ, and the repository now holds two
-items sharing an id.
-
-@command{cairn check} detects this and names both files.
-@command{cairn renumber} repairs it: published-side preference at a merge,
-otherwise creation date and filename, decides which item keeps the id; the
-others are reassigned. Because nothing
-can unambiguously refer to a duplicated id, existing @code{depends_on}
-references are left pointing at the retained item and a note says so.
-
-@example
-$ cairn renumber --dry-run
-  0002 -> 0003  Branch B feature
-$ cairn renumber
-@end example
-
-@cindex compacting ids
-There is no @option{--compact}. Gaps preserve identifiers already used in
-history and external references. Renumbering repairs collisions, not cosmetics.
-
-Renumbering is explicit unless you opted into @command{cairn init --git}; its
-post-merge hook performs the repair and leaves changes for review. References
-remain yours to audit, and no hook commits the repair for you.
+@command{renumber} changes nothing in a valid UUID backlog. Duplicate UUIDs
+require explicit reconciliation, including incoming references.
+There is no @option{--compact}: identity is not a row number.
 
 @node Index
 @unnumbered Index

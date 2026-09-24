@@ -2,15 +2,17 @@
 id: 67
 title: Decide whether identifiers should be collision-free by construction
 type: decision
-status: backlog
+status: doing
 milestone: v1.0
+assignee: codex
+claimed: 2026-09-23
 depends_on:
 - 138
 created: 2026-09-06
 updated: 2026-09-23
 priority: p1
 area: git
-effort: m
+effort: xl
 ---
 
 ## Problem
@@ -62,10 +64,14 @@ the bias to be suspicious of, so it should not be decided alone.
 
 ## Acceptance criteria
 
-- [ ] Decided before 1.0, with the reasoning recorded
-- [ ] If changed: a format version, a migration, and the corpus extended
-- [ ] If kept: the specification says why, so the question is settled
-- [ ] Somebody other than the author reads the argument first
+- [x] Owner-approved decision and tradeoffs recorded before 1.0
+- [x] Format 4 specifies immutable UUIDv4, full machine references, unambiguous prefixes and frozen legacy aliases
+- [x] Resumable migration preserves body bytes, dates, unknown metadata and historical identity without rewriting Git
+- [x] Frozen formats 1–3 and the current corpus pass both independent readers
+- [ ] Harrow preserves full identity across reads, queries, selection, writes, undo and history; paired CI pins agree
+- [ ] Durability, contract, documentation and packaging checks pass
+- [ ] Both live backlogs migrate in separate commits with their old aliases and Git history verified
+- [ ] Verified matching binaries are installed; migration and development-version status are documented
 
 ## 2026-09-06: three pieces of evidence this decision did not have
 
@@ -130,3 +136,19 @@ Assessment 0134: keep the current integer identifiers during the next cycle. No 
 ## 2026-09-23
 
 Evidence from 0138: real branch merges can repair numeric collisions deterministically while retaining every item, but references to colliding IDs still need branch-context review; rebase and cherry-pick need explicit repair. Shared-directory locks do not coordinate worktrees. This is a real ergonomic cost to weigh before 1.0, not grounds to change identity mid-v0.3. The executable cases are tests/collaboration.rs and the supported workflow is doc/COLLABORATION.md.
+
+## 2026-09-23
+
+Owner approved the decision and implementation: immutable UUIDv4 identities, canonical full references, unambiguous short command handles, no per-clone allocator or permanent second numbering system. Implement a format-4 migration with a preserved legacy-number map and historical lookup, update Harrow independently, and migrate this project in a dedicated commit without rewriting Git history. This explicit owner approval supersedes the earlier requirement to wait for outside-user review; the old rationale remains as history. The change belongs on a breaking-version development line, not in a 0.3 patch.
+
+## 2026-09-23
+
+Format 4 implementation is underway on feat/immutable-identities. UUIDv4 identities, full stored references, ambiguity-safe prefixes, a frozen legacy-number map, and resumable migration are implemented. The migration retains old filenames and exact body bytes; history comparisons bridge the migration without rewriting Git. Verified 65 core unit tests, 19 focused identity/harness tests, current golden parsing, and 49 independent-reader cases across formats 1-4. General regression tests are being updated to use actual UUIDs or explicit UUID fixtures, not rewritten command output. Harrow counterpart work is tracked in its item 0107 and separate worktree. Neither live project has been migrated yet.
+
+## 2026-09-23
+
+The format suite now passes all 43 tests, including migration of the frozen format-1 corpus. That test exposed and fixed comma-separated legacy dependency migration. The updated soak passed 400 mixed operations with identity-preserving export/import and unchanged identities through renumber; the concurrent soak created 100 distinct items. Hooks now expose full CAIRN_ITEM_ID plus short CAIRN_ITEM_REF. Harrow counterpart implementation is underway in its isolated feat/immutable-identities worktree; its core compiles with identity-bearing state separated from numeric counts. Live backlogs remain format 3 pending paired verification.
+
+## 2026-09-23
+
+The active criteria now express the owner-approved change rather than the superseded keep-integers alternative. Full Cairn default tests, release-mode 400-operation soak and 100-item concurrent creation pass; the 20,000-argument fuzz run is underway. Harrow standalone checks and all four explicit cross-tool agreement tests pass. New Harrow main work will be integrated before migration; the implementation remains separate from live-data conversion.

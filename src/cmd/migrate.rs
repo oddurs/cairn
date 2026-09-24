@@ -11,11 +11,16 @@
 // running this over years of work is whether the item files are about to be
 // rewritten, so every step answers that in files rather than in steps.
 use crate::config::{CONFIG_FILE, CURRENT_FORMAT, Config};
+use crate::identity::Id;
+use crate::identity::{LEGACY_MAP, LegacyMap, MIGRATION_JOURNAL};
 use crate::lock::Lock;
 use crate::store::Store;
 use crate::style;
 use anyhow::Result;
+use anyhow::{Context, bail};
 use clap::ArgAction;
+use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(clap::Args)]
 pub struct Args {
@@ -42,6 +47,23 @@ pub fn run(args: Args) -> Result<i32> {
     let cfg = Config::load_for_migration(&path)?;
     let from = cfg.format();
 
+    if cfg.items_dir().join(MIGRATION_JOURNAL).exists() {
+        if args.check {
+            bail!("identity migration is unfinished; run `cairn migrate` to resume");
+        }
+        if args.dry_run {
+            println!("resume the recorded identity migration; no new identities will be allocated");
+            return Ok(0);
+        }
+        let _lock = Lock::acquire_for_migration(&cfg)?;
+        resume_identities(&cfg)?;
+        println!(
+            "{} resumed identity migration to format 4",
+            style::green("migrated:")
+        );
+        return Ok(0);
+    }
+
     if from == CURRENT_FORMAT {
         if args.check {
             if !args.quiet {
@@ -67,6 +89,12 @@ pub fn run(args: Args) -> Result<i32> {
     }
 
     let steps = plan(from, CURRENT_FORMAT);
+    // Hold the migration lock before reading the data the plan will replace.
+    let _lock = if args.dry_run {
+        None
+    } else {
+        Some(Lock::acquire_for_migration(&cfg)?)
+    };
     let store = Store::new(&cfg);
     let items = store.load_all()?;
 
@@ -87,11 +115,14 @@ pub fn run(args: Args) -> Result<i32> {
     // The one command that may hold the lock on an older project.
     // A migration must never run against a backlog it cannot fully read; the
     // load above did that.
-    let _lock = Lock::acquire_for_migration(&cfg)?;
     for (from, to) in &steps {
-        apply(&cfg, &items, *from, *to)?;
+        let step_cfg = Config::load_for_migration(&path)?;
+        let step_items = Store::new(&step_cfg).load_all()?;
+        apply(&step_cfg, &step_items, *from, *to)?;
+        if *to < 4 {
+            stamp(&step_cfg, *to)?;
+        }
     }
-    stamp(&cfg, CURRENT_FORMAT)?;
 
     println!(
         "{} {} item(s) now at format {CURRENT_FORMAT}",
@@ -110,6 +141,7 @@ fn apply(cfg: &Config, items: &[crate::item::Item], from: u32, to: u32) -> Resul
     match (from, to) {
         (1, 2) => milestones_become_items(cfg, items),
         (2, 3) => types_declare_that_they_group(cfg),
+        (3, 4) => migrate_identities(cfg, items),
         _ => anyhow::bail!("no migration is defined from format {from} to {to}"),
     }
 }
@@ -131,8 +163,14 @@ fn milestones_become_items(cfg: &Config, items: &[crate::item::Item]) -> Result<
     // rule that walked the list backwards so an undated milestone could inherit
     // the next dated one's date existed only because milestones had no natural
     // order; items have one.
-    let mut previous: Option<u32> = None;
-    for (next, m) in (store.next_id(items)..).zip(cfg.milestones.iter()) {
+    let mut previous: Option<Id> = None;
+    let first = store.next_id(items)?.legacy().expect("legacy migration");
+    for (offset, m) in cfg.milestones.iter().enumerate() {
+        let next = Id::Legacy(
+            first
+                .checked_add(u32::try_from(offset)?)
+                .ok_or_else(|| anyhow::anyhow!("legacy identifier space exhausted"))?,
+        );
         let title = m.title.clone().unwrap_or_else(|| m.name.clone());
         let mut item = Item {
             id: next,
@@ -261,6 +299,298 @@ fn stamp(cfg: &Config, format: u32) -> Result<()> {
     crate::store::write_atomic(&path, doc.to_string().as_bytes())
 }
 
+/// Persist the complete before/after image before replacing anything. The
+/// configuration is the last replacement: no reader may see format 4 with a
+/// partially converted backlog. A journal survives a crash until every file
+/// has been flushed, and is never silently discarded on conflicting edits.
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct IdentityPlan {
+    version: u32,
+    files: Vec<Replacement>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Replacement {
+    path: String,
+    before: Option<String>,
+    after: String,
+}
+
+fn migrate_identities(cfg: &Config, items: &[crate::item::Item]) -> Result<()> {
+    let mut target = cfg.clone();
+    target.format = Some(4);
+    for item in items {
+        if let Some(key) = item.key()
+            && target.looks_like_id(key)
+        {
+            bail!(
+                "key `{key}` is reserved for identifiers in format 4; rename it and its key references before migrating"
+            );
+        }
+    }
+    let report = crate::cmd::check::collect(cfg, &Store::new(cfg))?;
+    if !report.errors.is_empty() {
+        bail!(
+            "repair the legacy backlog before migrating:\n{}",
+            report.errors.join("\n")
+        );
+    }
+    let mut ids = BTreeMap::new();
+    let mut allocated = BTreeSet::new();
+    for item in items {
+        let Some(n) = item.id.legacy() else {
+            bail!(
+                "{} already has a UUID in a legacy project",
+                item.path.display()
+            );
+        };
+        let id = loop {
+            let candidate = Id::new()?;
+            if allocated.insert(candidate) {
+                break candidate;
+            }
+        };
+        if ids.insert(n.to_string(), id).is_some() {
+            bail!("legacy id {n} occurs more than once; repair it before migrating");
+        }
+    }
+    let map = LegacyMap {
+        version: 1,
+        id_format: cfg.project.id_format.clone().unwrap_or_else(|| {
+            if cfg.project.id_width == 0 {
+                "{n}".into()
+            } else {
+                format!("{{n:0{}}}", cfg.project.id_width)
+            }
+        }),
+        ids,
+    };
+    map.validate()?;
+    let mut files = Vec::new();
+    for item in items {
+        let before = std::fs::read_to_string(&item.path)?;
+        let mut front: serde_yaml_ng::Mapping = serde_yaml_ng::from_str(&item.front)?;
+        front.insert("id".into(), map.canonical(item.id).yaml());
+        for field in cfg
+            .all_ref_fields()
+            .into_iter()
+            .filter(|f| f.by == crate::config::Addressing::Id)
+        {
+            if let Some(value) = front.get_mut(serde_yaml_ng::Value::String(field.name.clone())) {
+                // Historical depends_on accepts comma-separated scalar input.
+                // Use its already-parsed meaning before mapping identities.
+                if field.name == "depends_on" {
+                    *value = serde_yaml_ng::Value::Sequence(
+                        item.meta
+                            .depends_on
+                            .iter()
+                            .map(|id| map.canonical(*id).yaml())
+                            .collect(),
+                    );
+                    continue;
+                }
+                rewrite_reference(value, &map)
+                    .with_context(|| format!("{}: {}", item.path.display(), field.name))?;
+            }
+        }
+        let after = replace_frontmatter(&before, &front)?;
+        files.push(Replacement {
+            path: Store::new(cfg).rel(&item.path),
+            before: Some(before),
+            after,
+        });
+    }
+    let map_path = cfg.items_dir().join(LEGACY_MAP);
+    if map_path.exists() {
+        bail!(
+            "{} already exists; refusing to overwrite an identity map",
+            map_path.display()
+        );
+    }
+    files.push(Replacement {
+        path: Store::new(cfg).rel(&map_path),
+        before: None,
+        after: toml::to_string_pretty(&map)?,
+    });
+    let before = std::fs::read_to_string(cfg.root.join(CONFIG_FILE))?;
+    let mut doc: toml_edit::DocumentMut = before.parse()?;
+    doc["format"] = toml_edit::value(4);
+    if let Some(project) = doc
+        .get_mut("project")
+        .and_then(toml_edit::Item::as_table_like_mut)
+    {
+        for field in ["id_format", "id_width", "id_start"] {
+            project.remove(field);
+        }
+    }
+    files.push(Replacement {
+        path: CONFIG_FILE.into(),
+        before: Some(before),
+        after: doc.to_string(),
+    });
+    let plan = IdentityPlan { version: 1, files };
+    validate_plan(cfg, &plan)?;
+    crate::store::write_atomic(
+        &cfg.items_dir().join(MIGRATION_JOURNAL),
+        &serde_json::to_vec_pretty(&plan)?,
+    )?;
+    sync_directory(&cfg.items_dir())?;
+    resume_identities(cfg)
+}
+
+fn rewrite_reference(value: &mut serde_yaml_ng::Value, map: &LegacyMap) -> Result<()> {
+    use serde_yaml_ng::Value;
+    match value {
+        Value::Null => (),
+        Value::Sequence(values) => {
+            for value in values {
+                rewrite_reference(value, map)?;
+            }
+        }
+        _ => {
+            let raw = match value {
+                Value::String(s) => s.clone(),
+                Value::Number(n) => n.to_string(),
+                _ => bail!("reference is not an identifier"),
+            };
+            let Some(id) = map.resolve(&raw) else {
+                bail!("unresolved legacy reference `{raw}`");
+            };
+            *value = id.yaml();
+        }
+    }
+    Ok(())
+}
+
+/// Only replace YAML. Preserve the opening line, closing delimiter and every
+/// byte following it, including CRLF, blank lines and trailing whitespace.
+fn replace_frontmatter(original: &str, front: &serde_yaml_ng::Mapping) -> Result<String> {
+    let opening = original
+        .find('\n')
+        .context("missing frontmatter opening line")?
+        + 1;
+    let mut closing = opening;
+    for line in original[opening..].split_inclusive('\n') {
+        if matches!(line.trim_end_matches(['\r', '\n']), "---" | "...") {
+            let yaml = serde_yaml_ng::to_string(front)?;
+            let yaml = if original[..opening].ends_with("\r\n") {
+                yaml.replace('\n', "\r\n")
+            } else {
+                yaml
+            };
+            return Ok(format!(
+                "{}{}{}",
+                &original[..opening],
+                yaml,
+                &original[closing..]
+            ));
+        }
+        closing += line.len();
+    }
+    bail!("missing frontmatter closing delimiter")
+}
+
+fn read_optional(path: &std::path::Path) -> Result<Option<String>> {
+    match std::fs::read_to_string(path) {
+        Ok(text) => Ok(Some(text)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e).with_context(|| format!("reading {}", path.display())),
+    }
+}
+
+fn validate_plan(cfg: &Config, plan: &IdentityPlan) -> Result<()> {
+    use std::path::{Component, Path};
+    if plan.version != 1 || plan.files.last().is_none_or(|f| f.path != CONFIG_FILE) {
+        bail!("invalid identity migration journal: version or final configuration replacement");
+    }
+    let mut paths = BTreeSet::new();
+    for file in &plan.files {
+        let relative = Path::new(&file.path);
+        if relative
+            .components()
+            .any(|c| !matches!(c, Component::Normal(_)))
+            || !paths.insert(file.path.clone())
+        {
+            bail!("unsafe or duplicate migration path: {}", file.path);
+        }
+        let path = cfg.root.join(relative);
+        if file.path != CONFIG_FILE
+            && !(path.starts_with(cfg.items_dir())
+                && (path == cfg.items_dir().join(LEGACY_MAP)
+                    || path
+                        .extension()
+                        .is_some_and(|e| e.eq_ignore_ascii_case("md"))))
+        {
+            bail!("migration path is outside the item store: {}", file.path);
+        }
+        let mut ancestor = path.as_path();
+        while ancestor != cfg.root {
+            if std::fs::symlink_metadata(ancestor).is_ok_and(|m| m.file_type().is_symlink()) {
+                bail!("migration refuses symbolic link {}", ancestor.display());
+            }
+            ancestor = ancestor
+                .parent()
+                .context("migration path has no project parent")?;
+        }
+        let current = read_optional(&path)?;
+        if current.as_deref() != Some(file.after.as_str()) && current != file.before {
+            bail!(
+                "{} changed since migration was planned; preserve that edit and reconcile it with {} before resuming",
+                file.path,
+                MIGRATION_JOURNAL
+            );
+        }
+    }
+    let after: Config = toml::from_str(&plan.files.last().unwrap().after)?;
+    if after.format() != 4 || after.project.dir != cfg.project.dir {
+        bail!("invalid identity migration configuration target");
+    }
+    let items = Store::new(cfg).load_all()?;
+    for item in items {
+        if !paths.contains(&Store::new(cfg).rel(&item.path)) {
+            bail!(
+                "{} was added during migration; preserve it outside the item directory before resuming",
+                item.path.display()
+            );
+        }
+    }
+    Ok(())
+}
+
+fn resume_identities(cfg: &Config) -> Result<()> {
+    let journal = cfg.items_dir().join(MIGRATION_JOURNAL);
+    let plan: IdentityPlan = serde_json::from_str(&std::fs::read_to_string(&journal)?)
+        .context("reading identity migration journal")?;
+    validate_plan(cfg, &plan)?;
+    for file in &plan.files {
+        let path = cfg.root.join(&file.path);
+        let current = read_optional(&path)?;
+        if current.as_deref() == Some(&file.after) {
+            continue;
+        }
+        if current != file.before {
+            bail!(
+                "{} changed during migration; refusing to overwrite it",
+                file.path
+            );
+        }
+        crate::store::write_atomic(&path, file.after.as_bytes())?;
+        sync_directory(path.parent().context("migration file has no parent")?)?;
+    }
+    std::fs::remove_file(&journal)?;
+    sync_directory(&cfg.items_dir())
+}
+
+fn sync_directory(path: &std::path::Path) -> Result<()> {
+    #[cfg(unix)]
+    std::fs::File::open(path)?.sync_all()?;
+    #[cfg(not(unix))]
+    let _ = path;
+    Ok(())
+}
+
 /// What a migration step will touch.
 ///
 /// The step count `--dry-run` used to print is the one thing nobody wants to
@@ -338,7 +668,7 @@ fn report(total: &Effect) -> String {
     out
 }
 
-fn effect_of(from: u32, to: u32, cfg: &Config, _items: &[crate::item::Item]) -> Effect {
+fn effect_of(from: u32, to: u32, cfg: &Config, items: &[crate::item::Item]) -> Effect {
     match (from, to) {
         (1, 2) => Effect {
             rewritten: vec![CONFIG_FILE.to_string()],
@@ -351,6 +681,12 @@ fn effect_of(from: u32, to: u32, cfg: &Config, _items: &[crate::item::Item]) -> 
             created: 0,
             modified: Vec::new(),
             summary: "a type declares that it groups work".into(),
+        },
+        (3, 4) => Effect {
+            rewritten: vec![CONFIG_FILE.to_string(), Store::new(cfg).rel(&cfg.items_dir().join(LEGACY_MAP))],
+            modified: items.iter().map(|i| Store::new(cfg).rel(&i.path)).collect(),
+            summary: "immutable UUID identities and references; preserve legacy lookup, filenames, bodies and history".into(),
+            ..Default::default()
         },
         _ => Effect {
             summary: "unknown step".into(),

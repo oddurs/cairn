@@ -53,9 +53,8 @@ const MCP_TOOLS: &[&str] = &[
 /// exercised.
 fn stable() -> Project {
     let p = Project::new();
-    p.expect(&["new", "First", "-q"]);
-    p.expect(&["new", "Second", "-q"]);
-    p.expect(&["set", "2", "depends_on+=1", "-q"]);
+    let first = p.add("First", &[]);
+    p.add("Second", &["-d", &first]);
     p
 }
 
@@ -91,7 +90,7 @@ fn every_command_that_emits_items_carries_the_documented_fields() {
         assert_has(&keys(first), ITEM_FIELDS, &format!("`cairn {args:?}`"));
     }
 
-    let shown = p.json(&["show", "1", "--json"]);
+    let shown = p.json(&["show", &p.id(1), "--json"]);
     assert_has(&keys(&shown), ITEM_FIELDS, "`cairn show --json`");
     assert_has(&keys(&shown), &["body"], "`cairn show --json`");
 
@@ -110,7 +109,7 @@ fn the_interchange_document_keeps_its_shape() {
         &["cairn", "exported", "project", "schema", "items"],
         "the interchange document",
     );
-    assert_eq!(doc["cairn"], "1", "the interchange version changed");
+    assert_eq!(doc["cairn"], "2", "the UUID interchange version changed");
 
     let item = doc["items"]
         .as_array()
@@ -229,7 +228,7 @@ fn count_output_is_only_a_number() {
 #[test]
 fn plain_output_carries_names_rather_than_labels() {
     let p = stable();
-    p.expect(&["set", "1", "status=doing", "-q"]);
+    p.expect(&["set", &p.id(1), "status=doing", "-q"]);
 
     for args in [
         vec!["list", "--plain", "-A"],
@@ -272,7 +271,7 @@ const PROMISED_PSEUDO_FIELDS: &[&str] = &["category", "blocked", "ready", "block
 fn every_promised_filter_operator_still_works() {
     let p = stable();
     for op in FILTER_OPERATORS {
-        let expr = format!("id{op}1");
+        let expr = format!("id{op}{}", p.id(1));
         let out = p.run(&["list", "-A", "--filter", &expr, "--count"]);
         assert!(
             out.ok(),

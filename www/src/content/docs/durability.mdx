@@ -44,16 +44,16 @@ that a broken file already holds.
 
 ## Branches merge without a fight
 
-Two branches that both add an item conflict in the generated roadmap and collide
-on an identifier, on the first merge. Neither is really a conflict — both files
-are derived — so the answer is to derive them again.
+Independent branches create different UUID identities without coordination.
+The generated roadmap can still conflict: it is derived, so regenerate it
+after the item files have merged.
 
 ```sh
 cairn init --git
 ```
 
 That registers a merge driver for the roadmap and a `post-merge` hook that
-renumbers collisions and re-renders. It is safe on an existing project, and
+re-renders after the items settle. It is safe on an existing project, and
 doing it twice changes nothing.
 
 The ordering constrains the design and is worth knowing. Git resolves paths in
@@ -68,15 +68,17 @@ A merge performed by a forge runs no hook at all, which is why `cairn check
 
 ## Identifiers
 
-Item identifiers are small integers because people have to type them. That has a
-cost worth stating plainly: allocating the next one means knowing every one in
-use, which requires coordination that branches do not provide.
+Format 4 stores immutable UUIDv4 identities and full UUID references.
+Commands accept unambiguous prefixes of at least eight hex digits; JSON keeps
+the full identity. No shared counter or service is needed.
 
-`cairn check` detects a collision and names both files. `cairn renumber` repairs
-it — the older item keeps the contested number and the one that arrived later
-moves, so the repair matches what happened. Renumbering is never automatic
-outside the merge hook: it rewrites files, and that should happen because you
-asked.
+`cairn check` detects manually duplicated identities. `cairn renumber` never
+reassigns a UUID: reconcile the copies and their references deliberately.
+
+Migration retains old numeric lookup aliases, filenames, body bytes, and Git
+history. Back up the complete project, upgrade Cairn and Harrow, and migrate
+once; share that commit instead of migrating independent branches.
+If interrupted, rerun `cairn migrate`; do not delete the recovery journal.
 
 ## The format will not move under you
 

@@ -23,7 +23,7 @@ fn queue() -> Project {
     );
     p.add("Untriaged idea", &[]);
     p.add("External wait", &["-s", "waiting"]);
-    p.add("Approved but blocked", &["-s", "selected", "-d", "1"]);
+    p.add("Approved but blocked", &["-s", "selected", "-d", &p.id(1)]);
     p.add("Approved feature", &["-s", "selected"]);
     p.add("Approved bug", &["-s", "selected", "-t", "bug"]);
     p
@@ -37,21 +37,32 @@ fn payload(reply: serde_json::Value) -> serde_json::Value {
 #[test]
 fn every_selection_surface_uses_the_same_explicit_view() {
     let p = queue();
+    let mut ready = [p.id(4), p.id(5)];
+    ready.sort();
+    let references: Vec<String> = ready
+        .iter()
+        .map(|id| {
+            p.json(&["show", id, "--json"])["ref"]
+                .as_str()
+                .unwrap()
+                .into()
+        })
+        .collect();
     assert_eq!(
         p.expect(&["next", "--view", "approved", "--ids"]).lines(),
-        ["0004", "0005"]
+        references
     );
     let reply = payload(p.mcp_call("next_items", json!({"view":"approved"}), None));
     assert_eq!(reply["count"], 2);
-    assert_eq!(reply["items"][0]["id"], 4);
-    assert_eq!(reply["items"][1]["id"], 5);
+    assert_eq!(reply["items"][0]["id"], ready[0]);
+    assert_eq!(reply["items"][1]["id"], ready[1]);
     assert_eq!(
         p.expect(&["claim", "--next", "--view", "approved", "-q"])
             .trimmed(),
-        "0004"
+        references[0]
     );
     let claimed = payload(p.mcp_call("claim_item", json!({"view":"approved"}), Some("second")));
-    assert_eq!(claimed["id"], 5);
+    assert_eq!(claimed["id"], ready[1]);
     assert_eq!(claimed["status"], "working");
     let block = p.expect(&["agent", "--view", "approved"]).stdout;
     assert_contains(&block, "cairn next --view approved", "selected next");
@@ -67,16 +78,20 @@ fn every_selection_surface_uses_the_same_explicit_view() {
 #[test]
 fn caller_filters_only_narrow_a_view_and_bare_commands_are_unchanged() {
     let p = queue();
-    assert_eq!(
-        p.expect(&["next", "--ids"]).lines(),
-        ["0001", "0002", "0004", "0005"]
-    );
+    let mut expected = [
+        p.reference(1),
+        p.reference(2),
+        p.reference(4),
+        p.reference(5),
+    ];
+    expected.sort();
+    assert_eq!(p.expect(&["next", "--ids"]).lines(), expected);
     assert_eq!(
         p.expect(&[
             "next", "--view", "approved", "--filter", "type=bug", "--ids"
         ])
         .lines(),
-        ["0005"]
+        [p.reference(5)]
     );
     assert!(
         p.expect(&[
@@ -115,9 +130,12 @@ fn caller_filters_only_narrow_a_view_and_bare_commands_are_unchanged() {
             "claim", "--next", "--view", "approved", "--filter", "type=bug", "-q"
         ])
         .trimmed(),
-        "0005"
+        p.reference(5)
     );
-    assert_eq!(p.expect(&["claim", "--next", "-q"]).trimmed(), "0001");
+    let bare_next = p
+        .expect(&["next", "--filter", "assignee=", "-n", "1", "--ids"])
+        .trimmed();
+    assert_eq!(p.expect(&["claim", "--next", "-q"]).trimmed(), bare_next);
 }
 
 #[test]
@@ -160,19 +178,21 @@ fn simultaneous_claimers_take_distinct_approved_work() {
             .collect::<Vec<_>>()
     });
     ids.sort();
-    assert_eq!(ids, ["0004", "0005"]);
+    let mut expected = [p.reference(4), p.reference(5)];
+    expected.sort();
+    assert_eq!(ids, expected);
 }
 
 #[test]
 fn explicit_assignments_cannot_silently_ignore_a_view() {
     let p = queue();
-    p.fails(&["claim", "1", "--next", "--view", "approved"]);
-    p.fails(&["claim", "1", "--view", "approved"]);
+    p.fails(&["claim", &p.id(1), "--next", "--view", "approved"]);
+    p.fails(&["claim", &p.id(1), "--view", "approved"]);
     assert_eq!(
-        p.mcp_call("claim_item", json!({"id":1,"view":"approved"}), None)["isError"],
+        p.mcp_call("claim_item", json!({"id":p.id(1),"view":"approved"}), None)["isError"],
         true
     );
-    p.expect(&["claim", "1", "-q"]);
+    p.expect(&["claim", &p.id(1), "-q"]);
 }
 
 #[test]

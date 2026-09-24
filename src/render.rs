@@ -37,7 +37,7 @@ pub fn as_written(current: Option<&str>, rendered: &str) -> String {
 pub fn roadmap_markdown(cfg: &Config, store: &Store, items: &[Item]) -> Result<String> {
     let r = &cfg.render;
     let filter = match &r.include {
-        Some(expr) => Filter::parse(expr)?,
+        Some(expr) => crate::filter::parse_resolved(cfg, expr)?,
         None => Filter::default(),
     };
     let ctx = Ctx::new(cfg, items);

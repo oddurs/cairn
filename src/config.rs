@@ -1,8 +1,11 @@
 // cairn — configuration: the schema the whole tool is driven by.
 //
 // Copyright (c) 2026 Oddur Sigurdsson. MIT licensed; see LICENSE.
+use crate::identity::{Id, LEGACY_MAP, LegacyMap, MIGRATION_JOURNAL};
 use anyhow::{Context, Result, bail};
 use serde::Deserialize;
+use std::cell::RefCell;
+use std::collections::BTreeSet;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
@@ -37,7 +40,13 @@ pub const CONFIG_FILE: &str = "cairn.toml";
 ///   needs a new format number, a major release, and a migration.
 /// * A project recording a format this build does not know is refused with an
 ///   explanation, rather than misread.
-pub const CURRENT_FORMAT: u32 = 3;
+pub const CURRENT_FORMAT: u32 = 4;
+
+#[derive(Debug, Clone, Default)]
+pub struct IdentityIndex {
+    pub ids: Option<BTreeSet<Id>>,
+    pub legacy: LegacyMap,
+}
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -69,6 +78,8 @@ pub struct Config {
     /// time, not read from the file.
     #[serde(skip)]
     pub root: PathBuf,
+    #[serde(skip)]
+    pub identities: RefCell<IdentityIndex>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -123,14 +134,12 @@ pub struct Project {
 
     /// How an identifier is written: `{n}` is the number and `{n:04}` pads it.
     ///
-    /// `MP-{n}` gives `MP-1002`; `A{n}` gives `A24`. This is a rendering and
-    /// nothing more — `id` in the frontmatter is an unsigned integer whatever
-    /// this says, so adopting a project key is a display change rather than a
-    /// format change, and nothing that refers to an item by number breaks.
+    /// Legacy formats only: `MP-{n}` gives `MP-1002`; `A{n}` gives `A24`.
+    /// Format 4 keeps this template in the frozen alias map instead.
     #[serde(default)]
     pub id_format: Option<String>,
 
-    /// The identifier the first item in an empty project takes.
+    /// Legacy formats: the identifier the first item in an empty project takes.
     ///
     /// Allocation is otherwise unchanged: one more than the highest in use. So
     /// lowering this in a project that already has items does nothing, because
@@ -336,7 +345,7 @@ pub enum Addressing {
     /// A short human handle, unique within the target type.
     ///
     /// This is what keeps `milestone: v0.1` readable in a file. It is not a
-    /// second identity: identity is the integer, and a key is a handle, in the
+    /// second identity: identity is the stored id, and a key is a handle, in the
     /// same way a status has a `name` for machines and a `label` for people.
     Key,
 }
@@ -512,12 +521,10 @@ fn default_project_name() -> String {
 fn default_dir() -> String {
     "cairn/items".into()
 }
-/// How a project writes its identifiers.
+/// How a legacy project renders its numeric identifiers.
 ///
-/// `id` is an unsigned integer and stays one. This is only how that integer is
-/// shown and read back, which is why adopting `MP-{n}` is a display change
-/// rather than a format change: nothing stored moves, and every reference
-/// written as a bare number keeps working.
+/// Formats 1–3 store unsigned integers. Format 4 uses this template only to
+/// resolve the frozen numeric aliases created by migration.
 ///
 /// Deliberately one template rather than three settings for prefix, separator
 /// and padding. Three would express the same thing less clearly and would allow
@@ -834,6 +841,12 @@ impl Config {
             .parent()
             .map_or_else(|| PathBuf::from("."), Path::to_path_buf);
         cfg.validate()?;
+        if cfg.items_dir().join(MIGRATION_JOURNAL).exists() {
+            bail!(
+                "an identity migration is unfinished; run `cairn migrate` to resume it before reading or writing this project"
+            );
+        }
+        cfg.load_legacy_map()?;
         cfg.notice_if_behind();
         Ok(cfg)
     }
@@ -884,6 +897,7 @@ impl Config {
         cfg.root = path
             .parent()
             .map_or_else(|| PathBuf::from("."), Path::to_path_buf);
+        cfg.load_legacy_map()?;
         Ok(cfg)
     }
 
@@ -1065,8 +1079,26 @@ impl Config {
             .find(|s| s.category() == Category::Done)
     }
 
-    pub fn format_id(&self, id: u32) -> String {
-        self.id_format().render(id)
+    pub fn format_id(&self, id: Id) -> String {
+        if let Some(n) = id.legacy() {
+            return self.id_format().render(n);
+        }
+        let index = self.identities.borrow();
+        let Some(ids) = &index.ids else {
+            return id.to_string();
+        };
+        let compact = id.compact();
+        for width in 8..=32 {
+            let prefix = &compact[..width];
+            if !ids
+                .iter()
+                .any(|other| *other != id && other.compact().starts_with(prefix))
+                && index.legacy.resolve(prefix).is_none_or(|other| other == id)
+            {
+                return prefix.to_string();
+            }
+        }
+        id.to_string()
     }
 
     /// The project's identifier rendering.
@@ -1091,8 +1123,103 @@ impl Config {
     /// Both are accepted because requiring a prefix somebody already knows is
     /// friction for nothing, and because every reference written before the
     /// project adopted a key is a bare number.
-    pub fn parse_id(&self, s: &str) -> Result<u32> {
-        self.id_format().read(s)
+    pub fn parse_id(&self, s: &str) -> Result<Id> {
+        if self.format() < 4 {
+            return self.id_format().read(s).map(Id::Legacy);
+        }
+        let raw = s.trim().trim_start_matches('#').trim();
+        if (raw.len() == 32 || raw.len() == 36)
+            && let Ok(id) = raw.parse::<Id>()
+            && id.is_uuid()
+        {
+            return Ok(id);
+        }
+        if self.identities.borrow().ids.is_none() {
+            crate::store::Store::new(self).load_all()?;
+        }
+        let index = self.identities.borrow();
+        let mut matches = BTreeSet::new();
+        if let Some(id) = index.legacy.resolve(raw) {
+            matches.insert(id);
+        }
+        if (8..=32).contains(&raw.len()) && raw.bytes().all(|b| b.is_ascii_hexdigit()) {
+            let prefix = raw.to_ascii_lowercase();
+            for id in index.ids.iter().flatten() {
+                if id.is_uuid() && id.compact().starts_with(&prefix) {
+                    matches.insert(*id);
+                }
+            }
+        }
+        match matches.len() {
+            1 => Ok(*matches.first().expect("one match")),
+            0 => bail!(
+                "`{s}` is not a known item id; use a full UUID, an unambiguous prefix of at least 8 hex digits, or a migrated legacy number"
+            ),
+            _ => bail!(
+                "ambiguous item id `{s}`; use a longer prefix or full UUID: {}",
+                matches
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        }
+    }
+
+    fn load_legacy_map(&self) -> Result<()> {
+        let path = self.items_dir().join(LEGACY_MAP);
+        match std::fs::read_to_string(&path) {
+            Ok(text) => {
+                let map: LegacyMap =
+                    toml::from_str(&text).with_context(|| format!("reading {}", path.display()))?;
+                map.validate()?;
+                self.identities.borrow_mut().legacy = map;
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e).with_context(|| format!("reading {}", path.display())),
+        }
+        Ok(())
+    }
+
+    pub fn remember_ids(&self, ids: impl IntoIterator<Item = Id>) {
+        self.identities.borrow_mut().ids = Some(ids.into_iter().collect());
+    }
+
+    pub fn remember_id(&self, id: Id) {
+        self.identities
+            .borrow_mut()
+            .ids
+            .get_or_insert_with(BTreeSet::new)
+            .insert(id);
+    }
+
+    pub fn canonical_id(&self, id: Id) -> Id {
+        self.identities.borrow().legacy.canonical(id)
+    }
+
+    /// Reserve the identifier namespace even before a matching item exists.
+    pub fn looks_like_id(&self, raw: &str) -> bool {
+        let raw = raw.trim().trim_start_matches('#');
+        self.id_format().read(raw).is_ok()
+            || (self.format() >= 4
+                && ((8..=32).contains(&raw.len()) && raw.bytes().all(|b| b.is_ascii_hexdigit())
+                    || raw.parse::<Id>().is_ok_and(Id::is_uuid)
+                    || self.identities.borrow().legacy.resolve(raw).is_some()))
+    }
+
+    pub fn is_legacy_filename(&self, item: &crate::item::Item) -> bool {
+        let Some(name) = item.path.file_name().and_then(|n| n.to_str()) else {
+            return false;
+        };
+        let index = self.identities.borrow();
+        let Ok(format) = IdFormat::compile(&index.legacy.id_format) else {
+            return false;
+        };
+        index.legacy.ids.iter().any(|(n, id)| {
+            *id == item.id
+                && n.parse::<u32>()
+                    .is_ok_and(|n| name.starts_with(&format!("{}-", format.render(n))))
+        })
     }
 
     /// Bytes available for the slug part of a filename, once the id prefix,
@@ -1101,15 +1228,23 @@ impl Config {
         self.project
             .filename_max
             // The rendered identifier, the separating dash, and ".md".
-            .saturating_sub(self.id_format().width() + 1 + 3)
+            .saturating_sub(if self.format() >= 4 {
+                36 + 4
+            } else {
+                self.id_format().width() + 4
+            })
             .max(8)
     }
 
     /// The filename an item with this id and title should have.
-    pub fn filename_for(&self, id: u32, title: &str) -> String {
+    pub fn filename_for(&self, id: Id, title: &str) -> String {
         format!(
             "{}-{}.md",
-            self.format_id(id),
+            if id.is_uuid() {
+                id.to_string()
+            } else {
+                self.format_id(id)
+            },
             crate::item::slug(title, self.slug_budget())
         )
     }

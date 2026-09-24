@@ -1,3 +1,4 @@
+use crate::identity::Id;
 // cairn — filter expressions and sorting.
 //
 // Copyright (c) 2026 Oddur Sigurdsson. MIT licensed; see LICENSE.
@@ -13,20 +14,20 @@ use std::collections::{HashMap, HashSet};
 /// answered from frontmatter alone.
 pub struct Ctx<'a> {
     pub cfg: &'a Config,
-    closed: HashSet<u32>,
-    known: HashSet<u32>,
+    closed: HashSet<Id>,
+    known: HashSet<Id>,
     /// What each item directly contains, through every field marked `rollup`.
     ///
     /// Derived once here rather than on each query. Position in a hierarchy is
     /// a fact about the whole set, and computing it per comparison would turn a
     /// filter into a graph walk for every item it looks at.
-    contains: HashMap<u32, Vec<u32>>,
+    contains: HashMap<Id, Vec<Id>>,
     /// The project's milestones, which are items. Here for the same reason
     /// dependency state is: it is a property of the whole set.
     pub milestones: crate::refs::Milestones,
     /// Everything beneath an item at any depth, and how much of it is finished.
-    beneath: HashMap<u32, (usize, usize)>,
-    depth: HashMap<u32, usize>,
+    beneath: HashMap<Id, (usize, usize)>,
+    depth: HashMap<Id, usize>,
 }
 
 impl<'a> Ctx<'a> {
@@ -43,8 +44,8 @@ impl<'a> Ctx<'a> {
         // The composition graph, from every field a project marked `rollup`.
         // One derivation over however many fields point in, rather than a
         // second mechanism for each.
-        let mut contains: HashMap<u32, Vec<u32>> = HashMap::new();
-        let mut above: HashMap<u32, Vec<u32>> = HashMap::new();
+        let mut contains: HashMap<Id, Vec<Id>> = HashMap::new();
+        let mut above: HashMap<Id, Vec<Id>> = HashMap::new();
         for def in cfg.all_ref_fields().iter().filter(|f| f.rollup) {
             for item in items {
                 for parent in crate::refs::targets(items, item, def) {
@@ -79,7 +80,7 @@ impl<'a> Ctx<'a> {
     }
 
     /// What this item directly contains.
-    pub fn contains(&self, item: &Item) -> Vec<u32> {
+    pub fn contains(&self, item: &Item) -> Vec<Id> {
         self.contains.get(&item.id).cloned().unwrap_or_default()
     }
 
@@ -96,7 +97,7 @@ impl<'a> Ctx<'a> {
     /// Dependencies that exist and are not finished. A reference to an item
     /// that does not exist is a `cairn check` error, not a blocker — refusing
     /// to surface work because of a typo elsewhere would be worse than the typo.
-    pub fn blockers(&self, item: &Item) -> Vec<u32> {
+    pub fn blockers(&self, item: &Item) -> Vec<Id> {
         item.meta
             .depends_on
             .iter()
@@ -341,8 +342,31 @@ pub fn warn_unknown_keys(cfg: &Config, what: &str, filter: &Filter) {
 /// from a saved view goes through here, so none of them can be the one that
 /// stays silent.
 pub fn parse_checked(cfg: &Config, expr: &str, what: &str) -> Result<Filter> {
-    let f = Filter::parse(expr)?;
+    let f = parse_resolved(cfg, expr)?;
     warn_unknown_keys(cfg, what, &f);
+    Ok(f)
+}
+
+/// Resolve identity inputs without emitting presentation warnings. Callers
+/// such as quiet rendering control when schema warnings are appropriate.
+pub fn parse_resolved(cfg: &Config, expr: &str) -> Result<Filter> {
+    let mut f = Filter::parse(expr)?;
+    let refs = cfg.all_ref_fields();
+    for clause in &mut f.clauses {
+        let identity = clause.key == "id"
+            || clause.key == "contains"
+            || clause.key == "blockers"
+            || refs
+                .iter()
+                .any(|def| def.name == clause.key && def.by == crate::config::Addressing::Id);
+        if identity && matches!(clause.op, Op::Eq | Op::Ne) {
+            for value in &mut clause.values {
+                if !value.is_empty() {
+                    *value = cfg.parse_id(value)?.to_string();
+                }
+            }
+        }
+    }
     Ok(f)
 }
 
@@ -367,16 +391,11 @@ pub fn resolve(item: &Item, ctx: &Ctx, key: &str) -> Field {
             None => Field::Missing,
         },
         "ready" => Field::Text(ctx.is_ready(item).to_string()),
-        "blockers" => Field::List(ctx.blockers(item).iter().map(u32::to_string).collect()),
+        "blockers" => Field::List(ctx.blockers(item).iter().map(Id::to_string).collect()),
         // Position in the hierarchy, derived rather than declared. A `scale`
         // field would be a claim that goes stale; "has fourteen things beneath
         // it" cannot be wrong.
-        "contains" => Field::List(
-            ctx.contains(item)
-                .iter()
-                .map(|id| ctx.cfg.format_id(*id))
-                .collect(),
-        ),
+        "contains" => Field::List(ctx.contains(item).iter().map(ToString::to_string).collect()),
         "descendants" => Field::Text(ctx.beneath(item).0.to_string()),
         "depth" => Field::Text(ctx.depth(item).to_string()),
         "leaf" => Field::Text(ctx.contains(item).is_empty().to_string()),
@@ -421,7 +440,7 @@ fn eq_field(field: &Field, needle: &str, key: &str) -> bool {
     }
     // Ids compare numerically so `id=12` finds `0012`.
     if key == "id"
-        && let (Ok(a), Ok(b)) = (field.display().parse::<u32>(), needle.parse::<u32>())
+        && let (Ok(a), Ok(b)) = (field.display().parse::<Id>(), needle.parse::<Id>())
     {
         return a == b;
     }
@@ -608,9 +627,9 @@ mod properties {
 /// cannot make this run forever — `cairn check` reports the cycle separately,
 /// and a query is the wrong place to discover it.
 fn count_beneath(
-    contains: &HashMap<u32, Vec<u32>>,
-    closed: &HashSet<u32>,
-    root: u32,
+    contains: &HashMap<Id, Vec<Id>>,
+    closed: &HashSet<Id>,
+    root: Id,
 ) -> (usize, usize) {
     let mut seen = HashSet::from([root]);
     let mut stack = vec![root];
@@ -631,7 +650,7 @@ fn count_beneath(
 }
 
 /// How many levels of composition sit above an item.
-fn height_above(above: &HashMap<u32, Vec<u32>>, start: u32) -> usize {
+fn height_above(above: &HashMap<Id, Vec<Id>>, start: Id) -> usize {
     let mut seen = HashSet::from([start]);
     let mut frontier = vec![start];
     let mut depth = 0;

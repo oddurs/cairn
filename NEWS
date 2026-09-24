@@ -6,6 +6,30 @@ See the end of the file for copying conditions.
 Please send bug reports and suggestions through the project's issue tracker.
 
 
+* Noteworthy changes in release 1.0.0-alpha.1 (unreleased)
+
+** Immutable identities for independent Git work
+
+Format 4 replaces sequential numbers with UUIDv4 identities. Creation needs no
+shared counter or service. Stored references and machine-readable IDs use the
+full UUID; commands also accept unambiguous prefixes of at least eight hex
+digits. A short display reference is not a permanent identity.
+
+Migration freezes old numbers and their rendering in _legacy-ids.toml, keeps
+existing filenames and body bytes, and carries numeric references to their
+new identities. Git history remains untouched and cairn log bridges the change.
+An interrupted identity migration must be resumed with cairn migrate; ordinary
+commands refuse a half-migrated project. Back up the whole project, migrate
+once, and share that commit. Upgrade counterpart readers before migrating.
+
+The JSON interchange version is 2 for format-4 projects. Native UUID imports
+retain identities, including forward references. Historical formats remain
+readable and export interchange version 1. CAIRN_ITEM_ID now carries the full
+identity; CAIRN_ITEM_REF carries the short display reference.
+
+Renumber does not reassign UUIDs or rename old files. Duplicate identities
+require explicit reconciliation rather than an automatically invented identity.
+
 * Noteworthy changes in release 0.3.0 (2026-09-23)
 
 ** Select an approved queue once, use it everywhere

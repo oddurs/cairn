@@ -50,10 +50,10 @@ impl Lock {
                 "this project is format {}, and writing needs format {}\n\
                  run `cairn migrate` (`--dry-run` first to see what it would change)\n\
                  \n\
-                 it rewrites {}, and may create item files for things that used to\n\
-                 live in it. it changes nothing already in the item directory, so\n\
-                 undoing it means restoring that one file and removing anything it\n\
-                 created — `--dry-run` names both.\n\
+                 format 4 rewrites item identities and declared id references,\n\
+                 records a frozen legacy-number map, and updates {} last.\n\
+                 Commit or back up the complete project first; migrate once and\n\
+                 share that commit. Do not migrate divergent clones independently.\n\
                  \n\
                  reading works meanwhile: list, show, next, search, board, roadmap, log, export",
                 cfg.format(),

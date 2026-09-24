@@ -1,3 +1,4 @@
+use crate::identity::Id;
 // cairn — fields that name other items.
 //
 // Copyright (c) 2026 Oddur Sigurdsson. MIT licensed; see LICENSE.
@@ -43,7 +44,7 @@ pub fn resolve<'a>(items: &'a [Item], def: &FieldDef, value: &str) -> Option<&'a
             .filter(of_target)
             .find(|i| i.key().is_some_and(|k| k.eq_ignore_ascii_case(value))),
         Addressing::Id => {
-            let n: u32 = value.trim_start_matches('#').parse().ok()?;
+            let n: Id = value.trim_start_matches('#').parse().ok()?;
             items.iter().filter(of_target).find(|i| i.id == n)
         }
     }
@@ -116,14 +117,14 @@ pub fn unresolved(items: &[Item], cfg: &Config, def: &FieldDef) -> String {
 /// An item cannot be part of itself, directly or at any remove. This is the
 /// same guarantee `depends_on` has always had, generalised: a project must not
 /// be left in a state the tool itself rejects.
-pub fn would_cycle(items: &[Item], def: &FieldDef, from: u32, value: &str) -> bool {
+pub fn would_cycle(items: &[Item], def: &FieldDef, from: Id, value: &str) -> bool {
     let Some(target) = resolve(items, def, value) else {
         return false;
     };
     if target.id == from {
         return true;
     }
-    let by_id: HashMap<u32, &Item> = items.iter().map(|i| (i.id, i)).collect();
+    let by_id: HashMap<Id, &Item> = items.iter().map(|i| (i.id, i)).collect();
     let mut seen = HashSet::new();
     let mut stack = vec![target.id];
     while let Some(id) = stack.pop() {
@@ -376,7 +377,7 @@ pub fn validate_on_write_in(cfg: &Config, items: &mut Vec<Item>, item: &Item) ->
 /// honest; change one and change the other.
 pub fn key_problem(cfg: &Config, items: &[Item], item: &Item) -> Option<String> {
     let key = item.key()?;
-    if cfg.id_format().read(key).is_ok() {
+    if cfg.looks_like_id(key) {
         return Some(format!(
             "key `{key}` reads as an identifier, so a reference to it \
              would be ambiguous"
@@ -393,12 +394,12 @@ pub fn key_problem(cfg: &Config, items: &[Item], item: &Item) -> Option<String> 
         .map(|other| format!("key `{key}` is already used by {}", cfg.format_id(other.id)))
 }
 
-pub fn key_problems(cfg: &Config, items: &[Item]) -> Vec<(u32, String)> {
+pub fn key_problems(cfg: &Config, items: &[Item]) -> Vec<(Id, String)> {
     let mut out = Vec::new();
-    let mut seen: HashMap<(String, String), u32> = HashMap::new();
+    let mut seen: HashMap<(String, String), Id> = HashMap::new();
     for item in items {
         let Some(key) = item.key() else { continue };
-        if cfg.id_format().read(key).is_ok() {
+        if cfg.looks_like_id(key) {
             out.push((
                 item.id,
                 format!(
@@ -438,7 +439,7 @@ pub fn rename_key(
     renamed: &Item,
     old: &str,
     new: &str,
-) -> Result<Vec<u32>> {
+) -> Result<Vec<Id>> {
     let every = cfg.all_ref_fields();
     let fields: Vec<&FieldDef> = every
         .iter()
@@ -504,7 +505,7 @@ pub fn depth(items: &[Item], cfg: &Config, item: &Item) -> usize {
     if composing.is_empty() {
         return 0;
     }
-    let by_id: HashMap<u32, &Item> = items.iter().map(|i| (i.id, i)).collect();
+    let by_id: HashMap<Id, &Item> = items.iter().map(|i| (i.id, i)).collect();
 
     // Breadth-first, tracking what has been seen, so a cycle that slipped in by
     // hand cannot make this run forever. `check` reports the cycle separately.
@@ -634,7 +635,7 @@ impl Milestones {
                     .milestones
                     .iter()
                     .enumerate()
-                    .map(|(n, m)| as_item(cfg, n as u32 + 1, m))
+                    .map(|(n, m)| as_item(cfg, (n as u32 + 1).into(), m))
                     .collect(),
             };
         }
@@ -666,11 +667,11 @@ impl Milestones {
 
         // Depth in the dependency graph, so a milestone sorts after everything
         // it waits on however the dates read.
-        let by_id: HashMap<u32, Item> = found.iter().map(|i| (i.id, i.clone())).collect();
-        let mut rank: HashMap<u32, usize> = HashMap::new();
+        let by_id: HashMap<Id, Item> = found.iter().map(|i| (i.id, i.clone())).collect();
+        let mut rank: HashMap<Id, usize> = HashMap::new();
         for m in &found {
             let mut seen = HashSet::from([m.id]);
-            let mut frontier: Vec<u32> = m.meta.depends_on.clone();
+            let mut frontier: Vec<Id> = m.meta.depends_on.clone();
             let mut depth = 0usize;
             while !frontier.is_empty() {
                 let mut next = Vec::new();
@@ -765,7 +766,7 @@ pub fn due(item: &Item) -> Option<&str> {
 /// same roadmap the project's own cairn would have shown, rather than an empty
 /// one — which is the difference between understanding an older format and
 /// merely tolerating it.
-fn as_item(cfg: &Config, id: u32, m: &crate::config::Milestone) -> Item {
+fn as_item(cfg: &Config, id: Id, m: &crate::config::Milestone) -> Item {
     let title = m.title.clone().unwrap_or_else(|| m.name.clone());
     let mut item = Item {
         id,
@@ -791,8 +792,8 @@ fn as_item(cfg: &Config, id: u32, m: &crate::config::Milestone) -> Item {
     }
     // Declaration order is the order, which is what the chain the migration
     // writes will encode permanently.
-    if id > 1 {
-        item.meta.depends_on = vec![id - 1];
+    if let Some(n) = id.legacy().filter(|n| *n > 1) {
+        item.meta.depends_on = vec![Id::Legacy(n - 1)];
     }
     item
 }
@@ -850,7 +851,7 @@ mod tests {
     /// wrong at depth 5, not that `cairn check` said something odd.
     fn item(id: u32, kind: &str, key: Option<&str>, parent: Option<&str>) -> Item {
         let mut it = Item {
-            id,
+            id: id.into(),
             meta: Default::default(),
             body: String::new(),
             path: std::path::PathBuf::from(format!("{id:04}-x.md")),
@@ -875,8 +876,11 @@ mod tests {
     fn a_key_resolves_without_regard_to_case() {
         let def = field("parent", "milestone", "key");
         let items = vec![item(1, "milestone", Some("v0.1"), None)];
-        assert_eq!(resolve(&items, &def, "V0.1").map(|i| i.id), Some(1));
-        assert_eq!(resolve(&items, &def, "  v0.1  ").map(|i| i.id), Some(1));
+        assert_eq!(resolve(&items, &def, "V0.1").map(|i| i.id), Some(1.into()));
+        assert_eq!(
+            resolve(&items, &def, "  v0.1  ").map(|i| i.id),
+            Some(1.into())
+        );
         assert!(resolve(&items, &def, "v0.2").is_none());
     }
 
@@ -894,8 +898,8 @@ mod tests {
     fn an_id_addressed_field_accepts_a_hash_and_nothing_else() {
         let def = field("parent", "milestone", "id");
         let items = vec![item(42, "milestone", Some("v0.1"), None)];
-        assert_eq!(resolve(&items, &def, "42").map(|i| i.id), Some(42));
-        assert_eq!(resolve(&items, &def, "#42").map(|i| i.id), Some(42));
+        assert_eq!(resolve(&items, &def, "42").map(|i| i.id), Some(42.into()));
+        assert_eq!(resolve(&items, &def, "#42").map(|i| i.id), Some(42.into()));
         assert!(resolve(&items, &def, "v0.1").is_none());
         assert!(resolve(&items, &def, "").is_none());
     }
@@ -910,7 +914,7 @@ mod tests {
             item(2, "milestone", Some("v0.2"), None),
         ];
         assert!(resolve(&items, &def, "v0.1").is_none());
-        assert_eq!(resolve(&items, &def, "v0.2").map(|i| i.id), Some(2));
+        assert_eq!(resolve(&items, &def, "v0.2").map(|i| i.id), Some(2.into()));
     }
 
     // --- would_cycle --------------------------------------------------------
@@ -919,7 +923,7 @@ mod tests {
     fn an_item_cannot_be_its_own_parent() {
         let def = field("parent", "milestone", "key");
         let items = vec![item(1, "milestone", Some("a"), None)];
-        assert!(would_cycle(&items, &def, 1, "a"));
+        assert!(would_cycle(&items, &def, 1.into(), "a"));
     }
 
     #[test]
@@ -930,7 +934,7 @@ mod tests {
             item(1, "milestone", Some("a"), None),
             item(2, "milestone", Some("b"), Some("a")),
         ];
-        assert!(would_cycle(&items, &def, 1, "b"));
+        assert!(would_cycle(&items, &def, 1.into(), "b"));
     }
 
     #[test]
@@ -946,7 +950,7 @@ mod tests {
             })
             .collect();
         // e -> d -> c -> b -> a. Pointing a at e closes it.
-        assert!(would_cycle(&items, &def, 1, "e"));
+        assert!(would_cycle(&items, &def, 1.into(), "e"));
     }
 
     /// A diamond is not a cycle, and reporting one would refuse a shape people
@@ -960,14 +964,14 @@ mod tests {
             item(3, "milestone", Some("right"), Some("root")),
             item(4, "milestone", Some("leaf"), Some("left")),
         ];
-        assert!(!would_cycle(&items, &def, 4, "right"));
+        assert!(!would_cycle(&items, &def, 4.into(), "right"));
     }
 
     #[test]
     fn a_value_naming_nothing_closes_no_cycle() {
         let def = field("parent", "milestone", "key");
         let items = vec![item(1, "milestone", Some("a"), None)];
-        assert!(!would_cycle(&items, &def, 1, "nonexistent"));
+        assert!(!would_cycle(&items, &def, 1.into(), "nonexistent"));
     }
 
     // --- depth --------------------------------------------------------------

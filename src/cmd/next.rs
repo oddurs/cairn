@@ -1,3 +1,4 @@
+use crate::identity::Id;
 // cairn — finding the next thing to work on.
 //
 // Copyright (c) 2026 Oddur Sigurdsson. MIT licensed; see LICENSE.
@@ -279,7 +280,7 @@ pub fn select<'a>(
     // reorders the two groups without disturbing the ranking within them.
     chosen.sort_by_key(|i| cfg.category(i.status()) != Category::Active);
 
-    let ids: Vec<u32> = chosen.iter().take(args.limit).map(|i| i.id).collect();
+    let ids: Vec<Id> = chosen.iter().take(args.limit).map(|i| i.id).collect();
     Ok(ids
         .iter()
         .filter_map(|id| items.iter().find(|i| i.id == *id))

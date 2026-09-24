@@ -1,3 +1,4 @@
+use crate::identity::Id;
 // cairn — repairing item ids.
 //
 // Copyright (c) 2026 Oddur Sigurdsson. MIT licensed; see LICENSE.
@@ -7,8 +8,8 @@
 // item and both pick the same number. Git merges them cleanly — the filenames
 // differ — and you are left with two items sharing an id.
 //
-// This command is the repair. It is deliberately not automatic: renumbering
-// rewrites files, so it happens when you ask for it, not behind your back.
+// This is the legacy repair machinery. Format 4 is an explicit no-op: an
+// immutable identity is never reassigned to resolve a merge conflict.
 use crate::config::Config;
 use crate::item::Item;
 use crate::lock::Lock;
@@ -35,6 +36,21 @@ pub fn run(args: Args) -> Result<i32> {
     let store = Store::new(&cfg);
     let _lock = Lock::acquire(&cfg)?;
     let mut items = store.load_all()?;
+    if cfg.format() >= 4 {
+        let mut ids = std::collections::HashSet::new();
+        for item in &items {
+            if !ids.insert(item.id) {
+                bail!(
+                    "duplicate immutable identity {}; reconcile the copies, do not renumber them",
+                    item.id
+                );
+            }
+        }
+        if !args.quiet {
+            println!("immutable identities need no renumbering; existing filenames are retained");
+        }
+        return Ok(0);
+    }
     // Ordering decides which file keeps a contested id, so it is chosen rather
     // than incidental: oldest first, because the item that existed before the
     // collision should keep its number and the branch that arrived later should
@@ -64,6 +80,11 @@ pub fn run(args: Args) -> Result<i32> {
     });
 
     let duplicates = duplicate_ids(&items);
+    if cfg.format() >= 4 && !duplicates.is_empty() {
+        bail!(
+            "duplicate immutable identities; no item was renumbered. Resolve the duplicate files using their history, without changing the identity of existing work"
+        );
+    }
     if duplicates.is_empty() {
         // No identifier is wrong, but a filename can still disagree with one —
         // which is what happens the moment a project adopts `id_format`. Both
@@ -275,8 +296,8 @@ fn created_key(item: &Item) -> (bool, String) {
 }
 
 /// Ids held by more than one file, with the indices of every item holding them.
-fn duplicate_ids(items: &[Item]) -> BTreeMap<u32, Vec<usize>> {
-    let mut by_id: BTreeMap<u32, Vec<usize>> = BTreeMap::new();
+fn duplicate_ids(items: &[Item]) -> BTreeMap<Id, Vec<usize>> {
+    let mut by_id: BTreeMap<Id, Vec<usize>> = BTreeMap::new();
     for (i, it) in items.iter().enumerate() {
         by_id.entry(it.id).or_default().push(i);
     }
@@ -285,20 +306,25 @@ fn duplicate_ids(items: &[Item]) -> BTreeMap<u32, Vec<usize>> {
 }
 
 /// The oldest item holding a duplicated id keeps it; the rest get fresh ones.
-fn duplicate_plan(items: &[Item], duplicates: &BTreeMap<u32, Vec<usize>>) -> Vec<(usize, u32)> {
-    let mut next = items.iter().map(|i| i.id).max().unwrap_or(0) + 1;
+fn duplicate_plan(items: &[Item], duplicates: &BTreeMap<Id, Vec<usize>>) -> Vec<(usize, Id)> {
+    let mut next = items
+        .iter()
+        .filter_map(|i| i.id.legacy())
+        .max()
+        .unwrap_or(0)
+        .saturating_add(1);
     let mut plan = Vec::new();
     for indices in duplicates.values() {
         for index in indices.iter().skip(1) {
-            plan.push((*index, next));
-            next += 1;
+            plan.push((*index, Id::Legacy(next)));
+            next = next.saturating_add(1);
         }
     }
     plan
 }
 
 /// Two phases, so a rename can never land on a file that has not moved yet.
-fn apply(store: &Store, items: &mut [Item], plan: &[(usize, u32)]) -> Result<()> {
+fn apply(store: &Store, items: &mut [Item], plan: &[(usize, Id)]) -> Result<()> {
     let mut staged: Vec<(usize, PathBuf)> = Vec::new();
     for (index, _) in plan {
         let from = items[*index].path.clone();

@@ -1,3 +1,4 @@
+use crate::identity::Id;
 // cairn — reading and writing the item directory.
 //
 // Copyright (c) 2026 Oddur Sigurdsson. MIT licensed; see LICENSE.
@@ -44,6 +45,17 @@ impl<'a> Store<'a> {
         if let Some(first) = problems.into_iter().next() {
             return Err(first);
         }
+        let mut seen = std::collections::BTreeMap::new();
+        for item in &items {
+            if let Some(previous) = seen.insert(item.id, &item.path) {
+                anyhow::bail!(
+                    "duplicate identity {} in {} and {}; reconcile the copies before continuing",
+                    item.id,
+                    previous.display(),
+                    item.path.display()
+                );
+            }
+        }
         Ok(items)
     }
 
@@ -64,11 +76,53 @@ impl<'a> Store<'a> {
         let mut problems = Vec::new();
         for p in paths {
             match Item::load_with(&p, Some(&format)) {
-                Ok(item) => items.push(item),
+                Ok(mut item) => {
+                    if self.cfg.format() >= 4
+                        && (item.meta.id.is_none()
+                            || !item.id.is_uuid()
+                            || item.meta.depends_on.iter().any(|id| !id.is_uuid())
+                            || self
+                                .cfg
+                                .all_ref_fields()
+                                .iter()
+                                .filter(|f| f.by == crate::config::Addressing::Id)
+                                .any(|def| {
+                                    crate::refs::values(&item, def)
+                                        .iter()
+                                        .any(|v| !v.parse::<Id>().is_ok_and(Id::is_uuid))
+                                }))
+                    {
+                        problems.push(anyhow::anyhow!("{}: format 4 requires full UUIDv4 identities and references in frontmatter", p.display()));
+                    } else {
+                        // Full alternate spellings are accepted on read, but
+                        // queries, JSON and the next write use one identity.
+                        if self.cfg.format() >= 4 {
+                            for def in self.cfg.all_ref_fields().iter().filter(|f| {
+                                f.by == crate::config::Addressing::Id && f.name != "depends_on"
+                            }) {
+                                let values = crate::refs::values(&item, def);
+                                if values.is_empty() {
+                                    continue;
+                                }
+                                let ids = values
+                                    .iter()
+                                    .map(|v| v.parse::<Id>())
+                                    .collect::<Result<Vec<_>>>()?;
+                                if crate::refs::is_many(def) {
+                                    item.set_extra_ids(&def.name, &ids);
+                                } else if ids.len() == 1 {
+                                    item.set_extra_id(&def.name, ids.first().copied());
+                                }
+                            }
+                        }
+                        items.push(item);
+                    }
+                }
                 Err(e) => problems.push(e),
             }
         }
         items.sort_by_key(|i| i.id);
+        self.cfg.remember_ids(items.iter().map(|i| i.id));
         Ok((items, problems))
     }
 
@@ -148,7 +202,7 @@ impl<'a> Store<'a> {
             .ok_or_else(|| anyhow::anyhow!("no item with id {}", self.cfg.format_id(id)))
     }
 
-    pub fn find(&self, id: u32) -> Result<Item> {
+    pub fn find(&self, id: Id) -> Result<Item> {
         self.load_all()?
             .into_iter()
             .find(|i| i.id == id)
@@ -161,14 +215,36 @@ impl<'a> Store<'a> {
     /// `id_start` only ever applies to an empty project. Lowering it later does
     /// nothing, because the maximum still wins — which is the right behaviour
     /// and is said here rather than left to be discovered.
-    pub fn next_id(&self, items: &[Item]) -> u32 {
-        match items.iter().map(|i| i.id).max() {
-            Some(highest) => highest + 1,
-            None => self.cfg.project.id_start.max(1),
+    pub fn next_id(&self, items: &[Item]) -> Result<Id> {
+        if self.cfg.format() >= 4 {
+            loop {
+                let id = Id::new()?;
+                if !items.iter().any(|i| i.id == id)
+                    && !self
+                        .cfg
+                        .identities
+                        .borrow()
+                        .ids
+                        .as_ref()
+                        .is_some_and(|ids| ids.contains(&id))
+                {
+                    self.cfg.remember_id(id);
+                    return Ok(id);
+                }
+            }
         }
+        let n = items
+            .iter()
+            .filter_map(|i| i.id.legacy())
+            .max()
+            .map_or(Some(self.cfg.project.id_start.max(1)), |n| n.checked_add(1))
+            .ok_or_else(|| {
+                anyhow::anyhow!("legacy identifier space exhausted; migrate to UUID identities")
+            })?;
+        Ok(Id::Legacy(n))
     }
 
-    pub fn path_for(&self, id: u32, title: &str) -> PathBuf {
+    pub fn path_for(&self, id: Id, title: &str) -> PathBuf {
         self.cfg.items_dir().join(self.cfg.filename_for(id, title))
     }
 
@@ -295,8 +371,8 @@ pub fn write_atomic(path: &Path, contents: &[u8]) -> Result<()> {
 /// reports cycles, but reporting is not enough: an ordinary command should not
 /// be able to put the project into a state the tool itself calls invalid. The
 /// same principle made `remove` clean up after itself.
-pub fn dependency_path(items: &[Item], from: u32, to: u32) -> Option<Vec<u32>> {
-    let edges: std::collections::HashMap<u32, &Vec<u32>> =
+pub fn dependency_path(items: &[Item], from: Id, to: Id) -> Option<Vec<Id>> {
+    let edges: std::collections::HashMap<Id, &Vec<Id>> =
         items.iter().map(|i| (i.id, &i.meta.depends_on)).collect();
 
     let mut stack = vec![(from, vec![from])];

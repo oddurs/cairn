@@ -1,6 +1,6 @@
 # The cairn item format
 
-**Version 1.** A specification for storing a project's backlog as files in its
+**Format 4.** A specification for storing a project's backlog as files in its
 own repository.
 
 This document is normative and stands alone: a reader for the format can be
@@ -57,7 +57,7 @@ file it creates.
 
 ```markdown
 ---
-id: 1
+id: a83f26b1-71be-48d4-90c2-46b1b29a6ec9
 title: Support OAuth login
 type: feature
 status: doing
@@ -65,7 +65,7 @@ milestone: v0.1
 labels:
   - auth
 depends_on:
-  - 3
+  - b60981f3-5f55-4f9e-88c4-d6abc535ebdc
 created: 2026-09-04
 updated: 2026-09-11
 priority: p0
@@ -82,7 +82,7 @@ The frontmatter is a YAML mapping. All keys are optional except where noted.
 
 | Key | Type | Notes |
 | --- | --- | --- |
-| `id` | unsigned integer | Unique within a project. Required, except that a reader **may** take it from the filename when absent — see §4.1. |
+| `id` | UUIDv4 string | Immutable identity, required in frontmatter. See §4.2. Formats 1–3 used unsigned integers. |
 | `key` | string | A short handle, unique among items of the same `type`. Optional. See §4.3. |
 | `title` | string | Required in practice; an item without one is invalid. |
 | `type` | string | Names a type the project declares. |
@@ -93,7 +93,7 @@ The frontmatter is a YAML mapping. All keys are optional except where noted.
 | `owner` | string | Who is answerable for the work, which need not be who is doing it. With people the two are usually the same; with a program working and a person answerable they are not. |
 | `created_by` | string | What made the item, when that was not a person. A reader **must not** infer anything from its absence: most items have no such record. |
 | `labels` | sequence of strings | A reader **must** also accept a single string, split on commas with surrounding whitespace discarded. |
-| `depends_on` | sequence of unsigned integers | A reader **must** also accept a single comma-separated string, and **must** accept each element with an optional leading `#`. |
+| `depends_on` | sequence of full UUIDv4 strings | A reader **must** also accept a single comma-separated string, and **must** accept each element with an optional leading `#`. Abbreviations are command input, never stored references. Formats 1–3 used unsigned integers. |
 | `created` | date | `YYYY-MM-DD`. |
 | `updated` | date | `YYYY-MM-DD`. |
 | `closed_at` | date | `YYYY-MM-DD`. When the item last entered a status whose category is `done` or `dropped`. Distinct from `updated`, which any change moves: editing a finished item does not change when it was finished. A writer **should** set it at the transition and **must not** rewrite it on a later edit. A reader **must not** infer that an item is finished from its presence, nor that it is unfinished from its absence: `status` is what says so, and an item finished before a project recorded this has no value to record. |
@@ -113,8 +113,49 @@ not a nicety; it is the reason the format can change at all.
 
 ### 4.2 Identifiers, and how they are displayed
 
-`id` is an unsigned integer. That is the whole of what it is, and it does not
-change.
+In format 4, `id` is a UUID version 4 with the RFC 9562 variant, generated from
+operating-system randomness once when an item is created. It **must not** change
+when the item is edited, moved, imported, or merged. A writer emits the full,
+lowercase, hyphenated spelling. Readers also accept uppercase and compact
+32-hex-digit full spellings, normalizing them when writing. Missing or malformed
+identities **must** be rejected; filenames are not an identity source in format 4.
+
+Commands **may** accept hexadecimal prefixes of at least eight digits. They
+**must** resolve a prefix against all items and refuse ambiguity, not choose the
+first match. Full identities, not prefixes, are stored in every id-addressed
+reference and emitted as machine-readable `id` values. A human-facing `ref`
+**may** abbreviate to the shortest unambiguous prefix of at least eight digits.
+An abbreviation can become ambiguous as a project grows; durable links should
+use full identities. Duplicate full identities are errors, not permission to
+renumber an item. Random generation makes collisions vanishingly unlikely, not
+mathematically impossible; writers check local uniqueness and validators still
+detect duplicates.
+
+Migration retains `_legacy-ids.toml` inside the item directory. It has
+`version = 1`, the old numeric `id_format`, and an `[ids]` table mapping canonical
+decimal old numbers to full UUID strings. This is a fixed historical lookup
+table, not another allocator. Writers **must not** allocate new numeric aliases,
+reuse an old alias, or retarget one after deletion. Readers may resolve old bare,
+padded, or project-formatted numbers through this map. A lookup matching multiple
+identities across namespaces **must** fail as ambiguous. Keep the map under
+version control with the migrated items; it also lets history readers associate
+pre-migration numeric revisions with their current identities.
+
+Migration is an explicit, coordinated change committed once and shared through
+Git, not independently repeated in divergent clones. It preserves item bodies,
+unknown fields, line endings and dates, rewrites every declared id-addressed
+reference, and refuses unresolved or ambiguous legacy data. Key-addressed
+references and arbitrary prose are not rewritten. A resumable migration records
+its complete plan durably before replacing files; readers and ordinary writers
+refuse an unfinished migration. Resumption must refuse intervening edits rather
+than overwrite them. The project format is advanced only after the item and map
+writes are durable. No Git history is rewritten.
+
+#### Formats 1–3 (historical)
+
+In formats 1–3, `id` is an unsigned integer. These formats remain readable;
+their complete contract is retained in [format-3.md](format-3.md). The following
+numeric-rendering rules describe those older formats and migration aliases only.
 
 A project **may** display identifiers with a prefix, a suffix, or padding —
 `MP-1002`, `A24`, `0001`. Such a rendering is a property of the **project**, not
@@ -171,7 +212,10 @@ A writer **should** emit keys in the order given in §4, followed by custom
 fields in the order they were read, so that rewriting an unchanged item produces
 an identical file and a changed one produces a minimal diff.
 
-Items **should** be named `<id>-<slug>.md`, where the slug is the title reduced
+New format-4 items **should** be named `<full-uuid>-<slug>.md`. A migration may
+retain existing filenames to preserve links and minimize history churn; a later
+retitle may adopt the new naming convention without changing identity.
+In older formats items **should** be named `<id>-<slug>.md`, where the slug is the title reduced
 to lowercase alphanumerics separated by single hyphens, shortened only as far as
 the filesystem requires. Nothing **may** depend on the name: `id` is
 authoritative when present.
@@ -248,9 +292,11 @@ configuration **must not** reorder such a sequence.
 
 ## 8. Versioning and compatibility
 
-A project records the format version it uses. Versions 1, 2 and 3 are all
-described by this document: no key in it has changed meaning between them. Each
-bump changed only how the configuration says what it says.
+A project records the format version it uses. Versions 1, 2 and 3 used numeric
+identities; each bump changed configuration only. Format 4 changes identity and
+id-addressed references to UUID strings. It is a breaking format change with an
+explicit migration; an older reader must refuse it. Historical corpora remain
+frozen and readable under their original semantics.
 
 The version covers the on-disk shape of a **project**, not only of an item. A
 project is its configuration and its items (§7), so a change to the shape of the

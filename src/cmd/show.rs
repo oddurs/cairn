@@ -1,3 +1,4 @@
+use crate::identity::Id;
 // cairn — src/cmd/show.rs
 //
 // Copyright (c) 2026 Oddur Sigurdsson. MIT licensed; see LICENSE.
@@ -228,7 +229,7 @@ pub fn remove(args: RemoveArgs) -> Result<i32> {
     // ordinary operation. The rule is that a destructive command always leaves a
     // valid project and says what else it touched; there is no option to leave
     // the wreckage, because no one wants it.
-    let doomed: Vec<u32> = targets.iter().map(|t| t.id).collect();
+    let doomed: Vec<Id> = targets.iter().map(|t| t.id).collect();
     let all = store.load_all()?;
     // Everything that names one of these, through `depends_on` or through any
     // declared reference. Only `depends_on` was repaired before, which was

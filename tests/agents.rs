@@ -138,8 +138,8 @@ fn mcp_reports_tool_failures_in_band() {
     let p = seeded();
     let replies = p.mcp(
         &[
-            r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"update_item","arguments":{"id":1,"fields":{"status":"nope"}}}}"#,
-            r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"show_item","arguments":{"id":999}}}"#,
+            &serde_json::json!({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"update_item","arguments":{"id":p.id(1),"fields":{"status":"nope"}}}}).to_string(),
+            &serde_json::json!({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"show_item","arguments":{"id":p.id(999)}}}).to_string(),
         ],
     );
     for r in &replies {
@@ -202,11 +202,11 @@ fn an_agent_is_held_to_what_the_schema_permits() {
     p.add("A thing", &[]);
 
     // A person is unrestricted.
-    p.expect(&["set", "1", "priority=p0"]);
-    p.expect(&["close", "1"]);
-    p.expect(&["reopen", "1"]);
+    p.expect(&["set", &p.id(1), "priority=p0"]);
+    p.expect(&["close", &p.id(1)]);
+    p.expect(&["reopen", &p.id(1)]);
 
-    let refused = p.fails_as_agent(&["set", "1", "priority=p1"]);
+    let refused = p.fails_as_agent(&["set", &p.id(1), "priority=p1"]);
     assert_contains(
         &refused.all(),
         "may read `priority` but not set it",
@@ -218,7 +218,7 @@ fn an_agent_is_held_to_what_the_schema_permits() {
         "and the refusal says what to do instead, rather than only saying no",
     );
 
-    let closing = p.fails_as_agent(&["close", "1"]);
+    let closing = p.fails_as_agent(&["close", &p.id(1)]);
     assert_contains(
         &closing.all(),
         "may not move an item to `done`",
@@ -226,7 +226,7 @@ fn an_agent_is_held_to_what_the_schema_permits() {
     );
 
     // What it is allowed, it may still do.
-    p.expect_as_agent(&["set", "1", "status=doing"]);
+    p.expect_as_agent(&["set", &p.id(1), "status=doing"]);
 }
 
 /// The restriction is about what somebody changes, not about what a schema
@@ -248,12 +248,12 @@ fn an_agent_can_still_file_work_in_a_restricted_project() {
 fn claiming_does_not_overwrite_who_owns_something() {
     let p = Project::new();
     p.add("A thing", &[]);
-    p.expect(&["set", "1", "owner=alice"]);
+    p.expect(&["set", &p.id(1), "owner=alice"]);
 
-    let out = p.run_env(&["claim", "1"], &[("CAIRN_USER", Some("bob"))]);
+    let out = p.run_env(&["claim", &p.id(1)], &[("CAIRN_USER", Some("bob"))]);
     assert!(out.ok(), "{}", out.all());
 
-    let raw = p.expect(&["show", "1", "--raw"]).stdout;
+    let raw = p.expect(&["show", &p.id(1), "--raw"]).stdout;
     assert_contains(&raw, "assignee: bob", "bob is working on it");
     assert_contains(&raw, "owner: alice", "and alice is still answerable");
 }
@@ -265,18 +265,18 @@ fn claiming_does_not_overwrite_who_owns_something() {
 fn what_created_an_item_is_recorded() {
     let p = Project::new();
     p.add("By a person", &[]);
-    p.expect_as_agent(&["new", "By an agent", "-q"]);
+    let agent_ref = p.expect_as_agent(&["new", "By an agent", "-q"]).trimmed();
 
     // A person filing something is the ordinary case and is not annotated.
     // Two extra lines in every item forever would cost the readability that
     // makes this format worth having, for a signal only the other kind carries.
-    let person = p.expect(&["show", "1", "--raw"]).stdout;
+    let person = p.expect(&["show", &p.id(1), "--raw"]).stdout;
     assert!(
         !person.contains("created_by") && !person.contains("owner"),
         "a person's item should be unchanged:\n{person}"
     );
 
-    let agent = p.expect(&["show", "2", "--raw"]).stdout;
+    let agent = p.expect(&["show", &agent_ref, "--raw"]).stdout;
     assert_contains(&agent, "created_by: claude", "the agent that filed it");
     assert!(
         !agent.contains("owner:"),
@@ -288,7 +288,7 @@ fn what_created_an_item_is_recorded() {
     assert_eq!(
         p.expect(&["list", "-A", "--ids", "--filter", "created_by!=,owner="])
             .lines(),
-        vec!["0002".to_string()],
+        vec![agent_ref],
     );
 }
 
@@ -297,8 +297,8 @@ fn what_created_an_item_is_recorded() {
 fn an_unrestricted_project_treats_an_agent_as_anybody_else() {
     let p = Project::new();
     p.add("A thing", &[]);
-    p.expect_as_agent(&["set", "1", "priority=p0"]);
-    p.expect_as_agent(&["close", "1"]);
+    p.expect_as_agent(&["set", &p.id(1), "priority=p0"]);
+    p.expect_as_agent(&["close", &p.id(1)]);
 }
 // --- the agent surface, held to what it advertises --------------------------
 
@@ -331,7 +331,7 @@ fn an_agent_cannot_write_a_field_the_schema_reserves() {
         ),
         (
             "update_item",
-            serde_json::json!({"id": 1, "fields": {"risk": "high"}}),
+            serde_json::json!({"id": p.id(1), "fields": {"risk": "high"}}),
         ),
     ] {
         let r = p.mcp_call(name, args, Some("claude"));
@@ -354,7 +354,7 @@ fn an_agent_cannot_write_a_field_the_schema_reserves() {
     );
     // And the field is genuinely still unset on the item that was updated.
     assert!(
-        !p.expect(&["show", "1", "--json"])
+        !p.expect(&["show", &p.id(1), "--json"])
             .stdout
             .contains("\"risk\""),
         "the read-only field was written anyway"
@@ -365,7 +365,11 @@ fn an_agent_cannot_write_a_field_the_schema_reserves() {
 fn an_agent_cannot_move_an_item_to_a_status_it_may_only_propose() {
     let p = restricted_for_agents();
 
-    let r = p.mcp_call("close_item", serde_json::json!({"id": 1}), Some("claude"));
+    let r = p.mcp_call(
+        "close_item",
+        serde_json::json!({"id": p.id(1)}),
+        Some("claude"),
+    );
     assert!(
         refused(&r),
         "close_item moved to a propose status: {}",
@@ -438,10 +442,10 @@ fn a_hostile_client_name_does_not_bring_the_server_down() {
     let p = seeded();
     p.mcp_call(
         "claim_item",
-        serde_json::json!({"id": 1, "force": true}),
+        serde_json::json!({"id": p.id(1), "force": true}),
         Some("evil\ntitle: pwned"),
     );
-    let file = p.read(&p.expect(&["show", "1", "--path"]).trimmed());
+    let file = p.read(&p.expect(&["show", &p.id(1), "--path"]).trimmed());
     assert!(
         file.contains("assignee: 'evil title: pwned'"),
         "the newline survived into the frontmatter:\n{file}"
@@ -456,11 +460,11 @@ fn a_client_name_is_bounded() {
     let long = "n".repeat(10_000);
     p.mcp_call(
         "claim_item",
-        serde_json::json!({"id": 1, "force": true}),
+        serde_json::json!({"id": p.id(1), "force": true}),
         Some(&long),
     );
     let json: serde_json::Value =
-        serde_json::from_str(&p.expect(&["show", "1", "--json"]).stdout).unwrap();
+        serde_json::from_str(&p.expect(&["show", &p.id(1), "--json"]).stdout).unwrap();
     let who = json["assignee"].as_str().unwrap_or_default();
     assert!(
         who.len() <= 64 && !who.is_empty(),
@@ -513,7 +517,10 @@ fn every_tool_accepts_what_its_schema_advertises() {
 #[test]
 fn a_tool_accepts_an_id_in_either_form() {
     let p = seeded();
-    for id in [serde_json::json!(1), serde_json::json!("0001")] {
+    for id in [
+        serde_json::json!(p.id(1)),
+        serde_json::json!(p.reference(1)),
+    ] {
         let r = p.mcp_call("show_item", serde_json::json!({"id": id}), Some("claude"));
         assert!(!refused(&r), "{id} was refused: {}", tool_text(&r));
     }
@@ -526,14 +533,18 @@ fn an_update_may_change_only_the_body() {
     let p = seeded();
     let r = p.mcp_call(
         "update_item",
-        serde_json::json!({"id": 1, "body": "Rewritten."}),
+        serde_json::json!({"id": p.id(1), "body": "Rewritten."}),
         Some("claude"),
     );
     assert!(!refused(&r), "{}", tool_text(&r));
-    assert_contains(&p.expect(&["show", "1"]).stdout, "Rewritten.", "");
+    assert_contains(&p.expect(&["show", &p.id(1)]).stdout, "Rewritten.", "");
 
     // Neither one is not a change.
-    let r = p.mcp_call("update_item", serde_json::json!({"id": 1}), Some("claude"));
+    let r = p.mcp_call(
+        "update_item",
+        serde_json::json!({"id": p.id(1)}),
+        Some("claude"),
+    );
     assert!(refused(&r));
     assert_contains(&tool_text(&r), "nothing to change", "");
 }
@@ -547,11 +558,11 @@ fn a_tool_given_the_wrong_type_fails_in_band() {
         ("show_item", serde_json::json!({"id": {"nested": true}})),
         (
             "update_item",
-            serde_json::json!({"id": 1, "fields": "not an object"}),
+            serde_json::json!({"id": p.id(1), "fields": "not an object"}),
         ),
         ("search_items", serde_json::json!({"query": 42})),
         ("list_items", serde_json::json!({"limit": "many"})),
-        ("add_note", serde_json::json!({"id": 1, "text": []})),
+        ("add_note", serde_json::json!({"id": p.id(1), "text": []})),
     ] {
         let r = p.mcp_call(name, args, Some("claude"));
         assert!(
@@ -710,13 +721,18 @@ fn a_delete_against_an_edit_is_left_to_a_person() {
     p.add("Contested", &[]);
     git(&p, &["add", "-A"]);
     git(&p, &["commit", "-qm", "start"]);
-    let path = p.expect(&["show", "1", "--path"]).trimmed();
+    let path = p.expect(&["show", &p.id(1), "--path"]).trimmed();
 
-    on_branch(&p, "editing", "main", &["set", "1", "assignee=someone"]);
+    on_branch(
+        &p,
+        "editing",
+        "main",
+        &["set", &p.id(1), "assignee=someone"],
+    );
 
     git(&p, &["checkout", "-q", "main"]);
     git(&p, &["checkout", "-qb", "deleting"]);
-    p.expect(&["remove", "1", "--force"]);
+    p.expect(&["remove", &p.id(1), "--force"]);
     git(&p, &["add", "-A"]);
     git(&p, &["commit", "-qm", "deleting"]);
 
@@ -774,8 +790,8 @@ fn the_driver_does_not_claim_the_configuration() {
 #[test]
 fn a_board_groups_by_any_field() {
     let p = seeded();
-    p.expect(&["set", "1", "priority=p0"]);
-    p.expect(&["set", "2", "priority=p2"]);
+    p.expect(&["set", &p.id(1), "priority=p0"]);
+    p.expect(&["set", &p.id(2), "priority=p2"]);
 
     let by_priority = p.expect(&["board", "--group-by", "priority"]).stdout;
     assert_contains(&by_priority, "p0", "the enum's own values are the columns");
@@ -799,7 +815,7 @@ fn a_board_groups_by_any_field() {
     );
 
     // A field with no declared values takes its columns from what items carry.
-    p.expect(&["set", "1", "area=parser"]);
+    p.expect(&["set", &p.id(1), "area=parser"]);
     let by_area = p.expect(&["board", "--group-by", "area"]).stdout;
     assert_contains(&by_area, "parser", "");
 }
@@ -811,7 +827,7 @@ fn a_board_honours_a_view_a_filter_and_a_milestone() {
         "cairn.toml",
         "\n[[view]]\nname = \"hot\"\nfilter = \"priority=p0\"\ngroup_by = \"milestone\"\n",
     );
-    p.expect(&["set", "1", "priority=p0"]);
+    p.expect(&["set", &p.id(1), "priority=p0"]);
 
     // The view names a group_by, which is the branch worth reaching.
     let out = p.expect(&["board", "--view", "hot"]).stdout;
@@ -837,7 +853,7 @@ fn a_roadmap_can_list_its_items() {
         "--items showed no more than the summary did"
     );
 
-    p.expect(&["close", "1"]);
+    p.expect(&["close", &p.id(1)]);
     let closed_hidden = p.expect(&["roadmap", "--items"]).stdout;
     let closed_shown = p.expect(&["roadmap", "--items", "--all"]).stdout;
     assert!(
@@ -851,17 +867,17 @@ fn a_roadmap_can_list_its_items() {
 #[test]
 fn show_marks_a_dependency_that_is_missing() {
     let p = seeded();
-    p.write(
+    p.write_uuid_fixture(
         "cairn/items/0050-hangs-on-nothing.md",
         "---\nid: 50\ntitle: Hangs on nothing\nstatus: backlog\ndepends_on:\n  - 999\n---\nbody\n",
     );
-    let out = p.expect(&["show", "50"]).stdout;
+    let out = p.expect(&["show", &p.id(50)]).stdout;
     assert_contains(&out, "missing", "it says the dependency is not there");
 
     // And a dependency that exists is shown ticked once it is finished.
-    p.expect(&["close", "1"]);
-    p.expect(&["set", "50", "depends_on=1"]);
-    assert_contains(&p.expect(&["show", "50"]).stdout, "[x]", "");
+    p.expect(&["close", &p.id(1)]);
+    p.expect(&["set", &p.id(50), &format!("depends_on={}", p.id(1))]);
+    assert_contains(&p.expect(&["show", &p.id(50)]).stdout, "[x]", "");
 }
 
 /// The rendered roadmap's optional parts, none of which the suite had produced.
@@ -1062,8 +1078,14 @@ fn the_agent_can_ask_for_the_schema() {
 /// exercises the other end of the parser.
 #[test]
 fn an_identifier_can_have_a_suffix() {
-    let p = keyed("[{n:03}]", None);
-    p.expect(&["new", "First", "-q"]);
+    let p = Project::new();
+    p.write(
+        "cairn.toml",
+        &p.read("cairn.toml")
+            .replace("format = 4", "format = 3")
+            .replace("[project]", "[project]\nid_format = \"[{n:03}]\""),
+    );
+    p.write_item("[001]-first.md", "id: 1\ntitle: First\nstatus: backlog", "");
     assert_eq!(p.expect(&["list", "--ids"]).trimmed(), "[001]");
 
     // Accepted back in every spelling: rendered, bare, and case-folded.
@@ -1114,12 +1136,12 @@ fn a_configuration_with_no_project_block_works() {
     let p = Project::empty();
     p.write(
         "cairn.toml",
-        "format = 3\n[[status]]\nname = \"todo\"\ncategory = \"open\"\n",
+        "format = 4\n[[status]]\nname = \"todo\"\ncategory = \"open\"\n",
     );
     std::fs::create_dir_all(p.path("cairn/items")).unwrap();
 
-    p.expect(&["new", "Minimal", "-q"]);
-    assert_eq!(p.expect(&["list", "--ids"]).trimmed(), "0001");
+    let reference = p.add("Minimal", &[]);
+    assert_eq!(p.expect(&["list", "--ids"]).trimmed(), reference);
     assert!(p.run(&["check"]).ok(), "{}", p.run(&["check"]).all());
     assert_contains(
         &p.expect(&["config"]).stdout,
@@ -1131,7 +1153,7 @@ fn a_configuration_with_no_project_block_works() {
 /// A ref field addressed by id stores a number, not a string, so the file says
 /// what it means and a reader does not have to guess.
 #[test]
-fn an_id_addressed_ref_stores_numbers() {
+fn an_id_addressed_ref_stores_full_uuid_strings() {
     let p = Project::new();
     p.append(
         "cairn.toml",
@@ -1143,24 +1165,28 @@ fn an_id_addressed_ref_stores_numbers() {
     p.add("Two", &[]);
     p.add("Three", &[]);
 
-    p.expect(&["set", "3", "blocks=1,2"]);
-    p.expect(&["set", "3", "parent_item=1"]);
+    p.expect(&[
+        "set",
+        &p.id(3),
+        &format!("blocks={},{}", p.reference(1), p.reference(2)),
+    ]);
+    p.expect(&["set", &p.id(3), &format!("parent_item={}", p.reference(1))]);
 
-    let file = p.read(&p.expect(&["show", "3", "--path"]).trimmed());
+    let file = p.read(&p.expect(&["show", &p.id(3), "--path"]).trimmed());
     assert!(
-        file.contains("- 1") && file.contains("- 2"),
-        "a many-valued id ref should be a sequence of numbers:\n{file}"
+        file.contains(&format!("- {}", p.id(1))) && file.contains(&format!("- {}", p.id(2))),
+        "a many-valued id ref should be a sequence of full identities:\n{file}"
     );
     assert!(
-        file.contains("parent_item: 1"),
-        "a single id ref should be a number:\n{file}"
+        file.contains(&format!("parent_item: {}", p.id(1))),
+        "a single id ref should be a full identity:\n{file}"
     );
     assert!(p.run(&["check"]).ok(), "{}", p.run(&["check"]).all());
 
     // Cleared, the keys go rather than being left empty.
-    p.expect(&["set", "3", "blocks="]);
-    p.expect(&["set", "3", "parent_item="]);
-    let file = p.read(&p.expect(&["show", "3", "--path"]).trimmed());
+    p.expect(&["set", &p.id(3), "blocks="]);
+    p.expect(&["set", &p.id(3), "parent_item="]);
+    let file = p.read(&p.expect(&["show", &p.id(3), "--path"]).trimmed());
     assert!(
         !file.contains("parent_item"),
         "a cleared ref was left behind:\n{file}"
@@ -1172,11 +1198,11 @@ fn an_id_addressed_ref_stores_numbers() {
 #[test]
 fn a_partial_multi_item_write_says_how_far_it_got() {
     let p = seeded();
-    let out = p.fails(&["set", "1", "2", "3", "status=nonsense"]);
+    let out = p.fails(&["set", &p.id(1), &p.id(2), &p.id(3), "status=nonsense"]);
     assert_contains(&out.all(), "nonsense", "it names the bad value");
 
     // The first item takes a good change, the second a bad one.
-    let out = p.fails(&["set", "2", "3", "priority=p0", "effort=enormous"]);
+    let out = p.fails(&["set", &p.id(2), &p.id(3), "priority=p0", "effort=enormous"]);
     assert_contains(&out.all(), "enormous", "");
     assert!(p.run(&["check"]).ok(), "{}", p.run(&["check"]).all());
 }
@@ -1186,8 +1212,8 @@ fn a_partial_multi_item_write_says_how_far_it_got() {
 #[test]
 fn next_answers_every_way_of_asking() {
     let p = seeded();
-    p.expect(&["set", "1", "assignee=tester"]);
-    p.expect(&["set", "2", "depends_on=1"]);
+    p.expect(&["set", &p.id(1), "assignee=tester"]);
+    p.expect(&["set", &p.id(2), &format!("depends_on={}", p.id(1))]);
 
     assert!(!p.expect(&["next", "--mine"]).stdout.is_empty());
     assert!(!p.expect(&["next", "--unassigned"]).stdout.is_empty());
@@ -1203,12 +1229,9 @@ fn next_answers_every_way_of_asking() {
 
     // Blocked work is excluded, and `--blocked` brings it back with its reason.
     let plain = p.expect(&["next", "--ids"]).lines();
-    assert!(
-        !plain.contains(&"0002".to_string()),
-        "blocked work was offered"
-    );
+    assert!(!plain.contains(&p.reference(2)), "blocked work was offered");
     let with_blocked = p.expect(&["next", "--blocked", "--ids"]).lines();
-    assert!(with_blocked.contains(&"0002".to_string()));
+    assert!(with_blocked.contains(&p.reference(2)));
 
     let count: usize = p
         .expect(&["next", "--count"])
@@ -1225,7 +1248,11 @@ fn next_answers_every_way_of_asking() {
 #[test]
 fn search_has_the_same_output_shapes_as_everything_else() {
     let p = seeded();
-    p.expect(&["note", "1", "the word cassowary appears only in a body"]);
+    p.expect(&[
+        "note",
+        &p.id(1),
+        "the word cassowary appears only in a body",
+    ]);
 
     assert!(!p.expect(&["search", "cassowary"]).stdout.is_empty());
     // `--titles` looks at titles alone, so a word that lives only in a body
@@ -1240,7 +1267,7 @@ fn search_has_the_same_output_shapes_as_everything_else() {
     p.expect(&["search", "item", "--count"]);
     p.expect(&["search", "item", "--limit", "1"]);
     p.expect(&["search", "item", "--filter", "category!=done"]);
-    p.expect(&["close", "2"]);
+    p.expect(&["close", &p.id(2)]);
     p.expect(&["search", "item", "--all"]);
 }
 
@@ -1248,7 +1275,7 @@ fn search_has_the_same_output_shapes_as_everything_else() {
 #[test]
 fn export_can_be_narrowed_and_redirected() {
     let p = seeded();
-    p.expect(&["close", "2"]);
+    p.expect(&["close", &p.id(2)]);
 
     let all: serde_json::Value = serde_json::from_str(&p.expect(&["export"]).stdout).expect("JSON");
     let open: serde_json::Value =
@@ -1310,7 +1337,7 @@ fn a_filtered_write_shows_what_it_will_change_and_asks() {
     assert_contains(&out.all(), "no item matches", "");
 
     // Ids and a filter together is a mistake, not a union.
-    let out = p.fails(&["set", "1", "--filter", "priority=p0", "effort=s"]);
+    let out = p.fails(&["set", &p.id(1), "--filter", "priority=p0", "effort=s"]);
     assert_contains(&out.all(), "not both", "");
 
     // And no target at all.
@@ -1321,7 +1348,7 @@ fn a_filtered_write_shows_what_it_will_change_and_asks() {
 #[test]
 fn set_refuses_an_empty_assignment_list() {
     let p = seeded();
-    let out = p.fails(&["set", "1"]);
+    let out = p.fails(&["set", &p.id(1)]);
     assert_contains(&out.all(), "field=value", "it says what it wanted");
 }
 
@@ -1330,11 +1357,14 @@ fn set_refuses_an_empty_assignment_list() {
 #[test]
 fn show_marks_a_milestone_that_answers_to_nothing() {
     let p = seeded();
-    p.write(
+    p.write_uuid_fixture(
         "cairn/items/0060-adrift.md",
         "---\nid: 60\ntitle: Adrift\nstatus: backlog\nmilestone: v9.9\n---\nbody\n",
     );
-    let out = p.run_env(&["show", "60", "--color", "always"], &[("NO_COLOR", None)]);
+    let out = p.run_env(
+        &["show", &p.id(60), "--color", "always"],
+        &[("NO_COLOR", None)],
+    );
     assert!(out.ok(), "{}", out.all());
     assert_contains(&out.stdout, "v9.9", "the value is shown");
     assert!(out.stdout.contains('\u{1b}'), "and marked, not left plain");
@@ -1344,10 +1374,10 @@ fn show_marks_a_milestone_that_answers_to_nothing() {
 #[test]
 fn show_has_a_shape_for_a_script() {
     let p = seeded();
-    let raw = p.expect(&["show", "1", "--raw"]).stdout;
+    let raw = p.expect(&["show", &p.id(1), "--raw"]).stdout;
     assert!(raw.starts_with("---"), "--raw is the file itself:\n{raw}");
 
-    let path = p.expect(&["show", "1", "--path"]).trimmed();
+    let path = p.expect(&["show", &p.id(1), "--path"]).trimmed();
     assert!(path.to_ascii_lowercase().ends_with(".md"), "{path}");
     assert_eq!(p.read(&path), raw, "--path and --raw disagree");
 }
@@ -1415,20 +1445,20 @@ fn a_table_fits_a_narrow_terminal() {
 #[test]
 fn log_can_show_the_patches_themselves() {
     let p = repository();
-    p.expect(&["set", "1", "priority=p0"]);
+    p.expect(&["set", &p.id(1), "priority=p0"]);
     git(&p, &["add", "-A"]);
     git(&p, &["commit", "-qm", "priority"]);
 
-    let out = p.expect(&["log", "1", "--patch"]);
+    let out = p.expect(&["log", &p.id(1), "--patch"]);
     assert_contains(&out.stdout, "diff --git", "the raw diff");
     assert_contains(&out.stdout, "priority", "and what changed in it");
 
     // Bounded, for an item with a long history.
-    p.expect(&["set", "1", "effort=s"]);
+    p.expect(&["set", &p.id(1), "effort=s"]);
     git(&p, &["add", "-A"]);
     git(&p, &["commit", "-qm", "effort"]);
-    let one = p.expect(&["log", "1", "--patch", "-n", "1"]).stdout;
-    let all = p.expect(&["log", "1", "--patch"]).stdout;
+    let one = p.expect(&["log", &p.id(1), "--patch", "-n", "1"]).stdout;
+    let all = p.expect(&["log", &p.id(1), "--patch"]).stdout;
     assert!(one.len() < all.len(), "-n did not limit the patches");
 }
 
@@ -1460,15 +1490,15 @@ fn check_reports_every_way_an_item_can_disagree_with_the_schema() {
          values = [\"linux\", \"macos\"]\n\
          \n[[field]]\nname = \"owner_team\"\nkind = \"text\"\nrequired = true\n",
     );
-    p.write(
+    p.write_uuid_fixture(
         "cairn/items/0011-no-status.md",
         "---\nid: 11\ntitle: No status\n---\nbody\n",
     );
-    p.write(
+    p.write_uuid_fixture(
         "cairn/items/0012-odd-type.md",
         "---\nid: 12\ntitle: Odd type\ntype: sculpture\nstatus: backlog\n---\nbody\n",
     );
-    p.write(
+    p.write_uuid_fixture(
         "cairn/items/0013-odd-list.md",
         "---\nid: 13\ntitle: Odd list\nstatus: backlog\nplatforms:\n  - linux\n  - haiku\n---\nbody\n",
     );
@@ -1495,7 +1525,7 @@ fn check_can_be_strict_and_quiet() {
     assert!(p.expect(&["check", "--quiet"]).stdout.trim().is_empty());
 
     // A warning: a filename that no longer matches its title.
-    let path = p.expect(&["show", "1", "--path"]).trimmed();
+    let path = p.expect(&["show", &p.id(1), "--path"]).trimmed();
     let moved = path.replace("first-item", "wrong-name");
     std::fs::rename(p.path(&path), p.path(&moved)).unwrap();
 
@@ -1525,16 +1555,16 @@ fn a_partial_view_is_reported_by_every_reader_that_needs_all_of_it() {
 #[test]
 fn a_note_can_choose_its_own_heading() {
     let p = seeded();
-    p.expect(&["note", "1", "plain note"]);
-    assert_contains(&p.expect(&["show", "1"]).stdout, "plain note", "");
+    p.expect(&["note", &p.id(1), "plain note"]);
+    assert_contains(&p.expect(&["show", &p.id(1)]).stdout, "plain note", "");
 
     let r = p.mcp_call(
         "add_note",
-        serde_json::json!({"id": 1, "text": "filed elsewhere", "heading": "Decisions"}),
+        serde_json::json!({"id": p.id(1), "text": "filed elsewhere", "heading": "Decisions"}),
         Some("claude"),
     );
     assert!(!refused(&r), "{}", tool_text(&r));
-    let body = p.expect(&["show", "1"]).stdout;
+    let body = p.expect(&["show", &p.id(1)]).stdout;
     assert_contains(&body, "Decisions", "the heading it asked for");
     assert_contains(&body, "plain note", "and nothing was erased");
 }
@@ -1546,35 +1576,35 @@ fn close_without_a_done_status_asks_for_one() {
     let p = Project::empty();
     p.write(
         "cairn.toml",
-        "format = 3\n[project]\nname = \"T\"\n\
+        "format = 4\n[project]\nname = \"T\"\n\
          [[status]]\nname = \"todo\"\ncategory = \"open\"\n\
          [[status]]\nname = \"doing\"\ncategory = \"active\"\n",
     );
     std::fs::create_dir_all(p.path("cairn/items")).unwrap();
-    p.expect(&["new", "Never finished", "-q"]);
+    p.add("Never finished", &[]);
 
-    let out = p.fails(&["close", "1"]);
+    let out = p.fails(&["close", &p.id(1)]);
     assert_contains(&out.all(), "category = \"done\"", "it says what is missing");
     assert_contains(&out.all(), "--status", "and how to proceed anyway");
 
     // And explicitly is fine.
-    assert!(p.run(&["close", "1", "--status", "doing"]).ok());
+    assert!(p.run(&["close", &p.id(1), "--status", "doing"]).ok());
 }
 
 /// `reopen` mirrors `close`, including choosing where to go back to.
 #[test]
 fn reopen_returns_an_item_to_the_backlog() {
     let p = seeded();
-    p.expect(&["close", "1"]);
-    assert_contains(&p.expect(&["show", "1"]).stdout, "done", "");
+    p.expect(&["close", &p.id(1)]);
+    assert_contains(&p.expect(&["show", &p.id(1)]).stdout, "done", "");
 
-    p.expect(&["reopen", "1"]);
-    let out = p.expect(&["show", "1"]).stdout;
+    p.expect(&["reopen", &p.id(1)]);
+    let out = p.expect(&["show", &p.id(1)]).stdout;
     assert!(!out.contains("done"), "it did not come back: {out}");
 
-    p.expect(&["close", "1"]);
-    p.expect(&["reopen", "1", "--status", "planned"]);
-    assert_contains(&p.expect(&["show", "1"]).stdout, "planned", "");
+    p.expect(&["close", &p.id(1)]);
+    p.expect(&["reopen", &p.id(1), "--status", "planned"]);
+    assert_contains(&p.expect(&["show", &p.id(1)]).stdout, "planned", "");
 }
 
 /// Closing several at once, and the acceptance-criteria report that comes with
@@ -1582,14 +1612,14 @@ fn reopen_returns_an_item_to_the_backlog() {
 #[test]
 fn closing_reports_criteria_that_are_still_unticked() {
     let p = Project::new();
-    p.expect(&[
-        "new",
+    p.add(
         "With criteria",
-        "-q",
-        "--body",
-        "## Acceptance criteria\n\n- [x] done one\n- [ ] not done\n",
-    ]);
-    let out = p.expect(&["close", "1"]).all();
+        &[
+            "--body",
+            "## Acceptance criteria\n\n- [x] done one\n- [ ] not done\n",
+        ],
+    );
+    let out = p.expect(&["close", &p.id(1)]).all();
     assert_contains(&out, "1 of 2", "it says how many are outstanding");
     assert!(p.run(&["check"]).ok(), "and closes anyway");
 
@@ -1618,16 +1648,16 @@ fn criteria_can_be_confined_to_one_section() {
         "[project]\ncriteria_section = \"Acceptance criteria\"",
     );
     p.write("cairn.toml", &cfg);
-    p.expect(&[
-        "new",
+    p.add(
         "Two lists",
-        "-q",
-        "--body",
-        "## Notes\n\n- [ ] not a criterion\n- [ ] nor this\n\n\
+        &[
+            "--body",
+            "## Notes\n\n- [ ] not a criterion\n- [ ] nor this\n\n\
          ## Acceptance criteria\n\n- [x] the only one that counts\n",
-    ]);
+        ],
+    );
 
-    let out = p.expect(&["close", "1"]).all();
+    let out = p.expect(&["close", &p.id(1)]).all();
     assert!(
         !out.contains("unticked") && !out.contains(" of "),
         "the notes checklist was counted:\n{out}"
@@ -1652,34 +1682,39 @@ fn criteria_can_be_confined_to_one_section() {
 /// `renumber --dry-run` and `--compact`, which are the two ways of asking it
 /// not to do the obvious thing.
 #[test]
-fn renumber_can_describe_itself_before_acting() {
+fn renumber_never_reassigns_a_duplicate_immutable_identity() {
     let p = Project::new();
     p.add("Keeper", &[]);
-    p.write(
+    p.write_uuid_fixture(
         "cairn/items/0001-a-copy.md",
         "---\nid: 1\ntitle: A copy\nstatus: backlog\n---\nbody\n",
     );
     let before = p.files("cairn/items");
 
-    let out = p.expect(&["renumber", "--dry-run"]).all();
-    assert_contains(&out, "would be renumbered", "");
+    let out = p.fails(&["renumber", "--dry-run"]).all();
+    assert_contains(&out, "duplicate identity", "");
     assert_eq!(before, p.files("cairn/items"), "a dry run moved a file");
 
-    p.expect(&["renumber"]);
-    assert!(p.run(&["check"]).ok(), "{}", p.run(&["check"]).all());
+    p.fails(&["renumber"]);
+    assert_eq!(
+        before,
+        p.files("cairn/items"),
+        "duplicates need reconciliation, never a replacement identity"
+    );
 }
 
 /// Every `--json` shape a script might read, asserted to parse.
 #[test]
 fn every_machine_readable_shape_parses() {
     let p = seeded();
-    p.expect(&["note", "1", "something"]);
+    let first = p.id(1);
+    p.expect(&["note", &p.id(1), "something"]);
 
     for args in [
         vec!["list", "-A", "--json"],
         vec!["next", "--json"],
         vec!["search", "item", "--json"],
-        vec!["show", "1", "--json"],
+        vec!["show", &first, "--json"],
         vec!["export"],
         vec!["config", "--json"],
     ] {
@@ -1695,7 +1730,7 @@ fn every_machine_readable_shape_parses() {
 fn a_roadmap_can_be_narrowed_to_one_milestone() {
     let p = seeded();
     milestone(&p, "v0.2", Some("2027-01-01"));
-    p.expect(&["set", "2", "milestone=v0.2"]);
+    p.expect(&["set", &p.id(2), "milestone=v0.2"]);
 
     let all = p.expect(&["roadmap"]).stdout;
     assert_contains(&all, "v0.1", "");
@@ -1792,28 +1827,28 @@ fn migrating_adds_the_type_and_field_when_they_are_absent() {
 #[test]
 fn claiming_refuses_for_reasons_it_names() {
     let p = seeded();
-    p.expect(&["set", "2", "depends_on=1"]);
+    p.expect(&["set", &p.id(2), &format!("depends_on={}", p.id(1))]);
 
     // Blocked.
-    let out = p.fails(&["claim", "2"]);
+    let out = p.fails(&["claim", &p.id(2)]);
     assert_contains(&out.all(), "blocked", "");
     assert!(
-        p.run(&["claim", "2", "--force"]).ok(),
+        p.run(&["claim", &p.id(2), "--force"]).ok(),
         "--force takes it anyway"
     );
 
     // Held by somebody else.
-    p.expect(&["set", "3", "assignee=someone-else"]);
-    let out = p.fails(&["claim", "3"]);
+    p.expect(&["set", &p.id(3), "assignee=someone-else"]);
+    let out = p.fails(&["claim", &p.id(3)]);
     assert_contains(&out.all(), "someone-else", "it names who has it");
-    assert!(p.run(&["claim", "3", "--force"]).ok());
+    assert!(p.run(&["claim", &p.id(3), "--force"]).ok());
 
     // Released, and then free again.
-    p.expect(&["release", "3"]);
-    assert!(p.run(&["claim", "3"]).ok(), "release did not free it");
+    p.expect(&["release", &p.id(3)]);
+    assert!(p.run(&["claim", &p.id(3)]).ok(), "release did not free it");
 
     // Nothing left to claim.
-    p.expect(&["claim", "1"]);
+    p.expect(&["claim", &p.id(1)]);
     let out = p.run(&["claim", "--next"]);
     assert!(
         !out.ok(),
@@ -1843,7 +1878,7 @@ fn new_can_set_everything_an_item_carries() {
             "-a",
             "somebody",
             "-d",
-            "1",
+            &p.id(1),
             "--set",
             "priority=p0",
             "--body",
@@ -1858,7 +1893,7 @@ fn new_can_set_everything_an_item_carries() {
     assert_eq!(json["milestone"], "v0.1");
     assert_eq!(json["assignee"], "somebody");
     assert_eq!(json["labels"], serde_json::json!(["one", "two"]));
-    assert_eq!(json["depends_on"], serde_json::json!([1]));
+    assert_eq!(json["depends_on"], serde_json::json!([p.id(1)]));
     assert_eq!(json["fields"]["priority"], "p0");
     assert_contains(json["body"].as_str().unwrap(), "A body of its own.", "");
 
@@ -1876,20 +1911,20 @@ fn new_can_set_everything_an_item_carries() {
 #[test]
 fn removing_an_item_repairs_what_pointed_at_it() {
     let p = seeded();
-    p.expect(&["set", "2", "depends_on=1"]);
-    p.expect(&["set", "3", "milestone=v0.1"]);
+    p.expect(&["set", &p.id(2), &format!("depends_on={}", p.id(1))]);
+    p.expect(&["set", &p.id(3), "milestone=v0.1"]);
 
     // It asks, and a refusal changes nothing.
-    let out = p.run_stdin(&["remove", "1"], "n\n");
+    let out = p.run_stdin(&["remove", &p.id(1)], "n\n");
     assert!(
-        !out.ok() || p.run(&["show", "1"]).ok(),
+        !out.ok() || p.run(&["show", &p.id(1)]).ok(),
         "a declined removal deleted it"
     );
 
-    p.expect(&["remove", "1", "--force"]);
-    assert!(!p.run(&["show", "1"]).ok(), "it is gone");
+    p.expect(&["remove", &p.id(1), "--force"]);
+    assert!(!p.run(&["show", &p.id(1)]).ok(), "it is gone");
     let json: serde_json::Value =
-        serde_json::from_str(&p.expect(&["show", "2", "--json"]).stdout).unwrap();
+        serde_json::from_str(&p.expect(&["show", &p.id(2), "--json"]).stdout).unwrap();
     assert_eq!(
         json["depends_on"],
         serde_json::json!([]),
@@ -1905,36 +1940,36 @@ fn every_reserved_field_has_its_own_rule() {
     let p = seeded();
 
     // `key`: set, cleared, and refused when it would read as an identifier.
-    p.expect(&["set", "1", "key=first"]);
-    assert_contains(&p.expect(&["show", "1"]).stdout, "first", "");
-    let out = p.fails(&["set", "1", "key=0002"]);
+    p.expect(&["set", &p.id(1), "key=first"]);
+    assert_contains(&p.expect(&["show", &p.id(1)]).stdout, "first", "");
+    let out = p.fails(&["set", &p.id(1), "key=0002"]);
     assert_contains(&out.all(), "reads as an identifier", "");
-    p.expect(&["set", "1", "key="]);
+    p.expect(&["set", &p.id(1), "key="]);
 
     // `owner` and `created_by` are ordinary strings that can be cleared.
     for field in ["owner", "created_by"] {
-        p.expect(&["set", "1", &format!("{field}=somebody")]);
+        p.expect(&["set", &p.id(1), &format!("{field}=somebody")]);
         assert_contains(
-            &p.expect(&["show", "1", "--json"]).stdout,
+            &p.expect(&["show", &p.id(1), "--json"]).stdout,
             "somebody",
             field,
         );
-        p.expect(&["set", "1", &format!("{field}=")]);
+        p.expect(&["set", &p.id(1), &format!("{field}=")]);
     }
 
     // A title cannot be emptied, and is not a list.
-    let out = p.fails(&["set", "1", "title="]);
+    let out = p.fails(&["set", &p.id(1), "title="]);
     assert_contains(&out.all(), "cannot be empty", "");
-    let out = p.fails(&["set", "1", "title+=more"]);
+    let out = p.fails(&["set", &p.id(1), "title+=more"]);
     assert_contains(&out.all(), "not a list field", "");
 
     // `id` is identity and cannot be assigned at all.
-    let out = p.fails(&["set", "1", "id=99"]);
+    let out = p.fails(&["set", &p.id(1), "id=99"]);
     assert_contains(&out.all(), "cannot be changed", "");
 
     // `type` cleared, and refused when it names nothing.
-    p.expect(&["set", "1", "type="]);
-    let out = p.fails(&["set", "1", "type=sculpture"]);
+    p.expect(&["set", &p.id(1), "type="]);
+    let out = p.fails(&["set", &p.id(1), "type=sculpture"]);
     assert_contains(&out.all(), "sculpture", "");
 
     assert!(p.run(&["check"]).ok(), "{}", p.run(&["check"]).all());
@@ -1944,20 +1979,20 @@ fn every_reserved_field_has_its_own_rule() {
 #[test]
 fn a_list_field_can_be_added_to_and_taken_from() {
     let p = seeded();
-    p.expect(&["set", "1", "labels=one,two"]);
-    p.expect(&["set", "1", "labels+=three"]);
+    p.expect(&["set", &p.id(1), "labels=one,two"]);
+    p.expect(&["set", &p.id(1), "labels+=three"]);
     let json: serde_json::Value =
-        serde_json::from_str(&p.expect(&["show", "1", "--json"]).stdout).unwrap();
+        serde_json::from_str(&p.expect(&["show", &p.id(1), "--json"]).stdout).unwrap();
     assert_eq!(json["labels"], serde_json::json!(["one", "two", "three"]));
 
-    p.expect(&["set", "1", "labels-=two"]);
+    p.expect(&["set", &p.id(1), "labels-=two"]);
     let json: serde_json::Value =
-        serde_json::from_str(&p.expect(&["show", "1", "--json"]).stdout).unwrap();
+        serde_json::from_str(&p.expect(&["show", &p.id(1), "--json"]).stdout).unwrap();
     assert_eq!(json["labels"], serde_json::json!(["one", "three"]));
 
-    p.expect(&["set", "1", "labels="]);
+    p.expect(&["set", &p.id(1), "labels="]);
     let json: serde_json::Value =
-        serde_json::from_str(&p.expect(&["show", "1", "--json"]).stdout).unwrap();
+        serde_json::from_str(&p.expect(&["show", &p.id(1), "--json"]).stdout).unwrap();
     assert_eq!(json["labels"], serde_json::json!([]));
 }
 
@@ -1966,21 +2001,21 @@ fn a_list_field_can_be_added_to_and_taken_from() {
 fn a_dependency_cycle_is_refused_at_every_depth() {
     let p = Project::new();
     p.add("One", &[]);
-    p.add("Two", &["-d", "1"]);
-    p.add("Three", &["-d", "2"]);
+    p.add("Two", &["-d", &p.id(1)]);
+    p.add("Three", &["-d", &p.id(2)]);
 
-    let out = p.fails(&["set", "1", "depends_on=1"]);
+    let out = p.fails(&["set", &p.id(1), &format!("depends_on={}", p.id(1))]);
     assert_contains(&out.all(), "cycle", "an item depending on itself");
 
-    let out = p.fails(&["set", "1", "depends_on=3"]);
+    let out = p.fails(&["set", &p.id(1), &format!("depends_on={}", p.id(3))]);
     assert_contains(&out.all(), "cycle", "closing a loop three deep");
 
     // A dependency on nothing is refused too, at creation as well as on an
     // edit: `new` checked only for a cycle, so it accepted one and left `check`
     // to complain afterwards.
-    let out = p.fails(&["set", "1", "depends_on=999"]);
+    let out = p.fails(&["set", &p.id(1), &format!("depends_on={}", p.id(999))]);
     assert_contains(&out.all(), "does not exist", "");
-    let out = p.fails(&["new", "Four", "-d", "999"]);
+    let out = p.fails(&["new", "Four", "-d", &p.id(999)]);
     assert_contains(&out.all(), "does not exist", "");
 
     assert!(p.run(&["check"]).ok(), "{}", p.run(&["check"]).all());
@@ -2058,11 +2093,11 @@ fn a_failing_hook_warns_without_undoing_anything() {
 #[test]
 fn who_is_answerable_survives_a_round_trip() {
     let p = seeded();
-    p.expect(&["set", "1", "owner=a-person"]);
-    p.expect(&["set", "1", "created_by=an-agent"]);
+    p.expect(&["set", &p.id(1), "owner=a-person"]);
+    p.expect(&["set", &p.id(1), "created_by=an-agent"]);
 
     let json: serde_json::Value =
-        serde_json::from_str(&p.expect(&["show", "1", "--json"]).stdout).unwrap();
+        serde_json::from_str(&p.expect(&["show", &p.id(1), "--json"]).stdout).unwrap();
     assert_eq!(json["owner"], "a-person", "{json}");
     assert_eq!(json["created_by"], "an-agent", "{json}");
 
@@ -2072,7 +2107,7 @@ fn who_is_answerable_survives_a_round_trip() {
     let fresh = Project::new();
     fresh.run_stdin(&["import"], &doc);
     let json: serde_json::Value =
-        serde_json::from_str(&fresh.expect(&["show", "1", "--json"]).stdout).unwrap();
+        serde_json::from_str(&fresh.expect(&["show", &p.id(1), "--json"]).stdout).unwrap();
     assert_eq!(
         json["owner"], "a-person",
         "the owner was lost in transit: {json}"
@@ -2091,32 +2126,36 @@ fn with_stale_after(days: u32) -> Project {
 #[test]
 fn a_claim_records_when_it_was_taken() {
     let p = seeded();
-    p.expect(&["claim", "2", "--as", "agent-one"]);
+    p.expect(&["claim", &p.id(2), "--as", "agent-one"]);
 
-    let file = p.item_file("2");
+    let file = p.item_file(&p.id(2));
     assert_contains(&file, "assignee: agent-one", "");
     assert_contains(&file, "claimed:", "a claim records when, not only who");
 
     // `updated` means something else and every other edit moves it, so it is a
     // key of its own.
-    p.expect(&["set", "2", "priority=p0"]);
+    p.expect(&["set", &p.id(2), "priority=p0"]);
     assert_contains(
-        &p.item_file("2"),
+        &p.item_file(&p.id(2)),
         "claimed:",
         "an unrelated edit cleared it",
     );
 
     // Handing it back or finishing it clears the claim.
-    p.expect(&["release", "2"]);
+    p.expect(&["release", &p.id(2)]);
     assert_missing(
-        &p.item_file("2"),
+        &p.item_file(&p.id(2)),
         "claimed:",
         "release left the claim behind",
     );
 
-    p.expect(&["claim", "3"]);
-    p.expect(&["close", "3"]);
-    assert_missing(&p.item_file("3"), "claimed:", "close left the claim behind");
+    p.expect(&["claim", &p.id(3)]);
+    p.expect(&["close", &p.id(3)]);
+    assert_missing(
+        &p.item_file(&p.id(3)),
+        "claimed:",
+        "close left the claim behind",
+    );
 }
 
 /// A claim nobody is honouring is invisible twice over: `next` will not offer
@@ -2124,7 +2163,7 @@ fn a_claim_records_when_it_was_taken() {
 #[test]
 fn a_stale_claim_is_visible_and_never_revoked() {
     let p = with_stale_after(3);
-    p.write_item(
+    p.write_uuid_item(
         "0050-abandoned.md",
         "id: 50\ntitle: Abandoned\nstatus: doing\nassignee: ghost\nclaimed: 2020-01-01",
         "body\n",
@@ -2144,26 +2183,26 @@ fn a_stale_claim_is_visible_and_never_revoked() {
 
     // Offered, never taken. The item is still theirs until somebody says
     // otherwise.
-    assert_contains(&p.item_file("50"), "assignee: ghost", "it was revoked");
+    assert_contains(&p.item_file(&p.id(50)), "assignee: ghost", "it was revoked");
 }
 
 #[test]
 fn a_stale_claim_can_be_taken_over_without_force() {
     let p = with_stale_after(3);
-    p.write_item(
+    p.write_uuid_item(
         "0050-abandoned.md",
         "id: 50\ntitle: Abandoned\nstatus: doing\nassignee: ghost\nclaimed: 2020-01-01",
         "body\n",
     );
 
-    let out = p.expect(&["claim", "50", "--as", "somebody"]).all();
+    let out = p.expect(&["claim", &p.id(50), "--as", "somebody"]).all();
     assert_contains(&out, "taken over from ghost", "it says whose it was");
     assert_contains(&out, "day(s)", "and how long they held it");
-    assert_contains(&p.item_file("50"), "assignee: somebody", "");
+    assert_contains(&p.item_file(&p.id(50)), "assignee: somebody", "");
 
     // A claim that is not stale still needs --force.
-    p.expect(&["claim", "1", "--as", "holder"]);
-    let out = p.fails(&["claim", "1", "--as", "interloper"]);
+    p.expect(&["claim", &p.id(1), "--as", "holder"]);
+    let out = p.fails(&["claim", &p.id(1), "--as", "interloper"]);
     assert_contains(&out.all(), "--force", "");
 }
 
@@ -2172,14 +2211,14 @@ fn a_stale_claim_can_be_taken_over_without_force() {
 #[test]
 fn without_a_threshold_nothing_is_ever_stale() {
     let p = seeded();
-    p.write_item(
+    p.write_uuid_item(
         "0050-ancient.md",
         "id: 50\ntitle: Ancient\nstatus: doing\nassignee: ghost\nclaimed: 2020-01-01",
         "body\n",
     );
     assert_eq!(p.count_of_all("stale=true"), 0);
     assert!(!p.expect(&["next"]).all().contains("stale:"));
-    let out = p.fails(&["claim", "50", "--as", "somebody"]);
+    let out = p.fails(&["claim", &p.id(50), "--as", "somebody"]);
     assert_contains(&out.all(), "--force", "an old claim is still a claim");
 }
 // --- handing work back ------------------------------------------------------
@@ -2189,15 +2228,15 @@ fn without_a_threshold_nothing_is_ever_stale() {
 #[test]
 fn releasing_with_a_reason_reaches_the_next_taker() {
     let p = seeded();
-    p.expect(&["claim", "2"]);
+    p.expect(&["claim", &p.id(2)]);
     p.expect(&[
         "release",
-        "2",
+        &p.id(2),
         "--reason",
         "The parser rewrite needs the format decision first.",
     ]);
 
-    let file = p.item_file("2");
+    let file = p.item_file(&p.id(2));
     assert_contains(
         &file,
         "## Released by",
@@ -2205,7 +2244,7 @@ fn releasing_with_a_reason_reaches_the_next_taker() {
     );
     assert_contains(&file, "format decision", "carrying what they knew");
 
-    let out = p.expect(&["claim", "2"]).all();
+    let out = p.expect(&["claim", &p.id(2)]).all();
     assert_contains(
         &out,
         "last released because:",
@@ -2214,8 +2253,13 @@ fn releasing_with_a_reason_reaches_the_next_taker() {
     assert_contains(&out, "format decision", "");
 
     // Three attempts on a hard item is a history, so nothing is overwritten.
-    p.expect(&["release", "2", "--reason", "Second attempt, same wall."]);
-    let file = p.item_file("2");
+    p.expect(&[
+        "release",
+        &p.id(2),
+        "--reason",
+        "Second attempt, same wall.",
+    ]);
+    let file = p.item_file(&p.id(2));
     assert_contains(&file, "format decision", "the first reason survived");
     assert_contains(&file, "Second attempt", "and the second is there too");
 
@@ -2227,8 +2271,8 @@ fn releasing_with_a_reason_reaches_the_next_taker() {
 #[test]
 fn releasing_without_a_reason_still_works_and_says_nothing_extra() {
     let p = seeded();
-    p.expect(&["claim", "2"]);
-    let out = p.expect(&["release", "2"]).all();
+    p.expect(&["claim", &p.id(2)]);
+    let out = p.expect(&["release", &p.id(2)]).all();
     assert_missing(&out, "Released by", "");
     assert!(p.run(&["check"]).ok());
 }
@@ -2256,7 +2300,7 @@ fn a_near_duplicate_title_is_reported_and_created_anyway() {
 
     // A finished item counts: re-filing something already done is the same
     // mistake.
-    p.expect(&["close", "1"]);
+    p.expect(&["close", &p.id(1)]);
     let out = p.expect(&["new", "Rate-limit the public API again"]).all();
     assert_contains(&out, "look", "a closed duplicate was not considered");
 
@@ -2302,16 +2346,20 @@ fn an_agent_is_told_in_band_that_it_may_be_filing_a_duplicate() {
 #[test]
 fn an_agent_can_hand_work_back_with_a_reason() {
     let p = seeded();
-    p.mcp_call("claim_item", serde_json::json!({"id": 2}), Some("claude"));
+    p.mcp_call(
+        "claim_item",
+        serde_json::json!({"id": p.id(2)}),
+        Some("claude"),
+    );
 
     let r = p.mcp_call(
         "release_item",
-        serde_json::json!({"id": 2, "reason": "Needs a decision only a person can make."}),
+        serde_json::json!({"id": p.id(2), "reason": "Needs a decision only a person can make."}),
         Some("claude"),
     );
     assert!(!refused(&r), "{}", tool_text(&r));
 
-    let file = p.item_file("2");
+    let file = p.item_file(&p.id(2));
     assert_contains(&file, "## Released by claude", "in the agent's own name");
     assert_contains(&file, "only a person can make", "");
     assert_missing(&file, "claimed:", "the claim was not cleared");
@@ -2347,7 +2395,7 @@ fn an_agent_can_ask_for_only_the_keys_it_needs() {
     let keys: Vec<&String> = first.as_object().expect("an object").keys().collect();
     assert_eq!(keys.len(), 5, "got more than was asked for: {keys:?}");
     // A result nothing can be acted on is worth less than the bytes it took.
-    assert!(first["id"].is_number(), "id must survive: {first}");
+    assert!(first["id"].is_string(), "id must survive: {first}");
 }
 
 /// A milestone carries no priority. Asking for one across a mixed list is a
@@ -2358,7 +2406,7 @@ fn a_field_an_item_lacks_is_null_rather_than_an_error() {
     let p = seeded();
     // Written by hand, because every item a command creates receives the
     // schema's default.
-    p.write_item(
+    p.write_uuid_item(
         "0050-bare.md",
         "id: 50\ntitle: Bare\nstatus: backlog",
         "body\n",
@@ -2389,7 +2437,7 @@ fn a_schema_field_can_be_asked_for_by_its_own_name() {
     let p = seeded();
     let doc: serde_json::Value = serde_json::from_str(&tool_text(&p.mcp_call(
         "show_item",
-        serde_json::json!({"id": 1, "fields": ["title", "priority"]}),
+        serde_json::json!({"id": p.id(1), "fields": ["title", "priority"]}),
         Some("claude"),
     )))
     .expect("JSON");
@@ -2435,7 +2483,7 @@ fn a_returning_caller_can_ask_only_for_what_moved() {
     p.add("Recent", &[]);
     // Reach in, because `updated` is what the filter reads and time is not a
     // thing a test may wait for.
-    let old = p.expect(&["show", "1", "--path"]).trimmed();
+    let old = p.expect(&["show", &p.id(1), "--path"]).trimmed();
     let text = p
         .read(&old)
         .replace(&format!("updated: {}", today()), "updated: 2020-01-01");
@@ -2445,7 +2493,7 @@ fn a_returning_caller_can_ask_only_for_what_moved() {
     assert_eq!(
         p.expect(&["list", "--since", "2026-01-01", "--ids"])
             .lines(),
-        vec!["0002".to_string()],
+        vec![p.reference(2)],
     );
     // And on search, and over the protocol.
     p.expect(&["search", "e", "--since", "2026-01-01"]);
@@ -2488,7 +2536,7 @@ fn proposing() -> Project {
 #[test]
 fn a_refusal_names_the_command_that_replaces_it() {
     let p = proposing();
-    let out = p.fails_as_agent(&["set", "1", "priority=p1"]);
+    let out = p.fails_as_agent(&["set", &p.id(1), "priority=p1"]);
     assert_contains(&out.all(), "cairn propose", "it names the way through");
     assert_contains(&out.all(), "priority=p1", "with the change already spelled");
     assert_contains(&out.all(), "cairn proposals", "and who reviews it");
@@ -2499,7 +2547,7 @@ fn a_proposal_is_listed_reviewed_and_applied() {
     let p = proposing();
     p.expect(&[
         "propose",
-        "1",
+        &p.id(1),
         "priority=p3",
         "--why",
         "It blocks nothing and nobody has asked.",
@@ -2507,7 +2555,7 @@ fn a_proposal_is_listed_reviewed_and_applied() {
 
     // Nothing has changed yet.
     assert_json(
-        &p.json(&["show", "1", "--json"]),
+        &p.json(&["show", &p.id(1), "--json"]),
         "fields.priority",
         serde_json::json!("p0"),
     );
@@ -2521,16 +2569,16 @@ fn a_proposal_is_listed_reviewed_and_applied() {
     assert_json(&json, "0.from", serde_json::json!("p0"));
     assert_json(&json, "0.to", serde_json::json!("p3"));
 
-    p.expect(&["proposals", "--accept", "1"]);
+    p.expect(&["proposals", "--accept", &p.id(1)]);
     assert_json(
-        &p.json(&["show", "1", "--json"]),
+        &p.json(&["show", &p.id(1), "--json"]),
         "fields.priority",
         serde_json::json!("p3"),
     );
 
     // Applied, and recorded as applied rather than looking as though it was
     // always so.
-    assert_contains(&p.item_file("1"), "## Accepted priority", "");
+    assert_contains(&p.item_file(&p.id(1)), "## Accepted priority", "");
     assert!(
         p.expect(&["proposals"])
             .all()
@@ -2544,9 +2592,9 @@ fn a_proposal_is_listed_reviewed_and_applied() {
 #[test]
 fn a_proposal_survives_an_unrelated_change() {
     let p = proposing();
-    p.expect(&["propose", "1", "priority=p1", "--why", "Because."]);
-    p.expect(&["set", "1", "area=parser"]);
-    p.expect(&["set", "1", "labels+=x"]);
+    p.expect(&["propose", &p.id(1), "priority=p1", "--why", "Because."]);
+    p.expect(&["set", &p.id(1), "area=parser"]);
+    p.expect(&["set", &p.id(1), "labels+=x"]);
     assert_contains(&p.expect(&["proposals"]).stdout, "priority: p0 -> p1", "");
 }
 
@@ -2554,17 +2602,29 @@ fn a_proposal_survives_an_unrelated_change() {
 #[test]
 fn proposals_accumulate_rather_than_replace() {
     let p = proposing();
-    p.expect(&["propose", "1", "priority=p1", "--why", "First argument."]);
-    p.expect(&["propose", "1", "priority=p3", "--why", "Second argument."]);
+    p.expect(&[
+        "propose",
+        &p.id(1),
+        "priority=p1",
+        "--why",
+        "First argument.",
+    ]);
+    p.expect(&[
+        "propose",
+        &p.id(1),
+        "priority=p3",
+        "--why",
+        "Second argument.",
+    ]);
 
     let listed = p.expect(&["proposals"]).stdout;
     assert_contains(&listed, "First argument.", "the earlier one survived");
     assert_contains(&listed, "Second argument.", "and the later one is there");
 
     // Accepting takes the most recent.
-    p.expect(&["proposals", "--accept", "1"]);
+    p.expect(&["proposals", "--accept", &p.id(1)]);
     assert_json(
-        &p.json(&["show", "1", "--json"]),
+        &p.json(&["show", &p.id(1), "--json"]),
         "fields.priority",
         serde_json::json!("p3"),
     );
@@ -2573,20 +2633,20 @@ fn proposals_accumulate_rather_than_replace() {
 #[test]
 fn a_proposal_is_checked_against_the_schema() {
     let p = proposing();
-    let out = p.fails(&["propose", "1", "priority=urgent"]);
+    let out = p.fails(&["propose", &p.id(1), "priority=urgent"]);
     assert_contains(
         &out.all(),
         "urgent",
         "a value the schema forbids is refused",
     );
 
-    let out = p.fails(&["propose", "1", "priority=p0"]);
+    let out = p.fails(&["propose", &p.id(1), "priority=p0"]);
     assert_contains(&out.all(), "already", "proposing what is already true");
 
-    let out = p.fails(&["propose", "1", "nonsense"]);
+    let out = p.fails(&["propose", &p.id(1), "nonsense"]);
     assert_contains(&out.all(), "field=value", "");
 
-    let out = p.fails(&["proposals", "--accept", "2"]);
+    let out = p.fails(&["proposals", "--accept", &p.id(2)]);
     assert_contains(&out.all(), "nothing proposed", "");
 }
 
@@ -2598,7 +2658,7 @@ fn an_agent_can_propose_what_it_may_not_set() {
 
     let refused_write = p.mcp_call(
         "update_item",
-        serde_json::json!({"id": 1, "fields": {"priority": "p3"}}),
+        serde_json::json!({"id": p.id(1), "fields": {"priority": "p3"}}),
         Some("claude"),
     );
     assert!(refused(&refused_write));
@@ -2611,7 +2671,7 @@ fn an_agent_can_propose_what_it_may_not_set() {
     let r = p.mcp_call(
         "propose_change",
         serde_json::json!({
-            "id": 1, "field": "priority", "value": "p3",
+            "id": p.id(1), "field": "priority", "value": "p3",
             "why": "Nothing depends on it any more."
         }),
         Some("claude"),
@@ -2620,7 +2680,7 @@ fn an_agent_can_propose_what_it_may_not_set() {
 
     // Nothing changed, and a person can see what is waiting.
     assert_json(
-        &p.json(&["show", "1", "--json"]),
+        &p.json(&["show", &p.id(1), "--json"]),
         "fields.priority",
         serde_json::json!("p0"),
     );
@@ -2635,7 +2695,7 @@ fn an_agent_must_say_why() {
     let p = proposing();
     let r = p.mcp_call(
         "propose_change",
-        serde_json::json!({"id": 1, "field": "priority", "value": "p3"}),
+        serde_json::json!({"id": p.id(1), "field": "priority", "value": "p3"}),
         Some("claude"),
     );
     assert!(refused(&r));

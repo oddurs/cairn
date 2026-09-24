@@ -55,12 +55,12 @@ fn a_milestone_is_an_item_like_any_other() {
     p.add("Real work", &[]);
     assert_eq!(
         p.expect(&["list", "--ids"]).lines(),
-        vec!["0002".to_string()],
+        vec![p.reference(2)],
         "a container is not listed among the work"
     );
     assert_eq!(
         p.expect(&["list", "-t", "milestone", "--ids"]).lines(),
-        vec!["0001".to_string()],
+        vec![p.reference(1)],
         "but is there when asked for"
     );
 
@@ -89,8 +89,8 @@ fn removing_an_item_repairs_every_reference_to_it() {
     let id = milestone(&p, "v0.9", None);
     p.add("Work", &[]);
     p.add("More work", &[]);
-    p.expect(&["set", "2", "3", "milestone=v0.9"]);
-    p.expect(&["set", "3", "part_of=2"]);
+    p.expect(&["set", &p.id(2), &p.id(3), "milestone=v0.9"]);
+    p.expect(&["set", &p.id(3), &format!("part_of={}", p.id(2))]);
 
     let out = p.expect(&["remove", &id, "--force"]);
     assert_contains(
@@ -101,16 +101,16 @@ fn removing_an_item_repairs_every_reference_to_it() {
 
     // Valid afterwards, with no option to leave the wreckage.
     p.expect(&["check", "--strict"]);
-    for n in ["2", "3"] {
+    for n in [p.id(2), p.id(3)] {
         assert!(
-            !p.expect(&["show", n, "--raw"]).stdout.contains("v0.9"),
+            !p.expect(&["show", &n, "--raw"]).stdout.contains("v0.9"),
             "item {n} still names a milestone that is gone"
         );
     }
 
     // And a reference to something still present is left alone.
     assert_contains(
-        &p.expect(&["show", "3", "--raw"]).stdout,
+        &p.expect(&["show", &p.id(3), "--raw"]).stdout,
         "part_of",
         "an unrelated reference survived",
     );
@@ -126,27 +126,34 @@ fn editing_the_configuration_preserves_its_comments() {
         "hand-written comments survive a programmatic edit",
     );
 }
-// --- how identifiers are written --------------------------------------------
+// --- immutable identities and legacy aliases --------------------------------
 
-/// A project may declare how its identifiers are written. `id` in the
-/// frontmatter is an unsigned integer regardless — the key is a *rendering*,
-/// which is what makes adopting one a display change rather than a format
-/// change.
+/// Historical rendering remains readable. Migration freezes it into aliases,
+/// not a counter that new branches must coordinate.
 fn keyed(template: &str, start: Option<u32>) -> Project {
     let p = Project::new();
-    // Both settings go into the existing [project] table; a second one would
-    // be a duplicate key, which is how this helper was wrong the first time.
-    let mut replacement = format!("id_format = \"{template}\"");
+    let mut settings = format!("[project]\nid_format = \"{template}\"");
     if let Some(n) = start {
-        replacement.push_str(&format!("\nid_start = {n}"));
+        settings.push_str(&format!("\nid_start = {n}"));
     }
-    let cfg = p.read("cairn.toml").replace("id_width = 4", &replacement);
-    p.write("cairn.toml", &cfg);
+    p.write(
+        "cairn.toml",
+        &p.read("cairn.toml")
+            .replace("format = 4", "format = 3")
+            .replace("[project]", &settings),
+    );
     p
 }
 
+fn legacy_item(p: &Project, id: u32, title: &str) {
+    p.write(
+        &format!("cairn/items/{id:04}-{}.md", title.to_lowercase()),
+        &format!("---\nid: {id}\ntitle: {title}\nstatus: backlog\n---\nbody\n"),
+    );
+}
+
 #[test]
-fn a_project_can_say_how_its_identifiers_are_written() {
+fn historical_identifier_renderings_remain_readable() {
     for (template, first) in [
         ("MP-{n}", "MP-1"),
         ("A{n}", "A1"),
@@ -155,72 +162,35 @@ fn a_project_can_say_how_its_identifiers_are_written() {
         ("{n}", "1"),
     ] {
         let p = keyed(template, None);
-        p.expect(&["new", "First", "-q"]);
-        let ids = p.expect(&["list", "--ids"]).trimmed();
-        assert_eq!(
-            ids, first,
-            "`{template}` should render the first item as {first}"
-        );
-
-        // And the file is named to match, or the name and the identifier
-        // disagree — which is the confusion a key is adopted to remove.
-        let name = p.expect(&["show", "1", "--path"]).trimmed();
-        assert!(
-            name.contains(&format!("{first}-first")),
-            "`{template}` produced the file {name}"
-        );
+        legacy_item(&p, 1, "First");
+        assert_eq!(p.expect(&["list", "--ids"]).trimmed(), first);
+        let v = p.json(&["show", first, "--json"]);
+        assert_eq!(v["id"], 1);
+        assert_eq!(v["ref"], first);
+        p.expect(&["migrate"]);
+        let migrated = p.json(&["show", first, "--json"]);
+        uuid::Uuid::parse_str(migrated["id"].as_str().unwrap()).unwrap();
+        assert_eq!(migrated["title"], "First");
     }
 }
 
-/// `id` stays an integer whatever the rendering says. This is the whole design:
-/// if it were not true, adopting a key would be a format change and a migration
-/// for every existing project.
 #[test]
-fn the_stored_identifier_is_still_a_number() {
+fn legacy_aliases_resolve_to_the_same_immutable_identity() {
     let p = keyed("MP-{n}", None);
-    p.expect(&["new", "First", "-q"]);
-
-    let raw = p.expect(&["show", "1", "--raw"]).stdout;
-    assert_contains(&raw, "id: 1", "the frontmatter still stores an integer");
-    assert!(
-        !raw.contains("id: MP-1"),
-        "the rendering leaked into the file:\n{raw}"
-    );
-
-    let v: serde_json::Value =
-        serde_json::from_str(&p.expect(&["show", "1", "--json"]).stdout).expect("JSON");
-    assert_eq!(v["id"], 1, "`id` in JSON is the number");
-    assert_eq!(v["ref"], "MP-1", "`ref` carries the rendered form");
-}
-
-/// Both forms are accepted, because requiring a prefix somebody already knows
-/// is friction for nothing — and because every reference written before a
-/// project adopted a key is a bare number.
-#[test]
-fn both_the_rendered_form_and_the_bare_number_are_accepted() {
-    let p = keyed("MP-{n}", None);
-    p.expect(&["new", "First", "-q"]);
-    p.expect(&["new", "Second", "-q"]);
-
+    legacy_item(&p, 1, "First");
+    legacy_item(&p, 2, "Second");
+    p.expect(&["migrate"]);
+    let second = p.json(&["show", "2", "--json"])["id"].clone();
     for id in ["MP-2", "2", "mp-2", "#2", "#MP-2", " MP-2 "] {
-        let out = p.run(&["show", id, "--json"]);
-        assert!(out.ok(), "`cairn show {id}` failed: {}", out.all());
-        let v: serde_json::Value = serde_json::from_str(&out.stdout).expect("JSON");
-        assert_eq!(v["id"], 2, "`{id}` should mean item 2");
+        assert_eq!(p.json(&["show", id, "--json"])["id"], second);
     }
-
-    // And dependencies take either, wherever `show` does.
     p.expect(&["set", "MP-2", "depends_on+=MP-1"]);
-    let v: serde_json::Value =
-        serde_json::from_str(&p.expect(&["show", "2", "--json"]).stdout).expect("JSON");
-    assert_eq!(
-        v["depends_on"][0], 1,
-        "the dependency was stored as a number"
-    );
+    let first = p.json(&["show", "MP-1", "--json"])["id"].clone();
+    assert_eq!(p.json(&["show", "2", "--json"])["depends_on"][0], first);
 }
 
 #[test]
-fn a_malformed_template_is_refused_when_the_project_is_opened() {
+fn malformed_historical_templates_are_refused() {
     for (template, complaint) in [
         ("MP-{oops}", "should be `{n}`"),
         ("MP-1002", "has no `{n}`"),
@@ -229,276 +199,123 @@ fn a_malformed_template_is_refused_when_the_project_is_opened() {
         ("MP-{n", "never closed"),
     ] {
         let p = keyed(template, None);
-        let out = p.fails(&["list"]);
-        assert_contains(
-            &out.all(),
-            complaint,
-            &format!("`{template}` should be refused with an explanation"),
-        );
-        assert_contains(
-            &out.all(),
-            "cairn.toml",
-            "and the message should name the file",
-        );
+        let out = p.fails(&["list"]).all();
+        assert_contains(&out, complaint, "invalid historical rendering");
+        assert_contains(&out, "cairn.toml", "the responsible file");
     }
 }
 
-/// A prefix beginning with a digit would make `12-34` ambiguous with a plain
-/// number, and two spellings must not be able to mean different items.
 #[test]
-fn a_numeric_prefix_is_refused_rather_than_left_ambiguous() {
-    let p = keyed("2024-{n}", None);
-    let out = p.fails(&["list"]);
-    assert_contains(
-        &out.all(),
-        "cannot start with a digit",
-        "a numeric prefix is ambiguous with a bare number",
-    );
-}
-
-#[test]
-fn a_project_can_start_numbering_somewhere_other_than_one() {
+fn a_legacy_starting_point_does_not_allocate_new_aliases() {
     let p = keyed("MP-{n}", Some(1000));
-    p.expect(&["new", "First", "-q"]);
-    p.expect(&["new", "Second", "-q"]);
-    assert_eq!(
-        p.expect(&["list", "--ids"]).lines(),
-        vec!["MP-1000".to_string(), "MP-1001".to_string()],
-        "allocation starts at id_start and continues normally"
-    );
+    legacy_item(&p, 1000, "First");
+    p.expect(&["migrate"]);
+    let aliases = p.read("cairn/items/_legacy-ids.toml");
+    let new_ref = p.add("Second", &[]);
+    let second = p.json(&["show", &new_ref, "--json"]);
+    assert!(second["id"].is_string());
+    assert_eq!(aliases, p.read("cairn/items/_legacy-ids.toml"));
+    p.fails(&["show", "MP-1001"]);
+    p.expect(&["remove", "MP-1000", "--force"]);
+    p.add("Third", &[]);
+    p.fails(&["show", "MP-1000"]);
+    assert_eq!(aliases, p.read("cairn/items/_legacy-ids.toml"));
 }
 
-/// Lowering it later does nothing, because allocation still takes the maximum.
-/// That is the right behaviour and is asserted rather than left to be found.
 #[test]
-fn lowering_the_starting_point_does_not_reuse_identifiers() {
-    let p = keyed("MP-{n}", Some(1000));
-    p.expect(&["new", "First", "-q"]);
-
-    let cfg = p
-        .read("cairn.toml")
-        .replace("id_start = 1000", "id_start = 5");
-    p.write("cairn.toml", &cfg);
-    p.expect(&["new", "Second", "-q"]);
-
-    assert_eq!(
-        p.expect(&["list", "--ids"]).lines(),
-        vec!["MP-1000".to_string(), "MP-1001".to_string()],
-        "an existing project is unaffected by lowering id_start"
-    );
-}
-
-/// Adopting a format should not mean touching every item by hand.
-#[test]
-fn renumber_brings_filenames_into_line_with_the_format() {
+fn migration_keeps_legacy_filenames_and_renumber_does_not_churn_them() {
     let p = keyed("MP-{n}", None);
-    p.expect(&["new", "First", "-q"]);
-    p.expect(&["new", "Second", "-q"]);
-
-    let cfg = p
-        .read("cairn.toml")
-        .replace("id_format = \"MP-{n}\"", "id_format = \"TOOLS-{n}\"");
-    p.write("cairn.toml", &cfg);
-
-    // check reports it first, which is how somebody finds out.
-    let checked = p.expect(&["check"]);
-    assert_contains(
-        &checked.all(),
-        "filename does not match",
-        "check should report the mismatch",
+    p.write(
+        "cairn/items/MP-1-first.md",
+        "---\nid: 1\ntitle: First\nstatus: backlog\n---\nbody\n",
     );
-
-    // A dry run says what it would do and does nothing.
-    let dry = p.expect(&["renumber", "--dry-run"]);
-    assert_contains(
-        &dry.all(),
-        "would be renamed",
-        "a dry run says what it would do",
-    );
-    assert_contains(
-        &p.expect(&["check"]).all(),
-        "filename does not match",
-        "a dry run must not have renamed anything",
-    );
-
+    p.expect(&["migrate"]);
+    let before = p.files("cairn/items");
+    let id = p.json(&["show", "MP-1", "--json"])["id"].clone();
     p.expect(&["renumber"]);
     p.expect(&["check", "--strict"]);
-    let path = p.expect(&["show", "1", "--path"]).trimmed();
-    assert!(path.contains("TOOLS-1-first"), "the file is now {path}");
+    assert_eq!(before, p.files("cairn/items"));
+    assert_eq!(p.json(&["show", "MP-1", "--json"])["id"], id);
+    assert!(
+        p.expect(&["show", "MP-1", "--path"])
+            .trimmed()
+            .ends_with("MP-1-first.md")
+    );
 }
 
-/// The specification's fallback is a *leading run of digits*, which a project
-/// with a key does not have. §4.2 permits a reader to apply the project's
-/// rendering instead, and cairn does — otherwise a hand-written file in such a
-/// project would be unreadable, and silently so.
 #[test]
-fn an_id_can_be_recovered_from_a_formatted_filename() {
+fn historical_filename_fallback_is_not_extended_to_format_four() {
     let p = keyed("MP-{n}", None);
-    p.expect(&["new", "First", "-q"]);
     p.write(
         "cairn/items/MP-77-written-by-hand.md",
         "---\ntitle: Written by hand\nstatus: backlog\n---\nbody\n",
     );
-
-    let ids = p.expect(&["list", "--ids"]).lines();
-    assert!(
-        ids.contains(&"MP-77".to_string()),
-        "the hand-written file was not read: {ids:?}"
+    assert_eq!(p.expect(&["list", "--ids"]).lines(), vec!["MP-77"]);
+    p.expect(&["migrate"]);
+    assert!(p.json(&["show", "MP-77", "--json"])["id"].is_string());
+    let path = p.expect(&["show", "MP-77", "--path"]).trimmed();
+    p.write(
+        &path,
+        "---\ntitle: Missing identity\nstatus: backlog\n---\nbody\n",
     );
+    p.fails(&["check"]);
 }
 
-/// A prefix is compared in bytes, and a byte offset can land inside a
-/// character. `MP` is two bytes and so is `é`, which was enough to bring the
-/// process down.
 #[test]
-fn a_non_ascii_argument_is_refused_rather_than_fatal() {
-    let p = keyed("MP-{n}", None);
-    p.expect(&["new", "First", "-q"]);
-
-    for arg in ["aé", "é", "MPé", "aéb", "日本"] {
-        let out = p.run(&["show", arg]);
-        assert!(
-            !out.all().contains("panicked"),
-            "`cairn show {arg}` panicked: {}",
-            out.all()
+fn non_ascii_arguments_and_filenames_never_panic() {
+    for legacy in [true, false] {
+        let p = if legacy {
+            keyed("MP-{n}", None)
+        } else {
+            Project::new()
+        };
+        for arg in ["aé", "é", "MPé", "aéb", "日本"] {
+            let out = p.fails(&["show", arg]);
+            assert_missing(&out.all(), "panicked", "invalid input is an ordinary error");
+        }
+        p.write(
+            "cairn/items/éclair.md",
+            "---\ntitle: Named oddly\nstatus: backlog\n---\nbody\n",
         );
-        assert!(!out.ok(), "`{arg}` is not an id and should be refused");
-        assert_contains(&out.all(), "not a valid item id", "and said why");
+        let out = p.run(&["list", "-A"]);
+        assert_missing(&out.all(), "panicked", "malformed filename is reported");
     }
 }
 
-/// The same slice, reached from a filename instead of an argument.
-///
-/// Worse than the argument path, because nobody types this: a file whose name
-/// happens to begin with a multi-byte character is enough, and the crash lands
-/// in `list` rather than in something a person just asked for.
 #[test]
-fn a_non_ascii_filename_does_not_bring_down_a_listing() {
-    let p = keyed("MP-{n}", None);
-    p.expect(&["new", "First", "-q"]);
-    // No `id` in the frontmatter, so the filename is the only place to find one.
-    p.write(
-        "cairn/items/éclair.md",
-        "---\ntitle: Named oddly\nstatus: backlog\n---\nbody\n",
-    );
-
-    let out = p.run(&["list", "-A"]);
-    assert!(
-        !out.all().contains("panicked"),
-        "a filename brought down the listing: {}",
-        out.all()
-    );
-    assert!(out.ok(), "{}", out.all());
-}
-
-/// A project that says nothing gets exactly what it gets today.
-#[test]
-fn the_default_rendering_is_unchanged() {
+fn default_identity_is_a_uuid_with_a_short_human_reference() {
     let p = Project::new();
-    p.expect(&["new", "First", "-q"]);
-    assert_eq!(p.expect(&["list", "--ids"]).trimmed(), "0001");
+    let short = p.add("First", &[]);
+    let item = p.json(&["show", &short, "--json"]);
+    let id = item["id"].as_str().unwrap();
+    assert_eq!(uuid::Uuid::parse_str(id).unwrap().get_version_num(), 4);
+    assert_eq!(short, &id.replace('-', "")[..8]);
+    assert_eq!(item["ref"], short);
     assert!(
-        p.expect(&["show", "1", "--path"])
+        p.expect(&["show", id, "--path"])
             .trimmed()
-            .contains("0001-first"),
-        "the default filename changed"
+            .ends_with(&format!("{id}-first.md"))
     );
 }
 
-/// Two branches each allocated the same identifier, and one of them is already
-/// on the main branch. They are not equals: renaming the published one churns
-/// history and breaks every link anybody has written to it.
-///
-/// This is the exact case found while rebasing two branches of cairn's own
-/// backlog that had both allocated `0055`. cairn renumbered the published one,
-/// because both items looked identical to it — same creation date,
-/// distinguished only by filename — so it picked alphabetically and got it
-/// backwards.
 #[test]
-fn at_a_merge_the_side_already_published_keeps_its_identifier() {
-    let p = repository();
-
-    // The published side. Named to sort *after* the arriving one, so a test
-    // that passes by alphabetical accident cannot.
-    git(&p, &["checkout", "-qb", "published"]);
-    p.write(
-        "cairn/items/0009-zebra.md",
-        "---\nid: 9\ntitle: Zebra\nstatus: backlog\ncreated: 2026-01-01\n---\nPublished first.\n",
-    );
-    git(&p, &["add", "-A"]);
-    git(&p, &["commit", "-qm", "the published item"]);
-    git(&p, &["checkout", "-q", "main"]);
-    git(&p, &["merge", "-q", "--no-edit", "published"]);
-
-    // The arriving side, allocating the same id on a branch cut earlier.
-    git(&p, &["checkout", "-qb", "arriving", "HEAD~1"]);
-    p.write(
-        "cairn/items/0009-antelope.md",
-        "---\nid: 9\ntitle: Antelope\nstatus: backlog\ncreated: 2026-01-01\n---\nArrived later.\n",
-    );
-    git(&p, &["add", "-A"]);
-    git(&p, &["commit", "-qm", "the arriving item"]);
-
-    git(&p, &["checkout", "-q", "main"]);
-    // The `post-merge` hook repairs this on its own, which is the realistic
-    // path and also the awkward one: the hook runs after the merge commit
-    // exists but while .git/MERGE_HEAD is still on disk.
-    git(&p, &["merge", "--no-edit", "arriving"]);
-    p.expect(&["renumber"]);
-    p.expect(&["check"]);
-
-    let items: serde_json::Value =
-        serde_json::from_str(&p.expect(&["list", "-A", "--json"]).stdout).expect("JSON");
-    let items = items.as_array().expect("an array");
-    let find = |title: &str| {
-        items
-            .iter()
-            .find(|i| i["title"] == title)
-            .unwrap_or_else(|| panic!("`{title}` survived"))["id"]
-            .as_u64()
-            .expect("id")
-    };
-
-    assert_eq!(
-        find("Zebra"),
-        9,
-        "the published item kept its identifier; renaming it would break every \
-         link written to it"
-    );
-    assert_ne!(find("Antelope"), 9, "the arriving item moved");
-}
-
-/// Outside a repository there is nothing to consult, and the previous rule —
-/// oldest first, path breaking the tie — applies unchanged.
-#[test]
-fn outside_a_repository_renumbering_is_unchanged() {
-    let p = Project::new();
-    p.write(
-        "cairn/items/0009-antelope.md",
-        "---\nid: 9\ntitle: Antelope\nstatus: backlog\ncreated: 2026-01-01\n---\nbody\n",
-    );
-    p.write(
-        "cairn/items/0009-zebra.md",
-        "---\nid: 9\ntitle: Zebra\nstatus: backlog\ncreated: 2026-01-01\n---\nbody\n",
-    );
-
-    p.expect(&["renumber"]);
-    p.expect(&["check"]);
-
-    let items: serde_json::Value =
-        serde_json::from_str(&p.expect(&["list", "-A", "--json"]).stdout).expect("JSON");
-    let antelope = items
-        .as_array()
-        .expect("array")
-        .iter()
-        .find(|i| i["title"] == "Antelope")
-        .expect("Antelope")["id"]
-        .as_u64()
-        .expect("id");
-    assert_eq!(
-        antelope, 9,
-        "with nothing to consult, the path still breaks the tie"
-    );
+fn duplicate_immutable_ids_are_not_reassigned_inside_or_outside_git() {
+    for in_git in [false, true] {
+        let p = if in_git { repository() } else { Project::new() };
+        let id = p.add("Published", &[]);
+        let path = p.expect(&["show", &id, "--path"]).trimmed();
+        let original = p.read(&path);
+        p.write(
+            "cairn/items/arriving-copy.md",
+            &original.replace("Published", "Arriving"),
+        );
+        let before = p.files("cairn/items");
+        let out = p.fails(&["renumber"]);
+        assert_contains(&out.all(), "duplicate", "manual duplication needs review");
+        p.fails(&["check"]);
+        assert_eq!(before, p.files("cairn/items"));
+        assert_eq!(original, p.read(&path));
+    }
 }
 // --- acceptance criteria ----------------------------------------------------
 
@@ -523,7 +340,7 @@ fn with_criteria(p: &Project, title: &str, done: usize, todo: usize) -> String {
 /// for and did not count. The template doing that is correct — it is how items
 /// come to carry criteria at all — which makes it the test's job to be explicit.
 fn set_body(p: &Project, title: &str, body: &str) -> String {
-    let id = p.expect(&["new", title, "-q"]).trimmed();
+    let id = p.add(title, &[]);
     let path = p.expect(&["show", &id, "--path"]).trimmed();
     let existing = std::fs::read_to_string(&path).expect("read");
     let front = existing.split("\n---\n").next().expect("frontmatter");
@@ -559,7 +376,11 @@ fn criteria_are_counted_and_filterable() {
     assert_eq!(
         p.expect(&["list", "-A", "--ids", "--filter", "criteria=2"])
             .lines(),
-        vec![met.clone(), unmet.clone()],
+        {
+            let mut ids = vec![met.clone(), unmet.clone()];
+            ids.sort();
+            ids
+        },
         "`criteria` counts what an item states"
     );
     assert_eq!(
@@ -672,7 +493,7 @@ fn closing_over_mcp_reports_unticked_criteria_without_refusing() {
 
     let request = format!(
         r#"{{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{{"name":"close_item","arguments":{{"id":{}}}}}}}"#,
-        id.trim_start_matches('0')
+        serde_json::to_string(&id).unwrap()
     );
     let out = p.run_stdin(&["mcp"], &format!("{request}\n"));
     let reply: serde_json::Value =
@@ -915,7 +736,10 @@ fn require_criteria_makes_close_refuse() {
 fn an_agent_can_tick_a_criterion() {
     let p = Project::new();
     let id = with_criteria(&p, "Agent work", 0, 2);
-    let n: u32 = id.trim_start_matches('0').parse().unwrap();
+    let n = p.json(&["show", &id, "--json"])["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
 
     let r = p.mcp_call(
         "tick_criteria",
@@ -954,7 +778,10 @@ fn an_agent_can_tick_a_criterion() {
     // And the same gate the CLI draws.
     let p = Project::with(Schema::standard().require_criteria());
     let id = with_criteria(&p, "Half done", 1, 1);
-    let n: u32 = id.trim_start_matches('0').parse().unwrap();
+    let n = p.json(&["show", &id, "--json"])["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
     let r = p.mcp_call("close_item", serde_json::json!({"id": n}), Some("claude"));
     assert!(
         refused(&r),
@@ -988,7 +815,7 @@ fn with_refs(extra: &str) -> Project {
 /// A milestone to point at. In format 2 a milestone is an item, so it has to
 /// exist before anything can name it — the same as a dependency.
 fn milestone(p: &Project, key: &str, due: Option<&str>) -> String {
-    let id = p.expect(&["new", key, "-t", "milestone", "-q"]).trimmed();
+    let id = p.add(key, &["-t", "milestone"]);
     p.expect(&["set", &id, &format!("key={key}")]);
     if let Some(d) = due {
         p.expect(&["set", &id, &format!("due={d}")]);
@@ -999,14 +826,14 @@ fn milestone(p: &Project, key: &str, due: Option<&str>) -> String {
 #[test]
 fn a_ref_field_names_an_item_by_key() {
     let p = with_refs("");
-    p.expect(&["new", "Version one", "-t", "milestone", "-q"]);
-    p.expect(&["set", "1", "key=v1.0"]);
-    p.expect(&["new", "Support OAuth", "-q"]);
+    p.add("Version one", &["-t", "milestone"]);
+    p.expect(&["set", &p.id(1), "key=v1.0"]);
+    p.add("Support OAuth", &[]);
 
-    p.expect(&["set", "2", "release=v1.0"]);
+    p.expect(&["set", &p.id(2), "release=v1.0"]);
 
     // The point of addressing by key: the file stays readable.
-    let raw = p.expect(&["show", "2", "--raw"]).stdout;
+    let raw = p.expect(&["show", &p.id(2), "--raw"]).stdout;
     assert_contains(&raw, "release: v1.0", "the key is what the file says");
     assert!(
         !raw.contains("release: 1"),
@@ -1016,7 +843,7 @@ fn a_ref_field_names_an_item_by_key() {
     assert_eq!(
         p.expect(&["list", "-A", "--ids", "--filter", "release=v1.0"])
             .lines(),
-        vec!["0002".to_string()],
+        vec![p.reference(2)],
         "and refs are filterable like any other field"
     );
 }
@@ -1026,11 +853,11 @@ fn a_ref_field_names_an_item_by_key() {
 #[test]
 fn a_ref_that_names_nothing_is_refused_with_the_alternatives() {
     let p = with_refs("");
-    p.expect(&["new", "Version one", "-t", "milestone", "-q"]);
-    p.expect(&["set", "1", "key=v1.0"]);
-    p.expect(&["new", "Support OAuth", "-q"]);
+    p.add("Version one", &["-t", "milestone"]);
+    p.expect(&["set", &p.id(1), "key=v1.0"]);
+    p.add("Support OAuth", &[]);
 
-    let out = p.fails(&["set", "2", "release=v9.9"]);
+    let out = p.fails(&["set", &p.id(2), "release=v9.9"]);
     assert_contains(&out.all(), "does not exist", "it refuses");
     assert_contains(&out.all(), "known: v1.0", "and says what would have worked");
 
@@ -1044,11 +871,11 @@ fn a_ref_that_names_nothing_is_refused_with_the_alternatives() {
 #[test]
 fn a_key_addressed_ref_does_not_fall_back_to_an_identifier() {
     let p = with_refs("");
-    p.expect(&["new", "Version one", "-t", "milestone", "-q"]);
-    p.expect(&["set", "1", "key=v1.0"]);
-    p.expect(&["new", "Support OAuth", "-q"]);
+    p.add("Version one", &["-t", "milestone"]);
+    p.expect(&["set", &p.id(1), "key=v1.0"]);
+    p.add("Support OAuth", &[]);
 
-    let out = p.fails(&["set", "2", "release=1"]);
+    let out = p.fails(&["set", &p.id(2), "release=1"]);
     assert_contains(
         &out.all(),
         "does not exist",
@@ -1060,8 +887,8 @@ fn a_key_addressed_ref_does_not_fall_back_to_an_identifier() {
 #[test]
 fn a_key_that_reads_as_an_identifier_is_refused() {
     let p = with_refs("");
-    p.expect(&["new", "Version one", "-t", "milestone", "-q"]);
-    let out = p.fails(&["set", "1", "key=0042"]);
+    p.add("Version one", &["-t", "milestone"]);
+    let out = p.fails(&["set", &p.id(1), "key=0042"]);
     assert_contains(
         &out.all(),
         "reads as an identifier",
@@ -1074,19 +901,19 @@ fn a_key_that_reads_as_an_identifier_is_refused() {
 #[test]
 fn renaming_a_key_carries_the_references_with_it() {
     let p = with_refs("");
-    p.expect(&["new", "Version one", "-t", "milestone", "-q"]);
-    p.expect(&["set", "1", "key=v1.0"]);
+    p.add("Version one", &["-t", "milestone"]);
+    p.expect(&["set", &p.id(1), "key=v1.0"]);
     for title in ["First", "Second"] {
-        p.expect(&["new", title, "-q"]);
+        p.add(title, &[]);
     }
-    p.expect(&["set", "2", "3", "release=v1.0"]);
+    p.expect(&["set", &p.id(2), &p.id(3), "release=v1.0"]);
 
-    let out = p.expect(&["set", "1", "key=v2.0"]);
+    let out = p.expect(&["set", &p.id(1), "key=v2.0"]);
     assert_contains(&out.all(), "also", "it says what else it touched");
 
-    for id in ["2", "3"] {
+    for id in [p.id(2), p.id(3)] {
         assert_contains(
-            &p.expect(&["show", id, "--raw"]).stdout,
+            &p.expect(&["show", &id, "--raw"]).stdout,
             "release: v2.0",
             "the reference followed the rename",
         );
@@ -1099,12 +926,12 @@ fn renaming_a_key_carries_the_references_with_it() {
 #[test]
 fn container_types_are_not_offered_as_work() {
     let p = with_refs("");
-    p.expect(&["new", "Version one", "-t", "milestone", "-q"]);
-    p.expect(&["new", "Support OAuth", "-q"]);
+    p.add("Version one", &["-t", "milestone"]);
+    p.add("Support OAuth", &[]);
 
     assert_eq!(
         p.expect(&["next", "--ids"]).lines(),
-        vec!["0002".to_string()],
+        vec![p.reference(2)],
         "the milestone is not startable work"
     );
     assert!(
@@ -1120,7 +947,7 @@ fn container_types_are_not_offered_as_work() {
     );
     assert_eq!(
         p.expect(&["list", "-t", "milestone", "--ids"]).lines(),
-        vec!["0001".to_string()],
+        vec![p.reference(1)],
         "and naming the type asks for them without `--all`"
     );
 }
@@ -1146,26 +973,26 @@ fn an_acyclic_ref_refuses_a_cycle_however_far_around() {
         p.add(title, &[]);
     }
 
-    p.expect(&["set", "1", "part_of=2"]);
-    p.expect(&["set", "2", "part_of=3"]);
+    p.expect(&["set", &p.id(1), &format!("part_of={}", p.id(2))]);
+    p.expect(&["set", &p.id(2), &format!("part_of={}", p.id(3))]);
 
-    let out = p.fails(&["set", "3", "part_of=1"]);
+    let out = p.fails(&["set", &p.id(3), &format!("part_of={}", p.id(1))]);
     assert_contains(&out.all(), "cycle", "three deep is still a cycle");
 
-    let direct = p.fails(&["set", "1", "part_of+=1"]);
+    let direct = p.fails(&["set", &p.id(1), &format!("part_of+={}", p.id(1))]);
     assert_contains(&direct.all(), "cycle", "and an item is not part of itself");
 }
 
 #[test]
 fn a_single_valued_ref_refuses_two_names() {
     let p = with_refs("");
-    p.expect(&["new", "One", "-t", "milestone", "-q"]);
-    p.expect(&["set", "1", "key=v1.0"]);
-    p.expect(&["new", "Two", "-t", "milestone", "-q"]);
-    p.expect(&["set", "2", "key=v2.0"]);
-    p.expect(&["new", "Work", "-q"]);
+    p.add("One", &["-t", "milestone"]);
+    p.expect(&["set", &p.id(1), "key=v1.0"]);
+    p.add("Two", &["-t", "milestone"]);
+    p.expect(&["set", &p.id(2), "key=v2.0"]);
+    p.add("Work", &[]);
 
-    let out = p.fails(&["set", "3", "release=v1.0,v2.0"]);
+    let out = p.fails(&["set", &p.id(3), "release=v1.0,v2.0"]);
     assert_contains(
         &out.all(),
         "names one item",
@@ -1230,7 +1057,7 @@ fn a_new_project_can_compose_without_configuring_anything() {
 
     p.add("Ship OAuth", &[]);
     p.add("Token endpoint", &[]);
-    p.expect(&["set", "3", "part_of=2"]);
+    p.expect(&["set", &p.id(2), &format!("part_of={}", p.id(1))]);
     p.expect(&["check"]);
 }
 
@@ -1244,12 +1071,12 @@ fn an_item_can_belong_to_two_things_at_once() {
         p.add(title, &[]);
     }
 
-    p.expect(&["set", "3", "part_of=1"]);
-    p.expect(&["set", "3", "part_of+=2"]);
+    p.expect(&["set", &p.id(3), &format!("part_of={}", p.id(1))]);
+    p.expect(&["set", &p.id(3), &format!("part_of+={}", p.id(2))]);
 
-    let raw = p.expect(&["show", "3", "--raw"]).stdout;
-    assert_contains(&raw, "- 1", "belongs to the first");
-    assert_contains(&raw, "- 2", "and to the second");
+    let raw = p.expect(&["show", &p.id(3), "--raw"]).stdout;
+    assert_contains(&raw, &format!("- {}", p.id(1)), "belongs to the first");
+    assert_contains(&raw, &format!("- {}", p.id(2)), "and to the second");
 
     // Identifiers are stored as numbers, so composition reads the way
     // `depends_on` does and a hand-written `part_of: [1, 2]` survives a save.
@@ -1285,7 +1112,7 @@ fn a_deep_hierarchy_is_a_warning_rather_than_an_error() {
         p.add(&format!("Level {n}"), &[]);
     }
     for n in 2..=6 {
-        p.expect(&["set", &n.to_string(), &format!("part_of={}", n - 1)]);
+        p.expect(&["set", &p.id(n), &format!("part_of={}", p.id(n - 1))]);
     }
 
     let out = p.expect(&["check"]);
@@ -1301,7 +1128,7 @@ fn a_deep_hierarchy_is_a_warning_rather_than_an_error() {
     let shallow = Project::with_init(&["init", "--name", "Shallow"]);
     shallow.add("One", &[]);
     shallow.add("Two", &[]);
-    shallow.expect(&["set", "3", "part_of=2"]);
+    shallow.expect(&["set", &shallow.id(2), &format!("part_of={}", shallow.id(1))]);
     assert!(
         !shallow.expect(&["check"]).all().contains("composition"),
         "two levels is a plan, not a taxonomy"
@@ -1320,19 +1147,25 @@ fn position_in_the_hierarchy_is_derived_rather_than_stored() {
         p.add(&format!("Piece {n}"), &[]);
     }
     p.add("Sub-piece", &[]);
-    p.expect(&["set", "2", "3", "4", "part_of=1"]);
-    p.expect(&["set", "5", "part_of=2"]);
+    p.expect(&[
+        "set",
+        &p.id(2),
+        &p.id(3),
+        &p.id(4),
+        &format!("part_of={}", p.id(1)),
+    ]);
+    p.expect(&["set", &p.id(5), &format!("part_of={}", p.id(2))]);
 
     let selects = |expr: &str| p.expect(&["list", "-A", "--ids", "--filter", expr]).lines();
 
-    assert!(selects("descendants=4").contains(&"0001".to_string()));
-    assert!(selects("depth=0").contains(&"0001".to_string()));
-    assert!(selects("depth=2").contains(&"0005".to_string()));
-    assert!(selects("leaf=true").contains(&"0005".to_string()));
-    assert!(!selects("leaf=true").contains(&"0001".to_string()));
+    assert!(selects("descendants=4").contains(&p.reference(1)));
+    assert!(selects("depth=0").contains(&p.reference(1)));
+    assert!(selects("depth=2").contains(&p.reference(5)));
+    assert!(selects("leaf=true").contains(&p.reference(5)));
+    assert!(!selects("leaf=true").contains(&p.reference(1)));
 
     // Nothing was written to the file: this is a fact about the set.
-    let raw = p.expect(&["show", "1", "--raw"]).stdout;
+    let raw = p.expect(&["show", &p.id(1), "--raw"]).stdout;
     for derived in ["descendants", "depth", "leaf", "progress"] {
         assert!(
             !raw.contains(derived),
@@ -1348,13 +1181,20 @@ fn progress_is_the_proportion_of_what_is_beneath_that_is_done() {
     for n in 1..=4 {
         p.add(&format!("Piece {n}"), &[]);
     }
-    p.expect(&["set", "2", "3", "4", "5", "part_of=1"]);
-    p.expect(&["close", "2", "3"]);
+    p.expect(&[
+        "set",
+        &p.id(2),
+        &p.id(3),
+        &p.id(4),
+        &p.id(5),
+        &format!("part_of={}", p.id(1)),
+    ]);
+    p.expect(&["close", &p.id(2), &p.id(3)]);
 
     assert_eq!(
         p.expect(&["list", "-A", "--ids", "--filter", "progress=50"])
             .lines(),
-        vec!["0001".to_string()],
+        vec![p.reference(1)],
         "two of four beneath it are done"
     );
 
@@ -1363,7 +1203,7 @@ fn progress_is_the_proportion_of_what_is_beneath_that_is_done() {
     assert!(
         p.expect(&["list", "-A", "--ids", "--filter", "progress="])
             .lines()
-            .contains(&"0004".to_string()),
+            .contains(&p.reference(4)),
         "an item containing nothing has no progress to report"
     );
 
@@ -1371,7 +1211,7 @@ fn progress_is_the_proportion_of_what_is_beneath_that_is_done() {
     assert_eq!(
         p.expect(&["list", "-A", "--ids", "--filter", "depth=0,progress<60"])
             .lines(),
-        vec!["0001".to_string()],
+        vec![p.reference(1)],
         "big things that are behind"
     );
 }
@@ -1382,16 +1222,16 @@ fn contains_names_what_is_directly_beneath() {
     p.add("Ship OAuth", &[]);
     p.add("Token endpoint", &[]);
     p.add("Refresh flow", &[]);
-    p.expect(&["set", "2", "3", "part_of=1"]);
+    p.expect(&["set", &p.id(2), &p.id(3), &format!("part_of={}", p.id(1))]);
 
     let rows = p.expect(&["list", "-A", "--plain", "--columns", "id,contains"]);
     let line = rows
         .lines()
         .into_iter()
-        .find(|l| l.starts_with("0001"))
+        .find(|l| l.starts_with(&p.reference(1)))
         .expect("the container");
-    assert_contains(&line, "0002", "the first child");
-    assert_contains(&line, "0003", "and the second");
+    assert_contains(&line, &p.id(2), "the first child");
+    assert_contains(&line, &p.id(3), "and the second");
 }
 
 /// A cycle that reached disk by hand must not make a query run forever. `check`
@@ -1401,12 +1241,16 @@ fn a_cycle_on_disk_does_not_hang_a_query() {
     let p = Project::new();
     p.add("One", &[]);
     p.add("Two", &[]);
-    p.expect(&["set", "2", "part_of=1"]);
+    p.expect(&["set", &p.id(2), &format!("part_of={}", p.id(1))]);
 
     // Written by hand, because the write path refuses to create this.
-    let path = p.expect(&["show", "1", "--path"]).trimmed();
+    let path = p.expect(&["show", &p.id(1), "--path"]).trimmed();
     let text = std::fs::read_to_string(&path).expect("read");
-    std::fs::write(&path, text.replace("status:", "part_of:\n- 2\nstatus:")).expect("write");
+    std::fs::write(
+        &path,
+        text.replace("status:", &format!("part_of:\n- {}\nstatus:", p.id(2))),
+    )
+    .expect("write");
 
     let out = p.expect(&["list", "-A", "--plain", "--columns", "id,depth,descendants"]);
     assert_eq!(out.lines().len(), 2, "the query still answered");
@@ -1431,13 +1275,13 @@ fn a_project_without_composition_is_unaffected() {
     assert_eq!(
         p.expect(&["list", "-A", "--ids", "--filter", "leaf=true"])
             .lines(),
-        vec!["0001".to_string()],
+        vec![p.reference(1)],
         "everything is a leaf when nothing composes"
     );
     assert!(
         p.expect(&["list", "-A", "--ids", "--filter", "descendants=0"])
             .lines()
-            .contains(&"0001".to_string())
+            .contains(&p.reference(1))
     );
 }
 // --- the schema, checked against itself -------------------------------------
@@ -1680,7 +1524,7 @@ fn adopting_refuses_what_it_cannot_copy() {
     // A schema from an older format would be copied forward silently, and the
     // migration that does it properly already exists.
     let old = Project::new();
-    let cfg = old.read("cairn.toml").replace("format = 3", "format = 1");
+    let cfg = old.read("cairn.toml").replace("format = 4", "format = 1");
     old.write("cairn.toml", &cfg);
     let out = p.run(&["init", "--from", &old.root().display().to_string()]);
     assert!(!out.ok());
@@ -1717,16 +1561,16 @@ fn declaring_that_a_type_groups_work_creates_its_field() {
             .item_type(ItemType::new("release").groups_one().inverse("scheduled"))
             .item_type(ItemType::new("epic").groups_many().inverse("contains")),
     );
-    p.expect(&["new", "First release", "-t", "release", "-q"]);
-    p.expect(&["set", "1", "key=v1"]);
-    p.expect(&["new", "Auth rework", "-t", "epic", "-q"]);
-    p.expect(&["set", "2", "key=auth"]);
-    p.expect(&["new", "Login page", "-t", "task", "-q"]);
+    p.add("First release", &["-t", "release"]);
+    p.expect(&["set", &p.id(1), "key=v1"]);
+    p.add("Auth rework", &["-t", "epic"]);
+    p.expect(&["set", &p.id(2), "key=auth"]);
+    p.add("Login page", &["-t", "task"]);
 
     // No `[[field]]` declares either of these.
-    p.expect(&["set", "3", "release=v1", "epic=auth"]);
+    p.expect(&["set", &p.id(3), "release=v1", "epic=auth"]);
 
-    let file = p.item_file("3");
+    let file = p.item_file(&p.id(3));
     assert_contains(&file, "release: v1", "single-valued, so a scalar");
     assert_contains(&file, "epic:\n- auth", "many-valued, so a sequence");
     assert!(p.run(&["check"]).ok(), "{}", p.run(&["check"]).all());
@@ -1740,14 +1584,11 @@ fn a_grouping_type_is_absent_from_what_can_be_started() {
             .item_type(ItemType::new("task"))
             .item_type(ItemType::new("release").groups_one()),
     );
-    p.expect(&["new", "v1", "-t", "release", "-q"]);
-    p.expect(&["set", "1", "key=v1"]);
-    p.expect(&["new", "Real work", "-t", "task", "-q"]);
+    p.add("v1", &["-t", "release"]);
+    p.expect(&["set", &p.id(1), "key=v1"]);
+    p.add("Real work", &["-t", "task"]);
 
-    assert_eq!(
-        p.expect(&["next", "--ids"]).lines(),
-        vec!["0002".to_string()]
-    );
+    assert_eq!(p.expect(&["next", "--ids"]).lines(), vec![p.reference(2)]);
     assert!(
         !p.expect(&["board"]).stdout.contains("v1"),
         "a container is a column heading, not a card"
@@ -1764,10 +1605,10 @@ fn the_schedule_type_need_not_be_called_milestone() {
             .item_type(ItemType::new("release").groups_one())
             .render(|r| r.group_by("release")),
     );
-    p.expect(&["new", "Version one", "-t", "release", "-q"]);
-    p.expect(&["set", "1", "key=v1"]);
-    p.expect(&["new", "Some work", "-t", "task", "-q"]);
-    p.expect(&["set", "2", "release=v1"]);
+    p.add("Version one", &["-t", "release"]);
+    p.expect(&["set", &p.id(1), "key=v1"]);
+    p.add("Some work", &["-t", "task"]);
+    p.expect(&["set", &p.id(2), "release=v1"]);
 
     let out = p.expect(&["roadmap"]).stdout;
     assert_contains(&out, "v1", "the roadmap found the schedule type");
@@ -1796,10 +1637,10 @@ fn the_reading_commands_use_the_schedule_types_own_name() {
             .item_type(ItemType::new("horizon").groups_one())
             .render(|r| r.group_by("horizon")),
     );
-    p.expect(&["new", "Now", "-t", "horizon", "-q"]);
-    p.expect(&["set", "1", "key=now"]);
-    p.expect(&["new", "Some work", "-t", "task", "-q"]);
-    p.expect(&["set", "2", "horizon=now"]);
+    p.add("Now", &["-t", "horizon"]);
+    p.expect(&["set", &p.id(1), "key=now"]);
+    p.add("Some work", &["-t", "task"]);
+    p.expect(&["set", &p.id(2), "horizon=now"]);
 
     let listed = p.expect(&["list"]).stdout;
     assert_contains(
@@ -1823,7 +1664,7 @@ fn the_reading_commands_use_the_schedule_types_own_name() {
     );
 
     assert_contains(
-        &p.expect(&["show", "2"]).stdout,
+        &p.expect(&["show", &p.id(2)]).stdout,
         "horizon",
         "`show` names the field as the item file does",
     );
@@ -1866,24 +1707,19 @@ fn a_general_reference_is_still_a_field() {
     let p =
         Project::with(Schema::standard().field(Field::reference("related", "*").by_id().many()));
     seed(&p);
-    p.expect(&["set", "2", "related=1,3"]);
-    assert_contains(&p.item_file("2"), "- 1", "");
+    p.expect(&["set", &p.id(2), &format!("related={},{}", p.id(1), p.id(3))]);
+    assert_contains(&p.item_file(&p.id(2)), &format!("- {}", p.id(1)), "");
     assert!(p.run(&["check"]).ok(), "{}", p.run(&["check"]).all());
 
     // And pointing at nothing is still refused.
-    let out = p.fails(&["set", "2", "related=999"]);
+    let out = p.fails(&["set", &p.id(2), &format!("related={}", p.id(999))]);
     assert_contains(&out.all(), "does not exist", "");
 }
 
 /// Format 3 moves the declaration and touches no item.
 #[test]
-fn migrating_to_format_three_changes_no_item_file() {
-    // Seeded at the current format, then the schema is rewritten to the way
-    // format 2 said it — because a format 2 project cannot be written to, which
-    // is the point of the version.
-    let p = Project::with(Schema::standard());
-    seed(&p);
-    p.set_schema(
+fn migrating_format_two_preserves_grouping_and_item_bodies() {
+    let p = Project::with(
         Schema::standard()
             .format(2)
             .amend_type("milestone", support::ItemType::groups_none)
@@ -1894,31 +1730,21 @@ fn migrating_to_format_three_changes_no_item_file() {
                     .inverse("scheduled"),
             ),
     );
-    let before: Vec<String> = p
-        .files("cairn/items")
-        .iter()
-        .map(|f| p.read(&format!("cairn/items/{f}")))
-        .collect();
-
+    p.write("cairn/items/0001-milestone.md",
+        "---\nid: 1\ntitle: Release\ntype: milestone\nkey: v0.1\nstatus: backlog\n---\nRelease prose.\n");
+    p.write(
+        "cairn/items/0002-work.md",
+        "---\nid: 2\ntitle: Work\nstatus: backlog\nmilestone: v0.1\n---\nWork prose.\n",
+    );
     let out = p.expect(&["migrate"]).all();
-    assert_contains(&out, "groups work", "it says what it did");
-
-    let after: Vec<String> = p
-        .files("cairn/items")
-        .iter()
-        .map(|f| p.read(&format!("cairn/items/{f}")))
-        .collect();
-    assert_eq!(before, after, "an item file changed");
-
+    assert_contains(&out, "groups work", "the grouping declaration migrated");
+    assert_eq!(p.json(&["show", "1", "--json"])["body"], "Release prose.\n");
+    assert_eq!(p.json(&["show", "2", "--json"])["body"], "Work prose.\n");
+    assert_eq!(p.json(&["show", "2", "--json"])["milestone"], "v0.1");
     let cfg = p.read("cairn.toml");
     assert_contains(&cfg, "groups = \"one\"", "the type says it now");
-    assert!(
-        !cfg.contains("target = \"milestone\""),
-        "the field that used to say it is gone:\n{cfg}"
-    );
-    assert!(p.run(&["check"]).ok(), "{}", p.run(&["check"]).all());
-
-    // And the roadmap still reads the same backlog.
+    assert_missing(&cfg, "target = \"milestone\"", "the old field is gone");
+    p.expect(&["check"]);
     assert_contains(&p.expect(&["roadmap"]).stdout, "v0.1", "");
 }
 
@@ -1936,24 +1762,24 @@ fn creating_a_grouping_item_gives_it_a_key() {
             .item_type(ItemType::new("release").groups_one())
             .render(|r| r.group_by("release")),
     );
-    p.expect(&["new", "v1.0", "-t", "release", "-q"]);
-    p.expect(&["new", "Some work", "-t", "task", "-q"]);
+    p.add("v1.0", &["-t", "release"]);
+    p.add("Some work", &["-t", "task"]);
 
     // The title, and not a filename slug: `v1.0` is what somebody types.
     assert_json(
-        &p.json(&["show", "1", "--json"]),
+        &p.json(&["show", &p.id(1), "--json"]),
         "key",
         serde_json::json!("v1.0"),
     );
-    p.expect(&["set", "2", "release=v1.0"]);
+    p.expect(&["set", &p.id(2), "release=v1.0"]);
     assert_contains(&p.expect(&["roadmap"]).stdout, "0/1", "and it is filed");
     assert!(p.run(&["check"]).ok(), "{}", p.run(&["check"]).all());
 
     // An ordinary type is untouched: a key there is a handle somebody chooses,
     // not something every item needs.
-    p.expect(&["new", "Ordinary", "-t", "task", "-q"]);
+    p.add("Ordinary", &["-t", "task"]);
     assert_json(
-        &p.json(&["show", "3", "--json"]),
+        &p.json(&["show", &p.id(3), "--json"]),
         "key",
         serde_json::json!(null),
     );
@@ -1967,17 +1793,9 @@ fn an_explicit_key_wins_over_the_derived_one() {
             .item_type(ItemType::new("task"))
             .item_type(ItemType::new("release").groups_one()),
     );
-    p.expect(&[
-        "new",
-        "Usable in anger",
-        "-t",
-        "release",
-        "--set",
-        "key=v0.1",
-        "-q",
-    ]);
+    p.add("Usable in anger", &["-t", "release", "--set", "key=v0.1"]);
     assert_json(
-        &p.json(&["show", "1", "--json"]),
+        &p.json(&["show", &p.id(1), "--json"]),
         "key",
         serde_json::json!("v0.1"),
     );
@@ -2000,7 +1818,7 @@ fn a_title_that_cannot_become_a_key_is_refused() {
     let out = p.fails(&["new", "***", "-t", "release"]);
     assert_contains(&out.all(), "nothing in `***`", "a title with nothing in it");
 
-    p.expect(&["new", "v1.0", "-t", "release", "-q"]);
+    p.add("v1.0", &["-t", "release"]);
     let out = p.fails(&["new", "V1.0", "-t", "release"]);
     assert_contains(&out.all(), "already", "two releases cannot share a key");
     assert_eq!(p.count_all(), 1, "and nothing was written");
@@ -2015,11 +1833,11 @@ fn a_keyless_container_is_reported_as_a_missing_key() {
             .item_type(ItemType::new("task"))
             .item_type(ItemType::new("release").groups_one()),
     );
-    p.expect(&["new", "v1.0", "-t", "release", "-q"]);
-    p.expect(&["set", "1", "key="]);
-    p.expect(&["new", "Some work", "-t", "task", "-q"]);
+    p.add("v1.0", &["-t", "release"]);
+    p.expect(&["set", &p.id(1), "key="]);
+    p.add("Some work", &["-t", "task"]);
 
-    let out = p.fails(&["set", "2", "release=v1.0"]);
+    let out = p.fails(&["set", &p.id(2), "release=v1.0"]);
     assert_contains(&out.all(), "none carries a `key`", "says what is wrong");
     assert_missing(
         &out.all(),
@@ -2030,7 +1848,11 @@ fn a_keyless_container_is_reported_as_a_missing_key() {
     // And `check` reports the container itself, which is where the fix goes.
     let out = p.expect(&["check"]).all();
     assert_contains(&out, "with no `key`", "check names the keyless container");
-    assert_contains(&out, "cairn set 0001 key=", "and how to repair it");
+    assert_contains(
+        &out,
+        &format!("cairn set {} key=", p.reference(1)),
+        "and how to repair it",
+    );
 
     // `cairn config` showed the milestone and not the field, in one screen.
     assert_contains(
@@ -2070,8 +1892,8 @@ fn grouping_by_a_declared_field_is_not_a_defect() {
             .field(Field::choice("release", ["v1.0"]))
             .render(|r| r.group_by("release")),
     );
-    p.expect(&["new", "Some work", "-q"]);
-    p.expect(&["set", "1", "release=v1.0"]);
+    p.add("Some work", &[]);
+    p.expect(&["set", &p.id(1), "release=v1.0"]);
 
     let out = p.expect(&["check"]).all();
     assert!(out.contains("0 warning"), "check warned: {out}");
@@ -2085,8 +1907,8 @@ fn grouping_by_a_declared_field_is_not_a_defect() {
             .item_type(ItemType::new("task"))
             .render(|r| r.group_by("milestone")),
     );
-    p.expect(&["new", "Some work", "-q"]);
-    p.expect(&["set", "1", "milestone=v1.0"]);
+    p.add("Some work", &[]);
+    p.expect(&["set", &p.id(1), "milestone=v1.0"]);
     let out = p.expect(&["check"]).all();
     assert!(out.contains("0 warning"), "check warned: {out}");
     assert_contains(
@@ -2277,15 +2099,7 @@ fn all_work_done() -> Project {
     let p = seeded_empty();
     // Two milestones, one of which is the `later` that is meant to stay open.
     for (title, key) in [("The rewind works", "v0.1"), ("Someday", "later")] {
-        p.expect(&[
-            "new",
-            title,
-            "-t",
-            "milestone",
-            "-q",
-            "--set",
-            &format!("key={key}"),
-        ]);
+        p.add(title, &["-t", "milestone", "--set", &format!("key={key}")]);
     }
     for (n, key) in [("one", "v0.1"), ("two", "v0.1"), ("three", "later")] {
         let id = p.expect(&["new", n, "-q"]).trimmed();
@@ -2344,9 +2158,9 @@ fn an_empty_listing_says_what_was_hidden_rather_than_that_nothing_matched() {
 #[test]
 fn finishing_the_last_item_under_a_milestone_says_so_once() {
     let p = seeded_empty();
-    p.expect(&["new", "v0.1", "-t", "milestone", "-q"]);
-    let a = p.expect(&["new", "one", "-q"]).trimmed();
-    let b = p.expect(&["new", "two", "-q"]).trimmed();
+    p.add("v0.1", &["-t", "milestone"]);
+    let a = p.add("one", &[]);
+    let b = p.add("two", &[]);
     p.expect(&["set", &a, &b, "milestone=v0.1", "-q"]);
 
     // Not on the first, because something is still unfinished.
@@ -2357,12 +2171,16 @@ fn finishing_the_last_item_under_a_milestone_says_so_once() {
     let out = p.expect(&["close", &b]);
     assert_contains(&out.all(), "all 2 item(s) under", "");
     assert_contains(&out.all(), "v0.1", "it names the milestone");
-    assert_contains(&out.all(), "cairn close 0001", "and the command");
+    assert_contains(
+        &out.all(),
+        &format!("cairn close {}", p.reference(1)),
+        "and the command",
+    );
 
     // Reported, never done: the milestone is still open, because whether
     // finished work means a shipped milestone is not cairn's judgement.
     assert_eq!(
-        p.json(&["show", "1", "--json"])["status"].as_str(),
+        p.json(&["show", &p.id(1), "--json"])["status"].as_str(),
         Some("backlog"),
         "cairn closed a milestone on its own"
     );
@@ -2389,7 +2207,7 @@ fn the_roadmap_marks_a_milestone_that_is_finished_and_open() {
 
     // Closing one stops the nudge, and the other is left alone — a `later`
     // milestone with everything under it done is a legitimate state.
-    p.expect(&["close", "1", "-q"]);
+    p.expect(&["close", &p.id(1), "-q"]);
     let out = p.expect(&["roadmap"]).stdout;
     assert_eq!(
         out.matches("nothing unfinished").count(),
