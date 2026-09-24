@@ -3,15 +3,15 @@ id: 135
 key: v0.3
 title: Trust the daily loop
 type: milestone
-status: doing
+status: done
 assignee: codex
-claimed: 2026-09-23
 owner: oddurs
 created_by: codex
 depends_on:
 - 82
 created: 2026-09-23
 updated: 2026-09-23
+closed_at: 2026-09-23
 priority: p2
 ---
 
@@ -30,3 +30,15 @@ No due date is assigned. The previous dates did not describe the released softwa
 ## 2026-09-23
 
 Recorded the release end-to-end session in a clean Git project: initialized with Git integration; approved one p1 item alongside a p0 untriaged idea and a p0 external wait; generated view-scoped instructions; next/claim selected only the approved item; Harrow agreed before and after the claim. Committed the assignment, implemented on a branch, recorded reasoning, verified and ticked both criteria, closed it, compared both history views, and appended a completion note without changing closed_at. Reviewed cairn log --range, merged, and verified the clean project with strict render checks and an empty approved queue. The executable branch/worktree, view-policy, and later-edit date tests retain the corresponding regression coverage.
+
+## 2026-09-23
+
+Shipped v0.3.0 from verified commit 8044313 through PR #98 (merged as 015532e). All 14 PR checks and main CI passed; coverage is 92.58% of regions and 94.50% of lines. Final make durability passed 567 regular tests, two soak tests (400 operations with seed 24301; four writers with 25 operations each), 20,000 fuzzed invocations (seed 12648430), and all 36 format cases. Pinned Harrow agreement, documentation, generated recordings and dependency audit also passed.
+
+## 2026-09-23
+
+Release run 35936086512 published all five platform binaries and the source archive at https://github.com/oddurs/cairn/releases/tag/v0.3.0. Downloaded all six archives, verified SHA-256 and GitHub provenance for each, and compared the published source archive byte-for-byte with the local git archive. The downloaded macOS binary passed approved-queue create/claim/close, minimal initialization (with explicit render), strict validation, and all three Harrow agreement tests. Homebrew tap PR #2 is merged; upgrade and formula tests pass. Both local Cairn installations now report 0.3.0, and the installed Harrow is built from pinned e7397a5; its package version remains 0.1.0. Harrow doctor accepts all eight views and agrees on all 144 items.
+
+## 2026-09-23
+
+All nine child items and the recorded end-to-end release gate are complete. The roadmap now points toward long-term recovery, retrieval and compatibility evidence without silently selecting new work. No runtime dependency, service or format migration was introduced. Crates.io publication and GPG signing were explicitly skipped because the required secrets are absent; those existing human prerequisites remain tracked in 0001 and 0052, not reported complete.
