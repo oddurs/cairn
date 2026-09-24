@@ -1,11 +1,11 @@
 ---
-id: 114
+id: 46bf5fc8-2020-4d06-98d4-278dd220dea0
 title: Nothing should be looked up by the word milestone
 type: feature
 status: done
 milestone: v0.2
 depends_on:
-- 113
+- 04600403-e461-4862-b262-2e8bfa582ea0
 created: 2026-09-11
 updated: 2026-09-11
 priority: p1

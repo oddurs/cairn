@@ -1,5 +1,5 @@
 ---
-id: 1
+id: 87cbfbda-253a-4567-806f-d9a3fd65c44d
 title: Publish to crates.io and Homebrew
 type: chore
 status: blocked

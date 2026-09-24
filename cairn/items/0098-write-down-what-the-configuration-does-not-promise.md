@@ -1,11 +1,11 @@
 ---
-id: 98
+id: 3877a7cf-ab1b-4546-ae8a-8a110679a440
 title: Write down what the configuration does not promise
 type: docs
 status: done
 milestone: v1.0
 depends_on:
-- 96
+- 9a3947ff-cce0-4e54-836c-d621373bf2b9
 created: 2026-09-07
 updated: 2026-09-07
 priority: p2

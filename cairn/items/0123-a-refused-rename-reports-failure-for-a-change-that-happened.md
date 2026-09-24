@@ -1,5 +1,5 @@
 ---
-id: 123
+id: 8282d670-1dd8-4e12-bd5e-6ba793af30b9
 title: A refused rename reports failure for a change that happened
 type: bug
 status: done

@@ -1,5 +1,5 @@
 ---
-id: 67
+id: 46d85eb3-2873-4fb8-aad0-bb1bc1e5c599
 title: Decide whether identifiers should be collision-free by construction
 type: decision
 status: doing
@@ -7,7 +7,7 @@ milestone: v1.0
 assignee: codex
 claimed: 2026-09-23
 depends_on:
-- 138
+- cff9b744-76f0-4d09-a2c4-0247bc73306c
 created: 2026-09-06
 updated: 2026-09-23
 priority: p1

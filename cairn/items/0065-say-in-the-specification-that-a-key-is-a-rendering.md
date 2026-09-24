@@ -1,5 +1,5 @@
 ---
-id: 65
+id: 528865e2-2995-4e25-92ed-208f65b5b226
 title: Say in the specification that a key is a rendering
 type: docs
 status: done

@@ -1,14 +1,14 @@
 ---
-id: 112
+id: 20f020c4-13c1-4b0f-bdbf-cf998ef75f40
 title: Write down what an agent is, and is not, to cairn
 type: docs
 status: done
 milestone: v1.0
 depends_on:
-- 106
-- 107
-- 108
-- 109
+- 6d212938-981c-4980-b637-e16210f49411
+- a99a0a51-5b25-4a8a-85ba-885d2d2085df
+- 4699fade-d38f-4a97-a264-2f0862e64a17
+- 4fec3e82-bdd3-404c-8218-44c32efd12d3
 created: 2026-09-08
 updated: 2026-09-08
 priority: p2

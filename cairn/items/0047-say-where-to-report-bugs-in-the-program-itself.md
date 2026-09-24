@@ -1,5 +1,5 @@
 ---
-id: 47
+id: ac802590-83a4-4256-9fa0-a71d9fdbbb28
 title: Say where to report bugs, in the program itself
 type: bug
 status: done

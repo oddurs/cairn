@@ -1,5 +1,5 @@
 ---
-id: 52
+id: 15bb92a7-ecf3-48af-bc0e-92233f988437
 title: Sign releases and ship a source tarball
 type: chore
 status: blocked

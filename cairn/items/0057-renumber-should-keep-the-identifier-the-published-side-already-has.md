@@ -1,5 +1,5 @@
 ---
-id: 57
+id: 246b986e-b0de-4f4a-82b0-921326fbab69
 title: Renumber should keep the identifier the published side already has
 type: bug
 status: done

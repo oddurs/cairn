@@ -1,5 +1,5 @@
 ---
-id: 118
+id: fc533731-5814-47bf-9254-7f081aba16f5
 title: Unquoted YAML 1.1 booleans disagree across readers
 type: bug
 status: dropped

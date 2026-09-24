@@ -1,11 +1,11 @@
 ---
-id: 83
+id: 25b35d97-0b40-4e36-8438-3eac1110e153
 key: v1.0
 title: Stable
 type: milestone
 status: backlog
 depends_on:
-- 135
+- f13ddc5e-9c3d-4b36-bd2e-52476b97db8b
 created: 2026-09-07
 updated: 2026-09-23
 ---

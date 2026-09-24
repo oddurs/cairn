@@ -1,5 +1,5 @@
 ---
-id: 36
+id: 7b0d3174-3f41-414b-8017-b60166be4c50
 title: Publish the item format as a document in its own right
 type: docs
 status: done

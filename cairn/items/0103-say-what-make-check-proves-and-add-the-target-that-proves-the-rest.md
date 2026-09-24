@@ -1,14 +1,14 @@
 ---
-id: 103
+id: c02d70e1-d3c4-4dc9-b04c-f101189b998f
 title: Say what make check proves, and add the target that proves the rest
 type: chore
 status: done
 milestone: v1.0
 depends_on:
-- 99
-- 100
-- 101
-- 102
+- acc5126e-0421-462b-bc77-76a506c9b03c
+- 36b3401a-ad24-44da-bec1-be21585a7a5e
+- fc84cc03-03cc-4798-8d7d-536cb2dcc1f0
+- e21a3cad-e72d-4c14-8839-76c4b7caf564
 created: 2026-09-07
 updated: 2026-09-07
 priority: p1

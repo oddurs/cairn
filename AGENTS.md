@@ -37,6 +37,8 @@ Selection uses saved view `next`. Additional filters only narrow it; the view's 
 
 Claims coordinate writers in the same item directory, not separate branches, worktrees, or clones. Agree on assignments before splitting work.
 
+Item identities are immutable UUIDv4 strings. Use full `id` values from JSON for durable references; commands also accept unambiguous prefixes of at least 8 hex digits. Store full identities in ID-reference fields, never prefixes. Migrated legacy numbers remain lookup aliases; new items do not receive numbers.
+
 ### Schema
 
 - **Types**: `feature`, `bug`, `chore`, `docs`, `decision`, `milestone`

@@ -1,5 +1,5 @@
 ---
-id: 85
+id: 77642a9b-4525-4cff-a4a2-afed6f63216c
 title: An older project is readable; only writing needs the migration
 type: bug
 status: done

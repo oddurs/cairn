@@ -1,5 +1,5 @@
 ---
-id: 8
+id: 9d432eb3-e033-4ef8-bc26-ad0a2038671d
 title: Embed GNU Guile as an extension language
 type: feature
 status: dropped

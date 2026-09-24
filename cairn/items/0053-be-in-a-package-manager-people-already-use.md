@@ -1,11 +1,11 @@
 ---
-id: 53
+id: af64ba60-be5f-4bf9-9954-251d03172c36
 title: Be in a package manager people already use
 type: chore
 status: backlog
 milestone: later
 depends_on:
-- 1
+- 87cbfbda-253a-4567-806f-d9a3fd65c44d
 created: 2026-09-05
 updated: 2026-09-23
 priority: p3

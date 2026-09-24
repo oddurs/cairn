@@ -1,5 +1,5 @@
 ---
-id: 21
+id: 7ecbdefe-d055-4436-8738-b00d64b33d96
 title: Recover from an interrupted renumber
 type: bug
 status: done

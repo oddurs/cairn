@@ -1,11 +1,11 @@
 ---
-id: 82
+id: 6088a6f0-71c4-465a-8a55-bc1053949b09
 key: v0.2
 title: Comfortable
 type: milestone
 status: done
 depends_on:
-- 81
+- f010732f-575d-4a06-9c00-24c3354a45a9
 created: 2026-09-07
 updated: 2026-09-23
 closed_at: 2026-09-23

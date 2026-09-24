@@ -8,13 +8,12 @@
 #   cairn check           validate every item against it
 #   man cairn             full reference
 
-format = 3
+format = 4
 
 [project]
 name = "cairn"
 description = "Project memory, versioned with the code. Plain Markdown, a schema you own, and a shared workflow for people and agents."
 dir = "cairn/items"           # where item files live, relative to this file
-id_width = 4              # 0001, 0002, ...
 default_type = "feature"
 default_status = "backlog"
 url = "https://github.com/oddurs/cairn/blob/main"

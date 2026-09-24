@@ -1,5 +1,5 @@
 ---
-id: 90
+id: 9ae817eb-5054-4215-b8dd-c991b82c0f34
 title: The body may be interpreted, and the specification should say so
 type: bug
 status: done

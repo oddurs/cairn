@@ -1,5 +1,5 @@
 ---
-id: 91
+id: 3afc367d-e903-4f0a-b189-9a121c9dabb2
 title: The identifier parser panics on a non-ASCII argument
 type: bug
 status: done

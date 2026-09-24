@@ -1,5 +1,5 @@
 ---
-id: 128
+id: 7b54ad6f-a4dd-4562-91b9-93f2ff79e30e
 title: A finished project looks like it contradicts itself
 type: bug
 status: done

@@ -1,5 +1,5 @@
 ---
-id: 13
+id: 8efb0898-9961-4f74-908a-187da7e53122
 title: Record a terminal demo for the README
 type: docs
 status: done
