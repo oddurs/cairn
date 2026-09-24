@@ -152,3 +152,7 @@ The format suite now passes all 43 tests, including migration of the frozen form
 ## 2026-09-23
 
 The active criteria now express the owner-approved change rather than the superseded keep-integers alternative. Full Cairn default tests, release-mode 400-operation soak and 100-item concurrent creation pass; the 20,000-argument fuzz run is underway. Harrow standalone checks and all four explicit cross-tool agreement tests pass. New Harrow main work will be integrated before migration; the implementation remains separate from live-data conversion.
+
+## 2026-09-23
+
+Decision rationale: with one daily user and no external migration population, this is the cheapest point to remove coordinated numbering from the durable identity contract. UUIDv4 uses 122 random bits from OS entropy, not a clone registry or a clock; collision risk is negligible, not mathematically impossible, and duplicates still fail validation. Creation dates carry chronology, full UUIDs carry identity, and short prefixes are disposable command handles. The benefit is independent creation without renumbering or ambiguous dependency retargeting after merges. This does not solve simultaneous edits or coordinate claims across worktrees: Git review and explicit assignment remain necessary. Numeric aliases are a frozen migration bridge, never an ongoing second allocator.
