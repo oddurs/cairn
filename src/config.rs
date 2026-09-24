@@ -1222,6 +1222,34 @@ impl Config {
         })
     }
 
+    /// An ordinary edit must not rename a migrated file merely because its
+    /// identity changed representation. A changed title can still adopt the
+    /// new convention, using the same slug rules the old writer used.
+    pub fn legacy_filename_matches_title(&self, item: &crate::item::Item) -> bool {
+        let Some(name) = item.path.file_name().and_then(|n| n.to_str()) else {
+            return false;
+        };
+        let index = self.identities.borrow();
+        let Ok(format) = IdFormat::compile(&index.legacy.id_format) else {
+            return false;
+        };
+        let budget = self
+            .project
+            .filename_max
+            .saturating_sub(format.width() + 4)
+            .max(8);
+        index.legacy.ids.iter().any(|(n, id)| {
+            *id == item.id
+                && n.parse::<u32>().is_ok_and(|n| {
+                    name == format!(
+                        "{}-{}.md",
+                        format.render(n),
+                        crate::item::slug(item.title(), budget)
+                    )
+                })
+        })
+    }
+
     /// Bytes available for the slug part of a filename, once the id prefix,
     /// separator and `.md` extension are accounted for.
     pub fn slug_budget(&self) -> usize {

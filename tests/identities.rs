@@ -182,6 +182,26 @@ fn migration_preserves_prose_dates_unknown_metadata_and_filenames() {
 }
 
 #[test]
+fn ordinary_edits_preserve_migrated_filenames_until_the_title_changes() {
+    let p = legacy();
+    // Unknown-metadata preservation is covered separately; this case should
+    // also pass strict validation before and after the filename decisions.
+    let path = "cairn/items/CRN-0067-first.md";
+    p.write(path, &p.read(path).replace("opaque: {kept: true}\r\n", ""));
+    p.expect(&["migrate"]);
+    let id = full(&p, "67");
+    let before = item_path(&p, "67");
+    p.expect(&["set", "67", "status=doing", "priority=p2"]);
+    assert_eq!(item_path(&p, "67"), before);
+    p.expect(&["check", "--strict"]);
+    p.expect(&["set", "67", "title=Renamed"]);
+    assert_eq!(full(&p, "67"), id);
+    assert_ne!(item_path(&p, "67"), before);
+    assert!(item_path(&p, "67").ends_with(&format!("{id}-renamed.md")));
+    p.expect(&["check", "--strict"]);
+}
+
+#[test]
 fn migration_refuses_conflicting_or_dangling_legacy_identities_without_changes() {
     for front in [
         "id: 67\ntitle: Duplicate\nstatus: backlog",

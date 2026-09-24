@@ -34,10 +34,6 @@ Safe to keep: an explicit compatibility contract, tested recovery, useful retrie
 - [ ] [`7934b7b6`](https://github.com/oddurs/cairn/blob/main/cairn/items/0140-exercise-years-of-history-and-interrupted-work.md) Exercise years of history and interrupted work <sup>chore · p1</sup>
 - [ ] [`8fa2cde9`](https://github.com/oddurs/cairn/blob/main/cairn/items/0139-recover-the-reason-for-a-change-after-a-long-absence.md) Recover the reason for a change after a long absence <sup>feature · p1</sup>
 
-### in progress
-
-- [ ] [`46d85eb3`](https://github.com/oddurs/cairn/blob/main/cairn/items/0067-decide-whether-identifiers-should-be-collision-free-by-construction.md) Decide whether identifiers should be collision-free by construction <sup>decision · p1</sup>
-
 ### waiting
 
 - [ ] [`15bb92a7`](https://github.com/oddurs/cairn/blob/main/cairn/items/0052-sign-releases-and-ship-a-source-tarball.md) Sign releases and ship a source tarball <sup>chore · p2 · needs-a-key</sup>

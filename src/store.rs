@@ -209,12 +209,8 @@ impl<'a> Store<'a> {
             .ok_or_else(|| anyhow::anyhow!("no item with id {}", self.cfg.format_id(id)))
     }
 
-    /// One more than the highest in use, or the project's starting point if
-    /// nothing is in use.
-    ///
-    /// `id_start` only ever applies to an empty project. Lowering it later does
-    /// nothing, because the maximum still wins — which is the right behaviour
-    /// and is said here rather than left to be discovered.
+    /// An OS-random UUID, checked against the local set. The numeric allocator
+    /// remains only for the earlier steps of a legacy-format migration.
     pub fn next_id(&self, items: &[Item]) -> Result<Id> {
         if self.cfg.format() >= 4 {
             loop {
@@ -251,6 +247,9 @@ impl<'a> Store<'a> {
     /// Keep the filename in step with the title, preserving whatever
     /// subdirectory the file already lives in.
     pub fn sync_path(&self, item: &mut Item) -> Result<Renamed> {
+        if self.cfg.legacy_filename_matches_title(item) {
+            return Ok(Renamed::Unchanged);
+        }
         let want_name = self.cfg.filename_for(item.id, item.title());
         let parent = item
             .path
