@@ -96,9 +96,12 @@ A clean Git status is not validation of the backlog.
 
 ## Migrate an existing project once
 
-Back up the complete project and stop concurrent writers. Preview with
-`cairn migrate --dry-run`, then run `cairn migrate`, and commit the result as
-one commit.
+Stop concurrent writers, preview with `cairn migrate --dry-run`, then run
+`cairn migrate --commit`. It refuses uncommitted changes to the files it
+rewrites, verifies its plan before writing anything, re-renders the roadmap and
+records the whole migration as one commit. `cairn migrate --all DIR --commit`
+does every project under a directory; a write to an older project from a
+terminal offers the migration instead of refusing.
 
 - From format 3, every item gains one `uid:` line. Nothing else changes.
 - From format 4, every item gets back the number it had, from

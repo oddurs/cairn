@@ -623,6 +623,44 @@ misreading data is worse than declining to read it.
 non-zero if a migration is due, which is what belongs in continuous
 integration.
 
+@cindex migration, safety
+It is one step, and a safe one. Before anything is written it refuses
+uncommitted changes to the files it rewrites (@option{--allow-dirty} overrides
+that), names any branch carrying items not merged yet, and --- for a step that
+rewrites items --- reads its own plan back and proves that every item keeps its
+body and every value except its identity, that every reference still names the
+item it named, and that every restored number is the one the item had. Any
+failure stops it with nothing written. It then re-renders the roadmap and either
+says how to commit the result or, with @option{--commit}, commits it: the
+configuration, the items and the roadmap, and nothing else.
+
+@example
+$ cairn migrate --dry-run      # what it would do, counted; --verbose names files
+$ cairn migrate --commit
+  format 3 -> 5  every item gains a `uid` tag; ...
+migrated: 42 item(s) now at format 5
+verified: 42 item(s) keep their bodies and every other value
+committed: chore(cairn): migrate from format 3 to 5
+@end example
+
+@cindex migration, many projects
+@option{--all} does the same for every project under a directory, which is how
+a machine with thirty of them upgrades in one go. It lists each with what it
+would do, skips any it should not touch --- uncommitted changes, a format newer
+than this cairn, a backlog that does not load --- with the reason, migrates the
+rest, and exits non-zero if any of those failed. Hidden and build directories
+are not searched.
+
+@example
+$ cairn migrate --all ~/Code --dry-run
+$ cairn migrate --all ~/Code --commit
+@end example
+
+@cindex migration, offered
+And it need not be remembered. A write to an older project from a terminal asks
+whether to migrate now; on yes it migrates, then finishes what was asked. An
+agent, a pipe or a script is never asked, and is told the command instead.
+
 Format 2 moved milestones out of the configuration and into items. No item file
 changed, and the migration touches @file{cairn.toml} and writes the new
 milestone items, and is described under @ref{Compatibility}.
@@ -3500,7 +3538,10 @@ that arrived with a format-4 UUID. @xref{Identifiers}.
 
 @section cairn migrate
 Brings a project to the current on-disk format, rewriting @file{cairn.toml}.
-@option{--dry-run} reports what would change and writes nothing;
+@option{--commit} records it as one commit, @option{--all} does every project
+under a directory, and @option{--allow-dirty} migrates despite uncommitted
+changes. @option{--dry-run} reports what would change and writes nothing, in
+counts unless @option{--verbose};
 @option{--check} exits non-zero if the project is not already current, which is
 what a continuous integration job runs. From format 3 it adds a @code{uid:} line
 to each item; from format 4 it restores numbers and renames UUID-named files.
