@@ -181,7 +181,12 @@ pub fn summary(ctx: &crate::filter::Ctx, items: &[&Item]) -> String {
         .iter()
         .filter(|i| ctx.cfg.category(i.status()) == Category::Active)
         .count();
-    let blocked = items.iter().filter(|i| ctx.is_blocked(i)).count();
+    // Finished work that still names an open dependency is not blocked work,
+    // and counting it made this line disagree with `list --filter blocked=true`.
+    let blocked = items
+        .iter()
+        .filter(|i| !ctx.is_closed(i) && ctx.is_blocked(i))
+        .count();
 
     let mut parts = Vec::new();
     if ready > 0 {
@@ -197,6 +202,20 @@ pub fn summary(ctx: &crate::filter::Ctx, items: &[&Item]) -> String {
         "nothing to start".to_string()
     } else {
         parts.join(" · ")
+    }
+}
+
+/// A value as one shell word, quoted only when it has to be, so a command cairn
+/// prints can be pasted back and mean what it said.
+pub fn shell_word(value: &str) -> String {
+    if !value.is_empty()
+        && value
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || "_-./".contains(c))
+    {
+        value.to_string()
+    } else {
+        format!("'{}'", value.replace('\'', "'\\''"))
     }
 }
 
