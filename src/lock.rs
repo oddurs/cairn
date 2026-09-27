@@ -50,10 +50,11 @@ impl Lock {
                 "this project is format {}, and writing needs format {}\n\
                  run `cairn migrate` (`--dry-run` first to see what it would change)\n\
                  \n\
-                 format 4 rewrites item identities and declared id references,\n\
-                 records a frozen legacy-number map, and updates {} last.\n\
-                 Commit or back up the complete project first; migrate once and\n\
-                 share that commit. Do not migrate divergent clones independently.\n\
+                 format 5 gives every item a readable number and a `uid` tag. From\n\
+                 format 4 it restores the numbers items had, numbers the rest in\n\
+                 creation order, rewrites id references and renames files; {} is\n\
+                 updated last. Commit the project first, migrate once and share\n\
+                 that commit. Do not migrate divergent clones independently.\n\
                  \n\
                  reading works meanwhile: list, show, next, search, board, roadmap, log, export",
                 cfg.format(),

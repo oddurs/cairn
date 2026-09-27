@@ -1,4 +1,10 @@
-// Immutable identities, with the numeric representation retained for reading history.
+// Item identities: the number people read and type, and the tag that outlives it.
+//
+// Format 5 gives every item a readable number (`id`) and a UUIDv4 tag (`uid`).
+// The number is what tables, filenames and references show. The tag is written
+// once and never shown by default: it is what still names the item after a
+// merge collision renumbers it, and what an old format-4 reference resolves to.
+// Format 4 made the UUID the `id` itself; that is still read, for migration.
 use anyhow::{Result, bail};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::{BTreeMap, BTreeSet};
@@ -11,7 +17,7 @@ pub const MIGRATION_JOURNAL: &str = ".identity-migration.json";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Id {
-    Legacy(u32),
+    Num(u32),
     Uuid(Uuid),
 }
 
@@ -29,44 +35,71 @@ impl Id {
         matches!(self, Self::Uuid(_))
     }
 
-    pub fn legacy(self) -> Option<u32> {
+    pub fn number(self) -> Option<u32> {
         match self {
-            Self::Legacy(n) => Some(n),
+            Self::Num(n) => Some(n),
             Self::Uuid(_) => None,
         }
     }
 
     pub fn compact(self) -> String {
         match self {
-            Self::Legacy(n) => n.to_string(),
+            Self::Num(n) => n.to_string(),
             Self::Uuid(id) => id.simple().to_string(),
         }
     }
 
     pub fn yaml(self) -> serde_yaml_ng::Value {
         match self {
-            Self::Legacy(n) => serde_yaml_ng::Value::Number(n.into()),
+            Self::Num(n) => serde_yaml_ng::Value::Number(n.into()),
             Self::Uuid(_) => serde_yaml_ng::Value::String(self.to_string()),
         }
     }
 }
 
+/// A fresh tag, from operating-system randomness. Nothing coordinates these,
+/// which is the point: two branches can create items without agreeing on
+/// anything, and still tell afterwards which item is which.
+pub fn new_uid() -> Result<Uuid> {
+    match Id::new()? {
+        Id::Uuid(uid) => Ok(uid),
+        Id::Num(_) => unreachable!("Id::new returns a UUID"),
+    }
+}
+
+/// A tag as written: full, either hyphenated or compact, and version 4.
+pub fn parse_uid(raw: &str) -> Result<Uuid> {
+    match raw.trim().parse::<Id>() {
+        Ok(Id::Uuid(uid)) => Ok(uid),
+        _ => bail!("`{raw}` is not a UUIDv4 tag"),
+    }
+}
+
+/// Whether text could be the start of a tag rather than a number: eight or
+/// more hex digits with at least one letter. All-digit text is always a number,
+/// so a tag prefix never shadows an id.
+pub fn is_uid_prefix(raw: &str) -> bool {
+    (8..=32).contains(&raw.len())
+        && raw.bytes().all(|b| b.is_ascii_hexdigit())
+        && raw.bytes().any(|b| b.is_ascii_alphabetic())
+}
+
 impl From<u32> for Id {
     fn from(n: u32) -> Self {
-        Self::Legacy(n)
+        Self::Num(n)
     }
 }
 
 impl PartialEq<u32> for Id {
     fn eq(&self, n: &u32) -> bool {
-        *self == Self::Legacy(*n)
+        *self == Self::Num(*n)
     }
 }
 
 impl fmt::Display for Id {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Legacy(n) => fmt::Display::fmt(n, f),
+            Self::Num(n) => fmt::Display::fmt(n, f),
             Self::Uuid(id) => fmt::Display::fmt(id, f),
         }
     }
@@ -86,7 +119,7 @@ impl FromStr for Id {
         }
         s.trim_start_matches('#')
             .parse::<u32>()
-            .map(Self::Legacy)
+            .map(Self::Num)
             .map_err(|_| anyhow::anyhow!("`{raw}` is not a valid item id"))
     }
 }
@@ -94,7 +127,7 @@ impl FromStr for Id {
 impl Serialize for Id {
     fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
         match self {
-            Self::Legacy(n) => s.serialize_u32(*n),
+            Self::Num(n) => s.serialize_u32(*n),
             Self::Uuid(_) => s.serialize_str(&self.to_string()),
         }
     }
@@ -109,7 +142,7 @@ impl<'de> Deserialize<'de> for Id {
             Text(String),
         }
         match Input::deserialize(d)? {
-            Input::Number(n) => Ok(Self::Legacy(n)),
+            Input::Number(n) => Ok(Self::Num(n)),
             Input::Text(s) => s.parse().map_err(serde::de::Error::custom),
         }
     }
@@ -159,7 +192,7 @@ impl LegacyMap {
     }
 
     pub fn canonical(&self, id: Id) -> Id {
-        id.legacy()
+        id.number()
             .and_then(|n| self.ids.get(&n.to_string()))
             .copied()
             .unwrap_or(id)
@@ -185,8 +218,8 @@ mod tests {
 
     #[test]
     fn legacy_numbers_remain_numbers_and_invalid_uuid_versions_are_refused() {
-        assert_eq!(serde_json::to_value(Id::Legacy(67)).unwrap(), 67);
-        assert_eq!("67".parse::<Id>().unwrap(), Id::Legacy(67));
+        assert_eq!(serde_json::to_value(Id::Num(67)).unwrap(), 67);
+        assert_eq!("67".parse::<Id>().unwrap(), Id::Num(67));
         assert!(
             "00000000-0000-7000-8000-000000000000"
                 .parse::<Id>()

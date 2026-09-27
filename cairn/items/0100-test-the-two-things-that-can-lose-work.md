@@ -1,5 +1,6 @@
 ---
-id: 36b3401a-ad24-44da-bec1-be21585a7a5e
+id: 100
+uid: 36b3401a-ad24-44da-bec1-be21585a7a5e
 title: Test the two things that can lose work
 type: chore
 status: done

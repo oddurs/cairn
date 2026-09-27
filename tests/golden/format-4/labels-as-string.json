@@ -1,0 +1,29 @@
+{
+  "assignee": null,
+  "body": "Body.\n",
+  "category": "open",
+  "claimed": null,
+  "created": null,
+  "created_by": null,
+  "depends_on": [
+    "00000001-0000-4000-8000-000000000001",
+    "00000002-0000-4000-8000-000000000002"
+  ],
+  "fields": {},
+  "id": "00000004-0000-4000-8000-000000000004",
+  "key": null,
+  "labels": [
+    "auth",
+    "backend",
+    "ops"
+  ],
+  "milestone": null,
+  "owner": null,
+  "ref": "00000004",
+  "source": null,
+  "status": "backlog",
+  "title": "Labels written as a bare string",
+  "type": null,
+  "updated": null,
+  "closed_at": null
+}

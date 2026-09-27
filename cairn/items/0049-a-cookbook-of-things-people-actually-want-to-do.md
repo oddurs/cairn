@@ -1,5 +1,6 @@
 ---
-id: 1d4ce7ad-c395-4b80-927a-b691743f52c4
+id: 49
+uid: 1d4ce7ad-c395-4b80-927a-b691743f52c4
 title: A cookbook of things people actually want to do
 type: docs
 status: done

@@ -1,5 +1,6 @@
 ---
-id: 1b49f9f9-01fc-49c6-b129-cca33972f28d
+id: 149
+uid: 1b49f9f9-01fc-49c6-b129-cca33972f28d
 title: See work under way in other worktrees before claiming
 type: feature
 status: done

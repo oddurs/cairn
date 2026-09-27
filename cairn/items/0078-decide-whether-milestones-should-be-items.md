@@ -1,11 +1,12 @@
 ---
-id: cf376433-aeb9-46ef-8626-63614a0931d8
+id: 78
+uid: cf376433-aeb9-46ef-8626-63614a0931d8
 title: Decide whether milestones should be items
 type: docs
 status: done
 milestone: v1.0
 depends_on:
-- 3fab728a-8c33-4748-aac8-967806b97c75
+- 79
 created: 2026-09-06
 updated: 2026-09-07
 priority: p0

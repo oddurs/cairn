@@ -77,6 +77,7 @@ for _tag, _pattern, _first in [
 # §4. Every key the specification names. Anything else is a custom field.
 KNOWN = (
     "id",
+    "uid",
     "key",
     "title",
     "type",
@@ -135,23 +136,28 @@ def as_list(value):
     return [part.strip() for part in str(value).split(",") if part.strip()]
 
 
+def uuid4(value, what):
+    """A full UUIDv4, hyphenated or compact, normalised to lowercase hyphens."""
+    if not isinstance(value, str) or not re.fullmatch(
+        r"(?:[0-9a-fA-F]{32}|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})", value
+    ):
+        raise NotAnItem(f"{what} must be a full UUIDv4")
+    parsed = uuid.UUID(value)
+    if parsed.version != 4 or parsed.variant != uuid.RFC_4122:
+        raise NotAnItem(f"{what} is not RFC 9562 UUIDv4")
+    return str(parsed)
+
+
 def identity(value, format):
-    """§4.2: full UUIDv4 in format 4; unsigned numbers in historical files."""
-    if format >= 4:
-        if not isinstance(value, str) or not re.fullmatch(
-            r"(?:[0-9a-fA-F]{32}|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})", value
-        ):
-            raise NotAnItem("a stored identity must be a full UUIDv4")
-        parsed = uuid.UUID(value)
-        if parsed.version != 4 or parsed.variant != uuid.RFC_4122:
-            raise NotAnItem("identity is not RFC 9562 UUIDv4")
-        return str(parsed)
+    """§4.2: an unsigned number, except in format 4, where it is a full UUIDv4."""
+    if format == 4:
+        return uuid4(value, "a format-4 identity")
     try:
         number = int(str(value).lstrip("#").strip())
     except ValueError as e:
-        raise NotAnItem("legacy identity is not an integer") from e
+        raise NotAnItem("an identity is not an integer") from e
     if not 0 <= number <= 4294967295:
-        raise NotAnItem("legacy identity is outside u32")
+        raise NotAnItem("an identity is outside u32")
     return number
 
 
@@ -167,7 +173,7 @@ def id_from_filename(path):
     return int(digits.group()) if digits else None
 
 
-def read(path, text=None, format=4):
+def read(path, text=None, format=5):
     """Parse one item file into a dictionary of its documented keys."""
     if text is None:
         with open(path, "rb") as f:
@@ -181,16 +187,16 @@ def read(path, text=None, format=4):
         raise NotAnItem("frontmatter is not a mapping")
 
     ident = meta.get("id")
-    if ident is None and format < 4:
+    if ident is None and format != 4:
         ident = id_from_filename(path)
     if ident is None:
-        raise NotAnItem("no full identity in frontmatter (only legacy formats allow filename fallback)")
+        raise NotAnItem("no `id`, and no number to recover from the filename")
 
     def text_or_none(key):
         value = meta.get(key)
         return None if value is None else str(value)
 
-    return {
+    item = {
         "id": identity(ident, format),
         "key": text_or_none("key"),
         "title": text_or_none("title"),
@@ -213,6 +219,10 @@ def read(path, text=None, format=4):
         # blank line is the separator, not content.
         "body": body.lstrip("\n"),
     }
+    # §4.2: the tag, from format 5, present only when the file carries one.
+    if format >= 5 and meta.get("uid") is not None:
+        item["uid"] = uuid4(meta["uid"], "`uid`")
+    return item
 
 
 def main(argv):

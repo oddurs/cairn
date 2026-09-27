@@ -8,8 +8,14 @@ use crate::identity::Id;
 // item and both pick the same number. Git merges them cleanly — the filenames
 // differ — and you are left with two items sharing an id.
 //
-// This is the legacy repair machinery. Format 4 is an explicit no-op: an
-// immutable identity is never reassigned to resolve a merge conflict.
+// This command is the repair. It is deliberately not automatic: renumbering
+// rewrites files, so it happens when you ask for it — or when the post-merge
+// hook `cairn init --git` installs asks on your behalf.
+//
+// Every item carries a `uid` tag that a renumber never touches, and that is
+// what makes the repair exact rather than a guess: at a merge, the tag finds
+// each item on both sides, so a reference to the contested number can be
+// traced to the side it came from and follow the item that moved.
 use crate::config::Config;
 use crate::item::Item;
 use crate::lock::Lock;
@@ -36,21 +42,7 @@ pub fn run(args: Args) -> Result<i32> {
     let store = Store::new(&cfg);
     let _lock = Lock::acquire(&cfg)?;
     let mut items = store.load_all()?;
-    if cfg.format() >= 4 {
-        let mut ids = std::collections::HashSet::new();
-        for item in &items {
-            if !ids.insert(item.id) {
-                bail!(
-                    "duplicate immutable identity {}; reconcile the copies, do not renumber them",
-                    item.id
-                );
-            }
-        }
-        if !args.quiet {
-            println!("immutable identities need no renumbering; existing filenames are retained");
-        }
-        return Ok(0);
-    }
+    let adopted = adopt(&cfg, &store, &mut items, args.dry_run)?;
     // Ordering decides which file keeps a contested id, so it is chosen rather
     // than incidental: oldest first, because the item that existed before the
     // collision should keep its number and the branch that arrived later should
@@ -60,7 +52,13 @@ pub fn run(args: Args) -> Result<i32> {
     // do not: which of two items claiming an id was committed first. That is
     // the one that has been published, that other people have linked to, and
     // that must therefore keep its number.
-    let published = arrival_side(&cfg, &items);
+    // Both sides of the merge being made or just made, read once: they decide
+    // which item keeps a contested number, and where its references go.
+    let (ours, theirs) = match merge_sides(&cfg) {
+        Some((ours, theirs)) => (items_at(&cfg, ours), items_at(&cfg, theirs)),
+        None => (Vec::new(), Vec::new()),
+    };
+    let published = arrival_side(&items, &ours, &theirs);
     items.sort_by(|a, b| {
         a.id.cmp(&b.id)
             .then_with(|| {
@@ -80,19 +78,16 @@ pub fn run(args: Args) -> Result<i32> {
     });
 
     let duplicates = duplicate_ids(&items);
-    if cfg.format() >= 4 && !duplicates.is_empty() {
-        bail!(
-            "duplicate immutable identities; no item was renumbered. Resolve the duplicate files using their history, without changing the identity of existing work"
-        );
-    }
     if duplicates.is_empty() {
         // No identifier is wrong, but a filename can still disagree with one —
         // which is what happens the moment a project adopts `id_format`. Both
         // are the same job: making the identifiers on disk say what they mean.
         let renamed = rename_to_match(&cfg, &store, &mut items, args.dry_run)?;
         if !args.quiet {
-            if renamed == 0 {
+            if renamed + adopted == 0 {
                 println!("{} no duplicate ids", style::green("ok:"));
+            } else if renamed == 0 {
+                // `adopt` has said what it did.
             } else if args.dry_run {
                 println!(
                     "\n{} {renamed} file(s) would be renamed",
@@ -104,7 +99,7 @@ pub fn run(args: Args) -> Result<i32> {
         }
         return Ok(0);
     }
-    let plan = duplicate_plan(&items, &duplicates);
+    let plan = duplicate_plan(&store, &items, &duplicates)?;
 
     if plan.is_empty() {
         if !args.quiet {
@@ -119,7 +114,7 @@ pub fn run(args: Args) -> Result<i32> {
             "  {} {} {}  {}",
             style::dim(&cfg.format_id(it.id)),
             style::dim("->"),
-            style::bold(&cfg.format_id(*new_id)),
+            style::bold(&cfg.format_id_as(*new_id, it.kind())),
             it.title()
         );
     }
@@ -133,22 +128,270 @@ pub fn run(args: Args) -> Result<i32> {
         return Ok(0);
     }
 
-    // The retained item keeps its id, and nothing can unambiguously refer to
-    // the copy, so references are left alone rather than guessed at. There was
-    // a `HashMap` threaded through here for rewriting them, always empty at the
-    // only call site — eighteen lines that could not run, kept alive by an
-    // argument. If references ever do need rewriting, `refs::rename_key` is the
-    // shape to copy, and it is tested.
+    let moved: Vec<(Id, Id)> = plan
+        .iter()
+        .map(|(index, new_id)| (items[*index].id, *new_id))
+        .collect();
+    let arrived: Vec<bool> = plan
+        .iter()
+        .map(|(index, _)| published.get(&items[*index].path) == Some(&1))
+        .collect();
     apply(&store, &mut items, &plan)?;
-
     println!("{} {} item(s)", style::green("renumbered:"), plan.len());
-    eprintln!(
-        "{} existing `depends_on` references still point at the retained items; \
-         check whether any should point at the renumbered ones. \
-         Review other id-valued reference fields and prose too",
-        style::yellow("note:")
-    );
+
+    // Only across a merge can a reference be traced to the side it came from.
+    // Elsewhere nothing says which of two same-numbered items a reference
+    // meant, so it is left on the item that kept the number, and said so.
+    let traced = if arrived.iter().all(|a| *a) {
+        retarget(&cfg, &mut items, &moved, &ours, &theirs)?
+    } else {
+        None
+    };
+    match traced {
+        Some(0) => {}
+        Some(n) => println!(
+            "{} {n} item(s) that referred to what moved",
+            style::green("retargeted:")
+        ),
+        None => eprintln!(
+            "{} existing references still point at the retained items; \
+             check whether any should point at the renumbered ones",
+            style::yellow("note:")
+        ),
+    }
     Ok(0)
+}
+
+/// Number what arrived with a format-4 identity.
+///
+/// An item filed on a branch while the project was format 4 keeps its UUID as
+/// its tag, which is exactly what it became for every item that migrated, and
+/// every reference to that UUID follows it to its number.
+fn adopt(cfg: &Config, store: &Store, items: &mut [Item], dry_run: bool) -> Result<usize> {
+    let mut numbered: HashMap<uuid::Uuid, Id> = items
+        .iter()
+        .filter(|i| !i.id.is_uuid())
+        .filter_map(|i| i.meta.uid.map(|u| (u, i.id)))
+        .collect();
+    let mut order: Vec<usize> = (0..items.len())
+        .filter(|i| items[*i].id.is_uuid())
+        .collect();
+    order.sort_by(|a, b| {
+        created_key(&items[*a])
+            .cmp(&created_key(&items[*b]))
+            .then_with(|| items[*a].id.cmp(&items[*b].id))
+    });
+    let mut changed: Vec<usize> = Vec::new();
+    for index in order {
+        let Id::Uuid(uid) = items[index].id else {
+            continue;
+        };
+        if let Some(existing) = numbered.get(&uid) {
+            bail!(
+                "{} carries the tag of {}, which is already here — a copied file; remove one",
+                store.rel(&items[index].path),
+                cfg.format_id(*existing)
+            );
+        }
+        let id = store.next_id(items)?;
+        println!(
+            "  {} {} {}  {}",
+            style::dim(&uid.simple().to_string()[..8]),
+            style::dim("->"),
+            style::bold(&cfg.format_id_as(id, items[index].kind())),
+            items[index].title()
+        );
+        numbered.insert(uid, id);
+        let it = &mut items[index];
+        it.id = id;
+        it.meta.id = Some(id);
+        it.meta.uid = Some(uid);
+        cfg.remember_item(it);
+        changed.push(index);
+    }
+    for (index, item) in items.iter_mut().enumerate() {
+        let rewrote = crate::refs::edit_id_refs(cfg, item, |_, ids| {
+            ids.into_iter()
+                .map(|id| match id {
+                    Id::Uuid(u) => numbered.get(&u).copied().unwrap_or(id),
+                    Id::Num(_) => id,
+                })
+                .collect()
+        });
+        if rewrote {
+            changed.push(index);
+        }
+    }
+    changed.sort_unstable();
+    changed.dedup();
+    if dry_run || changed.is_empty() {
+        return Ok(changed.len());
+    }
+    for index in &changed {
+        let it = &mut items[*index];
+        it.save()?;
+        if let crate::store::Renamed::Blocked(taken) = store.sync_path(it)? {
+            bail!(
+                "cannot rename {} to {}: that name is taken",
+                store.rel(&it.path),
+                store.rel(&taken)
+            );
+        }
+    }
+    println!("{} {} item(s)", style::green("adopted:"), changed.len());
+    Ok(changed.len())
+}
+
+/// The two sides of the merge being made or just made: the one that was here,
+/// and the one that arrived. None outside a merge.
+fn merge_sides(cfg: &Config) -> Option<(&'static str, &'static str)> {
+    let has = |rev: &str| {
+        std::process::Command::new("git")
+            .args(["rev-parse", "--verify", "-q", rev])
+            .current_dir(&cfg.root)
+            .output()
+            .is_ok_and(|o| o.status.success())
+    };
+    // The same order `arrival_side` asks in, for the same reason.
+    if has("HEAD^2") {
+        Some(("HEAD^1", "HEAD^2"))
+    } else if has("MERGE_HEAD") {
+        Some(("HEAD", "MERGE_HEAD"))
+    } else {
+        None
+    }
+}
+
+/// Every item file as it was at a revision, read in one pass.
+fn items_at(cfg: &Config, rev: &str) -> Vec<Item> {
+    let run = |args: &[&str], input: Option<&str>| -> Option<Vec<u8>> {
+        use std::io::Write;
+        let mut child = std::process::Command::new("git")
+            .args(args)
+            .current_dir(&cfg.root)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .ok()?;
+        let mut stdin = child.stdin.take()?;
+        stdin.write_all(input.unwrap_or_default().as_bytes()).ok()?;
+        drop(stdin);
+        let out = child.wait_with_output().ok()?;
+        out.status.success().then_some(out.stdout)
+    };
+    let dir = Store::new(cfg).rel(&cfg.items_dir());
+    let Some(listing) = run(&["ls-tree", "-r", "--name-only", rev, "--", &dir], None) else {
+        return Vec::new();
+    };
+    let paths: Vec<String> = String::from_utf8_lossy(&listing)
+        .lines()
+        .filter(|p| {
+            std::path::Path::new(p)
+                .extension()
+                .is_some_and(|e| e.eq_ignore_ascii_case("md"))
+        })
+        .map(str::to_string)
+        .collect();
+    let request = paths.iter().fold(String::new(), |mut out, p| {
+        use std::fmt::Write;
+        let _ = writeln!(out, "{rev}:{p}");
+        out
+    });
+    let Some(blobs) = run(&["cat-file", "--batch"], Some(&request)) else {
+        return Vec::new();
+    };
+    let formats = cfg.id_formats();
+    let mut items = Vec::new();
+    let mut rest = blobs.as_slice();
+    for path in &paths {
+        let Some(eol) = rest.iter().position(|b| *b == b'\n') else {
+            break;
+        };
+        let header = String::from_utf8_lossy(&rest[..eol]).into_owned();
+        rest = &rest[eol + 1..];
+        let Some(size) = header
+            .split(' ')
+            .nth(2)
+            .and_then(|n| n.parse::<usize>().ok())
+        else {
+            continue;
+        };
+        let Some(body) = rest.get(..size) else { break };
+        if let Ok(item) = Item::parse_with(
+            &cfg.root.join(path),
+            &String::from_utf8_lossy(body),
+            &formats,
+        ) {
+            items.push(item);
+        }
+        rest = rest.get(size + 1..).unwrap_or_default();
+    }
+    items
+}
+
+/// Point references at the item that moved, where they came from its side.
+///
+/// A collision means the contested number was created on both sides after
+/// they parted, so nothing referred to it before the branch point. A reference
+/// that exists only on the arriving side meant the arriving item and follows
+/// it. One that exists on both sides was added on both: it meant both items,
+/// and keeps the number while gaining the new one. Items are matched across
+/// sides by tag, falling back to the path for an item written before tags.
+///
+/// The number of items changed, or None when the sides could not be read.
+fn retarget(
+    cfg: &Config,
+    items: &mut [Item],
+    moved: &[(Id, Id)],
+    ours: &[Item],
+    theirs: &[Item],
+) -> Result<Option<usize>> {
+    if theirs.is_empty() {
+        return Ok(None);
+    }
+    let same = |side: &'_ [Item], item: &Item| -> Option<Item> {
+        side.iter()
+            .find(|s| match (s.meta.uid, item.meta.uid) {
+                (Some(a), Some(b)) => a == b,
+                _ => s.path == item.path,
+            })
+            .cloned()
+    };
+    let names = |side: Option<&Item>, def: &crate::config::FieldDef, id: Id| {
+        side.and_then(|s| crate::refs::ids_in(s, def))
+            .is_some_and(|ids| ids.contains(&id))
+    };
+    let mut changed = 0;
+    for item in items.iter_mut() {
+        let (here, there) = (same(ours, item), same(theirs, item));
+        let rewrote = crate::refs::edit_id_refs(cfg, item, |def, ids| {
+            let mut out = Vec::with_capacity(ids.len());
+            for id in ids {
+                out.push(id);
+                for (old, new) in moved {
+                    if id != *old {
+                        continue;
+                    }
+                    let (from_ours, from_theirs) = (
+                        names(here.as_ref(), def, id),
+                        names(there.as_ref(), def, id),
+                    );
+                    match (from_ours, from_theirs) {
+                        (false, true) => *out.last_mut().expect("just pushed") = *new,
+                        (true, true) if crate::refs::is_many(def) => out.push(*new),
+                        _ => {}
+                    }
+                }
+            }
+            out
+        });
+        if rewrote {
+            item.save()?;
+            changed += 1;
+        }
+    }
+    Ok(Some(changed))
 }
 
 /// Bring filenames into line with the project's identifier rendering and each
@@ -167,7 +410,7 @@ fn rename_to_match(
     // process against itself, which is exactly what happened the first time.
     let mut renamed = 0usize;
     for item in items.iter_mut() {
-        let want = cfg.filename_for(item.id, item.title());
+        let want = cfg.filename_for(item.id, item.kind(), item.title());
         let have = item
             .path
             .file_name()
@@ -212,79 +455,34 @@ fn rename_to_match(
 /// renaming it churns history for no reason — and the repository knows which is
 /// which.
 ///
-/// The published side is HEAD during a merge, and the *first parent* of HEAD
-/// once the merge has been committed, because the first parent is the branch
-/// you were standing on. Those are the two moments somebody runs this, the
-/// second being when the `post-merge` hook does.
-///
-/// Deliberately not by timestamp or by history depth: two branch commits made a
-/// moment apart tie on the first, and siblings tie on the second. Both were
-/// tried, and both left the original coin-flip in place.
+/// Answered by tag: an item whose tag is in the published side's tree was
+/// published. This used to ask `git log --follow` which commit added each file,
+/// and rename detection, seeing two item files that are mostly the same
+/// boilerplate, answered that a new item was an old one renamed — so both sides
+/// looked published and the coin-flip came back. An item written before tags
+/// is placed by its path instead.
 ///
 /// Outside a repository, or on an ordinary commit, this is empty and the
 /// previous rule applies unchanged.
-fn arrival_side(cfg: &Config, items: &[Item]) -> HashMap<PathBuf, u8> {
-    let git = |args: &[&str]| -> Option<String> {
-        let out = std::process::Command::new("git")
-            .args(args)
-            .current_dir(&cfg.root)
-            .output()
-            .ok()?;
-        out.status
-            .success()
-            .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
+fn arrival_side(items: &[Item], ours: &[Item], theirs: &[Item]) -> HashMap<PathBuf, u8> {
+    let on = |side: &[Item], item: &Item| {
+        side.iter().any(|s| match (s.meta.uid, item.meta.uid) {
+            (Some(a), Some(b)) => a == b,
+            _ => s.path == item.path,
+        })
     };
-
-    if git(&["rev-parse", "--is-inside-work-tree"]).is_none() {
-        return HashMap::new();
-    }
-
-    // Whether HEAD is a merge is asked *first*, and that order is the whole
-    // trick. The `post-merge` hook runs after the merge commit exists but while
-    // `.git/MERGE_HEAD` is still on disk, so testing for a merge in progress
-    // first would pick HEAD — the merge commit, which contains both sides — and
-    // conclude that both had been published. Which is precisely the coin-flip
-    // this is meant to remove.
-    let published = match git(&["rev-parse", "--verify", "-q", "HEAD^2"]) {
-        // HEAD has a second parent, so it is a merge commit and its first
-        // parent is the branch the merge was made on: the published side.
-        Some(_) => "HEAD^1",
-        // No merge commit yet. If one is in progress, HEAD is still the side
-        // that was already here.
-        None if git(&["rev-parse", "--verify", "-q", "MERGE_HEAD"]).is_some() => "HEAD",
-        None => return HashMap::new(),
-    };
-
-    let mut side = HashMap::new();
-    for item in items {
-        let Ok(relative) = item.path.strip_prefix(&cfg.root) else {
-            continue;
-        };
-        let relative = relative.to_string_lossy().replace('\\', "/");
-
-        // The commit that *added* the file, not the last one to touch it: an
-        // item edited yesterday can still be the one that existed first.
-        let Some(added) = git(&[
-            "log",
-            "--diff-filter=A",
-            "--follow",
-            "-1",
-            "--format=%H",
-            "--",
-            &relative,
-        ])
-        .filter(|s| !s.is_empty()) else {
-            continue;
-        };
-
-        let already_there = std::process::Command::new("git")
-            .args(["merge-base", "--is-ancestor", &added, published])
-            .current_dir(&cfg.root)
-            .output()
-            .is_ok_and(|o| o.status.success());
-        side.insert(item.path.clone(), u8::from(!already_there));
-    }
-    side
+    items
+        .iter()
+        .filter_map(|item| {
+            if on(ours, item) {
+                Some((item.path.clone(), 0))
+            } else if on(theirs, item) {
+                Some((item.path.clone(), 1))
+            } else {
+                None
+            }
+        })
+        .collect()
 }
 
 /// Sort key for creation date: undated items sort after dated ones.
@@ -305,22 +503,21 @@ fn duplicate_ids(items: &[Item]) -> BTreeMap<Id, Vec<usize>> {
     by_id
 }
 
-/// The oldest item holding a duplicated id keeps it; the rest get fresh ones.
-fn duplicate_plan(items: &[Item], duplicates: &BTreeMap<Id, Vec<usize>>) -> Vec<(usize, Id)> {
-    let mut next = items
-        .iter()
-        .filter_map(|i| i.id.legacy())
-        .max()
-        .unwrap_or(0)
-        .saturating_add(1);
+/// The oldest item holding a duplicated id keeps it; the rest get fresh ones,
+/// from the same allocator `new` uses, so a repair cannot collide with a
+/// number a sibling worktree or another branch already holds.
+fn duplicate_plan(
+    store: &Store,
+    items: &[Item],
+    duplicates: &BTreeMap<Id, Vec<usize>>,
+) -> Result<Vec<(usize, Id)>> {
     let mut plan = Vec::new();
     for indices in duplicates.values() {
         for index in indices.iter().skip(1) {
-            plan.push((*index, Id::Legacy(next)));
-            next = next.saturating_add(1);
+            plan.push((*index, store.next_id(items)?));
         }
     }
-    plan
+    Ok(plan)
 }
 
 /// Two phases, so a rename can never land on a file that has not moved yet.
@@ -337,7 +534,7 @@ fn apply(store: &Store, items: &mut [Item], plan: &[(usize, Id)]) -> Result<()> 
         let it = &mut items[*index];
         it.id = *new_id;
         it.meta.id = Some(*new_id);
-        it.path = store.path_for(*new_id, it.title());
+        it.path = store.path_for(*new_id, it.kind(), it.title());
         it.touch(&today());
         it.save()?;
         std::fs::remove_file(temp).with_context(|| format!("removing {}", temp.display()))?;

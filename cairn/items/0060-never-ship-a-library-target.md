@@ -1,5 +1,6 @@
 ---
-id: d3bb2ee7-d203-4205-a5b0-902a6f399a32
+id: 60
+uid: d3bb2ee7-d203-4205-a5b0-902a6f399a32
 title: Never ship a library target
 type: chore
 status: done

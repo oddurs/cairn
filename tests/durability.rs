@@ -102,7 +102,7 @@ fn an_interrupted_write_never_truncates_an_item() {
     // the rename either happened or it did not.
     let p = Project::new();
     p.add("Survives interruption", &["--body", "important content"]);
-    let original = p.read(&format!("cairn/items/{}-survives-interruption.md", p.id(1)));
+    let original = p.read("cairn/items/0001-survives-interruption.md");
 
     for n in 0..40 {
         let status = if n % 2 == 0 {
@@ -111,7 +111,7 @@ fn an_interrupted_write_never_truncates_an_item() {
             "status=backlog"
         };
         let mut child = Command::new(bin())
-            .args(["set", &p.id(1), status, "-q"])
+            .args(["set", "1", status, "-q"])
             .current_dir(p.root())
             .env("NO_COLOR", "1")
             .stdout(Stdio::null())
@@ -121,7 +121,7 @@ fn an_interrupted_write_never_truncates_an_item() {
         let _ = child.kill();
         let _ = child.wait();
 
-        let current = p.read(&format!("cairn/items/{}-survives-interruption.md", p.id(1)));
+        let current = p.read("cairn/items/0001-survives-interruption.md");
         assert!(!current.is_empty(), "the item vanished on iteration {n}");
         assert!(
             current.starts_with("---"),
@@ -130,7 +130,7 @@ fn an_interrupted_write_never_truncates_an_item() {
     }
     assert!(p.expect(&["check"]).ok(), "the corpus is still valid");
     assert_contains(
-        &p.read(&format!("cairn/items/{}-survives-interruption.md", p.id(1))),
+        &p.read("cairn/items/0001-survives-interruption.md"),
         "important content",
         "the body survived",
     );
@@ -179,15 +179,15 @@ fn an_interrupted_renumber_is_recovered() {
     let before = p.count();
     // Exactly what a crash between renumber's two phases leaves behind.
     std::fs::rename(
-        p.path(&format!("cairn/items/{}-first-item.md", p.id(1))),
-        p.path(&format!("cairn/items/{}-first-item.md.renumber", p.id(1))),
+        p.path("cairn/items/0001-first-item.md"),
+        p.path("cairn/items/0001-first-item.md.renumber"),
     )
     .unwrap();
 
     let out = p.expect(&["list", "--count"]);
     assert_eq!(out.trimmed(), before.to_string(), "the item came back");
     assert_contains(&out.stderr, "interrupted renumber", "and said so");
-    assert!(p.exists(&format!("cairn/items/{}-first-item.md", p.id(1))));
+    assert!(p.exists("cairn/items/0001-first-item.md"));
     p.expect(&["check"]);
 }
 
@@ -195,15 +195,15 @@ fn an_interrupted_renumber_is_recovered() {
 fn a_staged_file_is_never_restored_over_a_real_one() {
     let p = seeded();
     std::fs::copy(
-        p.path(&format!("cairn/items/{}-first-item.md", p.id(1))),
-        p.path(&format!("cairn/items/{}-first-item.md.renumber", p.id(1))),
+        p.path("cairn/items/0001-first-item.md"),
+        p.path("cairn/items/0001-first-item.md.renumber"),
     )
     .unwrap();
 
     let out = p.expect(&["list"]);
     assert_contains(&out.stderr, "already exists", "it refuses and explains");
     assert!(
-        p.exists(&format!("cairn/items/{}-first-item.md.renumber", p.id(1))),
+        p.exists("cairn/items/0001-first-item.md.renumber"),
         "the staged file is left for a person to deal with"
     );
 }
@@ -317,12 +317,12 @@ fn renaming_onto_an_existing_file_never_overwrites_it() {
     p.add("Original title", &[]);
 
     // A real item, in a file named after a different one.
-    p.write_uuid_fixture(
-        &format!("cairn/items/{}-taken.md", p.id(1)),
+    p.write(
+        "cairn/items/0001-taken.md",
         "---\nid: 99\ntitle: Taken\nstatus: backlog\n---\n\nkept by hand\n",
     );
 
-    let out = p.run(&["set", &p.id(1), "title=Taken"]);
+    let out = p.run(&["set", "1", "title=Taken"]);
     assert!(
         out.ok(),
         "a change that was written was reported as a failure:\n{}",
@@ -337,27 +337,21 @@ fn renaming_onto_an_existing_file_never_overwrites_it() {
 
     // A retry is not a new failure, which is what a script keying off the exit
     // status used to see forever.
-    assert!(p.run(&["set", &p.id(1), "title=Taken"]).ok());
+    assert!(p.run(&["set", "1", "title=Taken"]).ok());
 
-    let occupant =
-        std::fs::read_to_string(p.path(&format!("cairn/items/{}-taken.md", p.id(1)))).unwrap();
-    assert_contains(
-        &occupant,
-        &format!("id: {}", p.id(99)),
-        "the item in the way was overwritten",
-    );
+    let occupant = std::fs::read_to_string(p.path("cairn/items/0001-taken.md")).unwrap();
+    assert_contains(&occupant, "id: 99", "the item in the way was overwritten");
     assert_contains(&occupant, "kept by hand", "its body was overwritten");
 
     // Whatever the exit status claims, the item and its file agree with each
     // other: the title is the new one and the old file still holds it.
     assert_contains(
-        &p.expect(&["show", &p.id(1)]).stdout,
+        &p.expect(&["show", "1"]).stdout,
         "Taken",
         "the item is in neither state",
     );
     assert_contains(
-        &std::fs::read_to_string(p.path(&format!("cairn/items/{}-original-title.md", p.id(1))))
-            .unwrap(),
+        &std::fs::read_to_string(p.path("cairn/items/0001-original-title.md")).unwrap(),
         "title: Taken",
         "the file on disk disagrees with what cairn reports",
     );

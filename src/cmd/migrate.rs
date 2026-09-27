@@ -10,9 +10,9 @@
 // What a step reports matters as much as what it does: the question before
 // running this over years of work is whether the item files are about to be
 // rewritten, so every step answers that in files rather than in steps.
-use crate::config::{CONFIG_FILE, CURRENT_FORMAT, Config};
+use crate::config::{CONFIG_FILE, CURRENT_FORMAT, Config, IdFormat};
 use crate::identity::Id;
-use crate::identity::{LEGACY_MAP, LegacyMap, MIGRATION_JOURNAL};
+use crate::identity::{LEGACY_MAP, MIGRATION_JOURNAL};
 use crate::lock::Lock;
 use crate::store::Store;
 use crate::style;
@@ -56,9 +56,9 @@ pub fn run(args: Args) -> Result<i32> {
             return Ok(0);
         }
         let _lock = Lock::acquire_for_migration(&cfg)?;
-        resume_identities(&cfg)?;
+        let target = resume_identities(&cfg)?;
         println!(
-            "{} resumed identity migration to format 4",
+            "{} resumed identity migration to format {target}",
             style::green("migrated:")
         );
         return Ok(0);
@@ -104,6 +104,9 @@ pub fn run(args: Args) -> Result<i32> {
     }
 
     if args.dry_run {
+        if steps.contains(&(4, 5)) {
+            preview_numbers(&cfg, &items)?;
+        }
         let total = steps
             .iter()
             .map(|(a, b)| effect_of(*a, *b, &cfg, &items))
@@ -119,6 +122,8 @@ pub fn run(args: Args) -> Result<i32> {
         let step_cfg = Config::load_for_migration(&path)?;
         let step_items = Store::new(&step_cfg).load_all()?;
         apply(&step_cfg, &step_items, *from, *to)?;
+        // The identity steps journal the configuration with everything else,
+        // and write it last.
         if *to < 4 {
             stamp(&step_cfg, *to)?;
         }
@@ -132,16 +137,27 @@ pub fn run(args: Args) -> Result<i32> {
     Ok(0)
 }
 
-/// The chain of single-step migrations between two formats.
+/// The chain of migrations between two formats.
+///
+/// Format 4 is a detour, not a stage: a format-3 project goes straight to 5,
+/// gaining tags without ever trading its numbers for UUIDs.
 fn plan(from: u32, to: u32) -> Vec<(u32, u32)> {
-    (from..to).map(|n| (n, n + 1)).collect()
+    let mut steps = Vec::new();
+    let mut at = from;
+    while at < to {
+        let next = if at == 3 { 5 } else { at + 1 };
+        steps.push((at, next.min(to)));
+        at = next;
+    }
+    steps
 }
 
 fn apply(cfg: &Config, items: &[crate::item::Item], from: u32, to: u32) -> Result<()> {
     match (from, to) {
         (1, 2) => milestones_become_items(cfg, items),
         (2, 3) => types_declare_that_they_group(cfg),
-        (3, 4) => migrate_identities(cfg, items),
+        (3, 5) => tag_items(cfg, items),
+        (4, 5) => restore_numbers(cfg, items),
         _ => anyhow::bail!("no migration is defined from format {from} to {to}"),
     }
 }
@@ -164,9 +180,9 @@ fn milestones_become_items(cfg: &Config, items: &[crate::item::Item]) -> Result<
     // the next dated one's date existed only because milestones had no natural
     // order; items have one.
     let mut previous: Option<Id> = None;
-    let first = store.next_id(items)?.legacy().expect("legacy migration");
+    let first = store.next_id(items)?.number().expect("legacy migration");
     for (offset, m) in cfg.milestones.iter().enumerate() {
-        let next = Id::Legacy(
+        let next = Id::Num(
             first
                 .checked_add(u32::try_from(offset)?)
                 .ok_or_else(|| anyhow::anyhow!("legacy identifier space exhausted"))?,
@@ -176,7 +192,7 @@ fn milestones_become_items(cfg: &Config, items: &[crate::item::Item]) -> Result<
             id: next,
             meta: Default::default(),
             body: String::new(),
-            path: store.path_for(next, &title),
+            path: store.path_for(next, None, &title),
             front: String::new(),
             eol: Default::default(),
         };
@@ -200,6 +216,7 @@ fn milestones_become_items(cfg: &Config, items: &[crate::item::Item]) -> Result<
         if let Some(d) = &m.description {
             item.set_body(d);
         }
+        store.stamp_new(&mut item)?;
         item.save()?;
         println!(
             "  {} {}  {title}",
@@ -300,153 +317,373 @@ fn stamp(cfg: &Config, format: u32) -> Result<()> {
 }
 
 /// Persist the complete before/after image before replacing anything. The
-/// configuration is the last replacement: no reader may see format 4 with a
-/// partially converted backlog. A journal survives a crash until every file
-/// has been flushed, and is never silently discarded on conflicting edits.
+/// configuration is the last replacement: no reader may see the new format
+/// with a partially converted backlog. A journal survives a crash until every
+/// file has been flushed, and is never silently discarded on conflicting edits.
+///
+/// Version 1 journals were written by the format-4 migration and are still
+/// resumed; version 2 adds removals, which is how a rename is recorded.
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct IdentityPlan {
     version: u32,
+    #[serde(default = "format_four")]
+    target: u32,
     files: Vec<Replacement>,
 }
 
+fn format_four() -> u32 {
+    4
+}
+
+/// One file's journey. `before` is what is there now, or nothing; `after` is
+/// what will be, or nothing, which removes it.
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Replacement {
     path: String,
     before: Option<String>,
-    after: String,
+    after: Option<String>,
 }
 
-fn migrate_identities(cfg: &Config, items: &[crate::item::Item]) -> Result<()> {
+/// Format 3 to 5: every item gains a `uid` tag, and nothing else about it
+/// changes — not its number, its references, its filename or a byte of its
+/// body. The line is inserted beside `id:` rather than the frontmatter being
+/// rewritten, so the diff is one line per item.
+fn tag_items(cfg: &Config, items: &[crate::item::Item]) -> Result<()> {
     let mut target = cfg.clone();
-    target.format = Some(4);
+    target.format = Some(5);
+    refuse_keys_that_read_as_ids(&target, items)?;
+    let store = Store::new(cfg);
+    let mut files = Vec::new();
+    let mut tags = BTreeSet::new();
+    for item in items {
+        let before = std::fs::read_to_string(&item.path)?;
+        // An item an earlier step just wrote is tagged already, and is
+        // journaled unchanged so the journal still accounts for every file.
+        if item.meta.uid.is_some() {
+            files.push(Replacement {
+                path: store.rel(&item.path),
+                after: Some(before.clone()),
+                before: Some(before),
+            });
+            continue;
+        }
+        let uid = loop {
+            let uid = crate::identity::new_uid()?;
+            if tags.insert(uid) {
+                break uid;
+            }
+        };
+        files.push(Replacement {
+            path: store.rel(&item.path),
+            after: Some(insert_uid(&before, uid)?),
+            before: Some(before),
+        });
+    }
+    files.push(config_replacement(cfg, 5, None)?);
+    journal_and_apply(
+        cfg,
+        IdentityPlan {
+            version: 2,
+            target: 5,
+            files,
+        },
+    )
+}
+
+/// The `uid:` line, after `id:` when there is one and first otherwise, in the
+/// file's own line ending.
+fn insert_uid(original: &str, uid: uuid::Uuid) -> Result<String> {
+    let eol = if original.contains("\r\n") {
+        "\r\n"
+    } else {
+        "\n"
+    };
+    let opening = original
+        .find('\n')
+        .context("missing frontmatter opening line")?
+        + 1;
+    let mut at = opening;
+    for line in original[opening..].split_inclusive('\n') {
+        let bare = line.trim_end_matches(['\r', '\n']);
+        if matches!(bare, "---" | "...") {
+            break;
+        }
+        if bare.starts_with("id:") {
+            at += line.len();
+            return Ok(format!(
+                "{}uid: {uid}{eol}{}",
+                &original[..at],
+                &original[at..]
+            ));
+        }
+        at += line.len();
+    }
+    Ok(format!(
+        "{}uid: {uid}{eol}{}",
+        &original[..opening],
+        &original[opening..]
+    ))
+}
+
+/// Format 4 to 5: every item's number comes back, and its UUID becomes its tag.
+///
+/// An item that had a number before format 4 gets exactly that number, read
+/// from `_legacy-ids.toml`. One created since gets the next free number, in the
+/// order the items were created, after every number the map, this directory or
+/// any branch has used. Every id reference is rewritten from UUID to number, a
+/// UUID-named file is renamed to its number, the project's old `id_format`
+/// returns to `cairn.toml`, and the frozen map, which nothing needs any more,
+/// is removed. Bodies are not touched.
+fn restore_numbers(cfg: &Config, items: &[crate::item::Item]) -> Result<()> {
+    let store = Store::new(cfg);
+    let report = crate::cmd::check::collect(cfg, &store)?;
+    if !report.errors.is_empty() {
+        bail!(
+            "repair the backlog before migrating:\n{}",
+            report.errors.join("\n")
+        );
+    }
+    let legacy = cfg.identities.borrow().legacy.clone();
+    let mut target = cfg.clone();
+    target.format = Some(5);
+    let restored_format = IdFormat::compile(&legacy.id_format)?;
+    let template = (restored_format != IdFormat::padded(cfg.project.id_width))
+        .then(|| legacy.id_format.clone());
+    target.project.id_format.clone_from(&template);
+    refuse_keys_that_read_as_ids(&target, items)?;
+
+    let numbers = numbers_for(cfg, items)?;
+
+    let number_of = |id: Id| -> Result<Id> {
+        match id {
+            Id::Uuid(u) => numbers
+                .get(&u)
+                .map(|n| Id::Num(*n))
+                .ok_or_else(|| anyhow::anyhow!("unresolved reference {u}")),
+            Id::Num(_) => Ok(id),
+        }
+    };
+    let mut writes = Vec::new();
+    let mut removals = Vec::new();
+    let mut destinations = BTreeSet::new();
+    for item in items {
+        let Id::Uuid(uid) = item.id else {
+            bail!("{} has no UUID in a format-4 project", item.path.display());
+        };
+        let id = number_of(item.id)?;
+        let before = std::fs::read_to_string(&item.path)?;
+        let original: serde_yaml_ng::Mapping = serde_yaml_ng::from_str(&item.front)?;
+        let mut front = serde_yaml_ng::Mapping::new();
+        for (key, value) in original {
+            let mut value = value;
+            match key.as_str() {
+                Some("id") => {
+                    front.insert(key, id.yaml());
+                    front.insert("uid".into(), serde_yaml_ng::Value::String(uid.to_string()));
+                    continue;
+                }
+                Some("depends_on") => {
+                    value = serde_yaml_ng::Value::Sequence(
+                        item.meta
+                            .depends_on
+                            .iter()
+                            .map(|d| number_of(*d).map(Id::yaml))
+                            .collect::<Result<_>>()
+                            .with_context(|| format!("{}: depends_on", item.path.display()))?,
+                    );
+                }
+                Some(name)
+                    if cfg
+                        .all_ref_fields()
+                        .iter()
+                        .any(|f| f.name == name && f.by == crate::config::Addressing::Id) =>
+                {
+                    number_references(&mut value, &number_of)
+                        .with_context(|| format!("{}: {name}", item.path.display()))?;
+                }
+                _ => {}
+            }
+            front.insert(key, value);
+        }
+        let after = replace_frontmatter(&before, &front)?;
+        let parent = item.path.parent().context("item has no directory")?;
+        // Named as format 3 named it. A file that kept its old number
+        // through format 4 is already right, and keeps its history unbroken.
+        let destination = parent.join(target.filename_for(id, item.kind(), item.title()));
+        if !destinations.insert(destination.clone()) {
+            bail!("two items would be named {}", destination.display());
+        }
+        if destination == item.path {
+            writes.push(Replacement {
+                path: store.rel(&item.path),
+                before: Some(before),
+                after: Some(after),
+            });
+        } else {
+            if destination.exists() {
+                bail!(
+                    "{} is in the way of {}; move it aside before migrating",
+                    destination.display(),
+                    item.path.display()
+                );
+            }
+            writes.push(Replacement {
+                path: store.rel(&destination),
+                before: None,
+                after: Some(after),
+            });
+            removals.push(Replacement {
+                path: store.rel(&item.path),
+                before: Some(before),
+                after: None,
+            });
+        }
+    }
+    let map_path = cfg.items_dir().join(LEGACY_MAP);
+    if let Some(text) = read_optional(&map_path)? {
+        removals.push(Replacement {
+            path: store.rel(&map_path),
+            before: Some(text),
+            after: None,
+        });
+    }
+    let mut files = writes;
+    files.extend(removals);
+    files.push(config_replacement(cfg, 5, template.as_deref())?);
+    journal_and_apply(
+        cfg,
+        IdentityPlan {
+            version: 2,
+            target: 5,
+            files,
+        },
+    )
+}
+
+/// The number each format-4 item gets: the one it had, from the map, or for an
+/// item created since, the next free one in the order they were created.
+///
+/// Every number the map holds is spoken for, including those whose items have
+/// since been removed: a number is never handed to different work. So is every
+/// number any branch has used, through the ordinary allocator.
+fn numbers_for(cfg: &Config, items: &[crate::item::Item]) -> Result<BTreeMap<uuid::Uuid, u32>> {
+    let store = Store::new(cfg);
+    let legacy = cfg.identities.borrow().legacy.clone();
+    let mut numbers: BTreeMap<uuid::Uuid, u32> = BTreeMap::new();
+    for (number, id) in &legacy.ids {
+        let n: u32 = number.parse()?;
+        cfg.remember_id(Id::Num(n));
+        if let Id::Uuid(uid) = id {
+            numbers.insert(*uid, n);
+        }
+    }
+    let mut fresh: Vec<&crate::item::Item> = items
+        .iter()
+        .filter(|i| matches!(i.id, Id::Uuid(u) if !numbers.contains_key(&u)))
+        .collect();
+    fresh.sort_by(|a, b| {
+        a.meta
+            .created
+            .cmp(&b.meta.created)
+            .then_with(|| a.id.cmp(&b.id))
+    });
+    for item in fresh {
+        let Id::Uuid(uid) = item.id else { continue };
+        let Id::Num(n) = store.next_id(&[])? else {
+            bail!("the allocator returned a UUID");
+        };
+        numbers.insert(uid, n);
+    }
+    Ok(numbers)
+}
+
+/// What a dry run shows for format 4: the numbers items without one will get,
+/// which is the one thing about the migration nobody can work out beforehand.
+fn preview_numbers(cfg: &Config, items: &[crate::item::Item]) -> Result<()> {
+    let restored = cfg.identities.borrow().legacy.clone();
+    let template = IdFormat::compile(&restored.id_format)?;
+    let numbers = numbers_for(cfg, items)?;
+    let mut fresh: Vec<(u32, &crate::item::Item)> = items
+        .iter()
+        .filter_map(|i| match i.id {
+            Id::Uuid(u) if !restored.ids.values().any(|v| *v == i.id) => {
+                numbers.get(&u).map(|n| (*n, i))
+            }
+            _ => None,
+        })
+        .collect();
+    fresh.sort_by_key(|(n, _)| *n);
+    println!(
+        "\n  {} item(s) get back the number they had; {} created since are numbered:",
+        items.len() - fresh.len(),
+        fresh.len()
+    );
+    for (n, item) in fresh {
+        println!(
+            "    {} {} {}  {}",
+            style::dim(&item.id.compact()[..8]),
+            style::dim("->"),
+            style::bold(&template.render(n)),
+            item.title()
+        );
+    }
+    Ok(())
+}
+
+/// A key a reference names must not read as an id under the format arriving,
+/// or `milestone: cafe0042` could name either.
+fn refuse_keys_that_read_as_ids(target: &Config, items: &[crate::item::Item]) -> Result<()> {
     for item in items {
         if let Some(key) = item.key()
             && target.looks_like_id(key)
         {
             bail!(
-                "key `{key}` is reserved for identifiers in format 4; rename it and its key references before migrating"
+                "key `{key}` reads as an identifier in format {}; rename it and its key \
+                 references before migrating",
+                target.format()
             );
         }
     }
-    let report = crate::cmd::check::collect(cfg, &Store::new(cfg))?;
-    if !report.errors.is_empty() {
-        bail!(
-            "repair the legacy backlog before migrating:\n{}",
-            report.errors.join("\n")
-        );
-    }
-    let mut ids = BTreeMap::new();
-    let mut allocated = BTreeSet::new();
-    for item in items {
-        let Some(n) = item.id.legacy() else {
-            bail!(
-                "{} already has a UUID in a legacy project",
-                item.path.display()
-            );
-        };
-        let id = loop {
-            let candidate = Id::new()?;
-            if allocated.insert(candidate) {
-                break candidate;
-            }
-        };
-        if ids.insert(n.to_string(), id).is_some() {
-            bail!("legacy id {n} occurs more than once; repair it before migrating");
-        }
-    }
-    let map = LegacyMap {
-        version: 1,
-        id_format: cfg.project.id_format.clone().unwrap_or_else(|| {
-            if cfg.project.id_width == 0 {
-                "{n}".into()
-            } else {
-                format!("{{n:0{}}}", cfg.project.id_width)
-            }
-        }),
-        ids,
-    };
-    map.validate()?;
-    let mut files = Vec::new();
-    for item in items {
-        let before = std::fs::read_to_string(&item.path)?;
-        let mut front: serde_yaml_ng::Mapping = serde_yaml_ng::from_str(&item.front)?;
-        front.insert("id".into(), map.canonical(item.id).yaml());
-        for field in cfg
-            .all_ref_fields()
-            .into_iter()
-            .filter(|f| f.by == crate::config::Addressing::Id)
-        {
-            if let Some(value) = front.get_mut(serde_yaml_ng::Value::String(field.name.clone())) {
-                // Historical depends_on accepts comma-separated scalar input.
-                // Use its already-parsed meaning before mapping identities.
-                if field.name == "depends_on" {
-                    *value = serde_yaml_ng::Value::Sequence(
-                        item.meta
-                            .depends_on
-                            .iter()
-                            .map(|id| map.canonical(*id).yaml())
-                            .collect(),
-                    );
-                    continue;
-                }
-                rewrite_reference(value, &map)
-                    .with_context(|| format!("{}: {}", item.path.display(), field.name))?;
-            }
-        }
-        let after = replace_frontmatter(&before, &front)?;
-        files.push(Replacement {
-            path: Store::new(cfg).rel(&item.path),
-            before: Some(before),
-            after,
-        });
-    }
-    let map_path = cfg.items_dir().join(LEGACY_MAP);
-    if map_path.exists() {
-        bail!(
-            "{} already exists; refusing to overwrite an identity map",
-            map_path.display()
-        );
-    }
-    files.push(Replacement {
-        path: Store::new(cfg).rel(&map_path),
-        before: None,
-        after: toml::to_string_pretty(&map)?,
-    });
+    Ok(())
+}
+
+/// The configuration at its new format, written last.
+fn config_replacement(cfg: &Config, format: u32, id_format: Option<&str>) -> Result<Replacement> {
     let before = std::fs::read_to_string(cfg.root.join(CONFIG_FILE))?;
     let mut doc: toml_edit::DocumentMut = before.parse()?;
-    doc["format"] = toml_edit::value(4);
-    if let Some(project) = doc
-        .get_mut("project")
-        .and_then(toml_edit::Item::as_table_like_mut)
-    {
-        for field in ["id_format", "id_width", "id_start"] {
-            project.remove(field);
-        }
+    doc["format"] = toml_edit::value(i64::from(format));
+    if let Some(template) = id_format {
+        doc["project"]["id_format"] = toml_edit::value(template);
     }
-    files.push(Replacement {
+    Ok(Replacement {
         path: CONFIG_FILE.into(),
         before: Some(before),
-        after: doc.to_string(),
-    });
-    let plan = IdentityPlan { version: 1, files };
+        after: Some(doc.to_string()),
+    })
+}
+
+fn journal_and_apply(cfg: &Config, plan: IdentityPlan) -> Result<()> {
     validate_plan(cfg, &plan)?;
     crate::store::write_atomic(
         &cfg.items_dir().join(MIGRATION_JOURNAL),
         &serde_json::to_vec_pretty(&plan)?,
     )?;
     sync_directory(&cfg.items_dir())?;
-    resume_identities(cfg)
+    resume_identities(cfg).map(|_| ())
 }
 
-fn rewrite_reference(value: &mut serde_yaml_ng::Value, map: &LegacyMap) -> Result<()> {
+fn number_references(
+    value: &mut serde_yaml_ng::Value,
+    number_of: &dyn Fn(Id) -> Result<Id>,
+) -> Result<()> {
     use serde_yaml_ng::Value;
     match value {
         Value::Null => (),
         Value::Sequence(values) => {
             for value in values {
-                rewrite_reference(value, map)?;
+                number_references(value, number_of)?;
             }
         }
         _ => {
@@ -455,10 +692,7 @@ fn rewrite_reference(value: &mut serde_yaml_ng::Value, map: &LegacyMap) -> Resul
                 Value::Number(n) => n.to_string(),
                 _ => bail!("reference is not an identifier"),
             };
-            let Some(id) = map.resolve(&raw) else {
-                bail!("unresolved legacy reference `{raw}`");
-            };
-            *value = id.yaml();
+            *value = number_of(raw.parse::<Id>()?)?.yaml();
         }
     }
     Ok(())
@@ -502,7 +736,12 @@ fn read_optional(path: &std::path::Path) -> Result<Option<String>> {
 
 fn validate_plan(cfg: &Config, plan: &IdentityPlan) -> Result<()> {
     use std::path::{Component, Path};
-    if plan.version != 1 || plan.files.last().is_none_or(|f| f.path != CONFIG_FILE) {
+    if !matches!(plan.version, 1 | 2)
+        || plan
+            .files
+            .last()
+            .is_none_or(|f| f.path != CONFIG_FILE || f.after.is_none())
+    {
         bail!("invalid identity migration journal: version or final configuration replacement");
     }
     let mut paths = BTreeSet::new();
@@ -535,7 +774,7 @@ fn validate_plan(cfg: &Config, plan: &IdentityPlan) -> Result<()> {
                 .context("migration path has no project parent")?;
         }
         let current = read_optional(&path)?;
-        if current.as_deref() != Some(file.after.as_str()) && current != file.before {
+        if current != file.after && current != file.before {
             bail!(
                 "{} changed since migration was planned; preserve that edit and reconcile it with {} before resuming",
                 file.path,
@@ -543,23 +782,30 @@ fn validate_plan(cfg: &Config, plan: &IdentityPlan) -> Result<()> {
             );
         }
     }
-    let after: Config = toml::from_str(&plan.files.last().unwrap().after)?;
-    if after.format() != 4 || after.project.dir != cfg.project.dir {
+    let after: Config = toml::from_str(
+        plan.files
+            .last()
+            .and_then(|f| f.after.as_deref())
+            .unwrap_or_default(),
+    )?;
+    if after.format() != plan.target || after.project.dir != cfg.project.dir {
         bail!("invalid identity migration configuration target");
     }
-    let items = Store::new(cfg).load_all()?;
-    for item in items {
-        if !paths.contains(&Store::new(cfg).rel(&item.path)) {
+    // Listed rather than loaded: halfway through, no one format's reader can
+    // read every file, and that is exactly when this runs.
+    for path in crate::store::item_paths(&cfg.items_dir())? {
+        if !paths.contains(&Store::new(cfg).rel(&path)) {
             bail!(
                 "{} was added during migration; preserve it outside the item directory before resuming",
-                item.path.display()
+                path.display()
             );
         }
     }
     Ok(())
 }
 
-fn resume_identities(cfg: &Config) -> Result<()> {
+/// Finish what the journal records, and say which format it was going to.
+fn resume_identities(cfg: &Config) -> Result<u32> {
     let journal = cfg.items_dir().join(MIGRATION_JOURNAL);
     let plan: IdentityPlan = serde_json::from_str(&std::fs::read_to_string(&journal)?)
         .context("reading identity migration journal")?;
@@ -567,7 +813,7 @@ fn resume_identities(cfg: &Config) -> Result<()> {
     for file in &plan.files {
         let path = cfg.root.join(&file.path);
         let current = read_optional(&path)?;
-        if current.as_deref() == Some(&file.after) {
+        if current == file.after {
             continue;
         }
         if current != file.before {
@@ -576,11 +822,16 @@ fn resume_identities(cfg: &Config) -> Result<()> {
                 file.path
             );
         }
-        crate::store::write_atomic(&path, file.after.as_bytes())?;
+        match &file.after {
+            Some(text) => crate::store::write_atomic(&path, text.as_bytes())?,
+            None => std::fs::remove_file(&path)
+                .with_context(|| format!("removing {}", path.display()))?,
+        }
         sync_directory(path.parent().context("migration file has no parent")?)?;
     }
     std::fs::remove_file(&journal)?;
-    sync_directory(&cfg.items_dir())
+    sync_directory(&cfg.items_dir())?;
+    Ok(plan.target)
 }
 
 fn sync_directory(path: &std::path::Path) -> Result<()> {
@@ -607,14 +858,22 @@ struct Effect {
     /// Existing items rewritten, named. Empty is the good case and the common
     /// one, and saying so plainly is the point of all this.
     modified: Vec<String>,
+    /// Files deleted, named.
+    removed: Vec<String>,
     summary: String,
 }
 
 impl Effect {
     fn and(mut self, other: Effect) -> Effect {
-        self.rewritten.extend(other.rewritten);
+        // A file several steps rewrite is still one file to restore.
+        for f in other.rewritten {
+            if !self.rewritten.contains(&f) {
+                self.rewritten.push(f);
+            }
+        }
         self.created += other.created;
         self.modified.extend(other.modified);
+        self.removed.extend(other.removed);
         self
     }
 }
@@ -626,6 +885,9 @@ fn report(total: &Effect) -> String {
     for f in &total.rewritten {
         out += &format!("  {:<10} {f}\n", style::dim("rewritten"));
     }
+    for f in &total.removed {
+        out += &format!("  {:<10} {f}\n", style::dim("removed"));
+    }
     out += &format!(
         "  {:<10} {} new item(s)\n",
         style::dim("created"),
@@ -633,7 +895,7 @@ fn report(total: &Effect) -> String {
     );
     // The sentence somebody actually wants before running this on years of
     // work, printed only when it is true.
-    if total.modified.is_empty() {
+    if total.modified.is_empty() && total.removed.is_empty() {
         out += &format!(
             "\n{}\n",
             style::green("nothing already in the item directory will be changed.")
@@ -673,19 +935,28 @@ fn effect_of(from: u32, to: u32, cfg: &Config, items: &[crate::item::Item]) -> E
         (1, 2) => Effect {
             rewritten: vec![CONFIG_FILE.to_string()],
             created: cfg.milestones.len(),
-            modified: Vec::new(),
             summary: "milestones move from cairn.toml into items".into(),
+            ..Default::default()
         },
         (2, 3) => Effect {
             rewritten: vec![CONFIG_FILE.to_string()],
-            created: 0,
-            modified: Vec::new(),
             summary: "a type declares that it groups work".into(),
+            ..Default::default()
         },
-        (3, 4) => Effect {
-            rewritten: vec![CONFIG_FILE.to_string(), Store::new(cfg).rel(&cfg.items_dir().join(LEGACY_MAP))],
+        (3, 5) => Effect {
+            rewritten: vec![CONFIG_FILE.to_string()],
             modified: items.iter().map(|i| Store::new(cfg).rel(&i.path)).collect(),
-            summary: "immutable UUID identities and references; preserve legacy lookup, filenames, bodies and history".into(),
+            summary: "every item gains a `uid` tag; numbers, references, filenames and bodies are unchanged".into(),
+            ..Default::default()
+        },
+        (4, 5) => Effect {
+            rewritten: vec![CONFIG_FILE.to_string()],
+            removed: std::iter::once(cfg.items_dir().join(LEGACY_MAP))
+                .filter(|p| p.exists())
+                .map(|p| Store::new(cfg).rel(&p))
+                .collect(),
+            modified: items.iter().map(|i| Store::new(cfg).rel(&i.path)).collect(),
+            summary: "numbers return, restored from _legacy-ids.toml; each UUID becomes the item's `uid`; references and UUID-named files are renumbered".into(),
             ..Default::default()
         },
         _ => Effect {
@@ -797,6 +1068,7 @@ mod tests {
             created: 2,
             modified: Vec::new(),
             summary: String::new(),
+            ..Default::default()
         });
         assert!(out.contains("rewritten"), "{out}");
         assert!(out.contains("2 new item(s)"), "{out}");
@@ -817,6 +1089,7 @@ mod tests {
             created: 0,
             modified: Vec::new(),
             summary: String::new(),
+            ..Default::default()
         });
         assert!(out.contains("nothing else changes"), "{out}");
         assert!(!out.contains("remove the"), "{out}");
@@ -832,6 +1105,7 @@ mod tests {
             created: 0,
             modified: vec!["0001-a.md".into(), "0002-b.md".into()],
             summary: String::new(),
+            ..Default::default()
         });
         assert!(out.contains("careful:"), "{out}");
         assert!(

@@ -1,5 +1,6 @@
 ---
-id: b3d2770a-4f81-46dc-957c-d5f92cdbe69e
+id: 126
+uid: b3d2770a-4f81-46dc-957c-d5f92cdbe69e
 title: A bulk set re-reads every item file for every item it changes
 type: bug
 status: done

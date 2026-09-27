@@ -1,5 +1,6 @@
 ---
-id: aa63cada-f899-4eed-908c-8d2a66fc5500
+id: 28
+uid: aa63cada-f899-4eed-908c-8d2a66fc5500
 title: Keep a golden corpus of items that must always parse
 type: chore
 status: done

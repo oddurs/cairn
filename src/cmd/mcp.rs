@@ -427,7 +427,7 @@ fn create_item(a: &Value) -> Result<String> {
         id,
         meta: Default::default(),
         body: String::new(),
-        path: store.path_for(id, &title),
+        path: store.path_for(id, None, &title),
         front: String::new(),
         eol: Default::default(),
     };
@@ -488,6 +488,7 @@ fn create_item(a: &Value) -> Result<String> {
     if !item.meta.depends_on.is_empty() {
         crate::cmd::set::check_no_cycle(&store, &item)?;
     }
+    store.stamp_new(&mut item)?;
     crate::refs::validate_on_write(&cfg, &store, &item)?;
     item.save()?;
     drop(lock);

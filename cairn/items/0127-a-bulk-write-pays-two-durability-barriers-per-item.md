@@ -1,5 +1,6 @@
 ---
-id: 22c5b780-6a6f-46a5-8d3c-42f564ac7521
+id: 127
+uid: 22c5b780-6a6f-46a5-8d3c-42f564ac7521
 title: A bulk write pays two durability barriers per item
 type: bug
 status: dropped

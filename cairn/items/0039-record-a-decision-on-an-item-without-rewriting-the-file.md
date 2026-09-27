@@ -1,5 +1,6 @@
 ---
-id: 95816ca7-64a2-4e0c-813c-dc88ef721aff
+id: 39
+uid: 95816ca7-64a2-4e0c-813c-dc88ef721aff
 title: Record a decision on an item without rewriting the file
 type: feature
 status: done

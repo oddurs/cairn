@@ -240,15 +240,18 @@ local lock; read commands can still show healthy items when another file is
 damaged. Tests exercise interruptions, concurrent writers, old formats, and
 arbitrary inputs.
 
-Format 4 gives every item an immutable UUIDv4, without a server or shared
-counter. Type an unambiguous prefix (at least eight hex digits); store full
-IDs in scripts and references. Independently created work merges without
-renumbering. Conflicting edits to the same item still need review.
+Items are numbered, and a project says how numbers read: `0012`, `MP-12`, or
+`BUG-12` for one type beside `0013` for another, all from one counter. Each item
+also carries a hidden `uid` tag that never changes. A new number is one more
+than the highest any worktree or branch has used, so parallel agents never
+collide; a collision between machines is renumbered at the merge, and the tag
+carries the references that came with the moved item. Conflicting edits to the
+same item still need review.
 
-This development line is **1.0.0-alpha.1**, not the stable 0.3 release.
-Upgrade Harrow before migrating a live project. `cairn migrate --dry-run`
-previews the change; migration retains old numeric lookup aliases, filenames,
-bodies, and Git history. Commit the migration once and carry it to other
+This development line is **1.0.0-alpha.1**, not the stable 0.3 release, and
+writes format 5. `cairn migrate --dry-run` previews the change: from format 3 it
+adds one `uid:` line per item; from format 4 it restores the numbers items had
+and keeps each UUID as the tag. Commit the migration once and carry it to other
 branches; do not migrate them independently. See the
 [migration contract](spec/README.md) and [collaboration guide](doc/COLLABORATION.md).
 

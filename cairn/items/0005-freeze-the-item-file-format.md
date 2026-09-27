@@ -1,5 +1,6 @@
 ---
-id: c56a35f1-b79e-4640-86c4-670dd8a3864a
+id: 5
+uid: c56a35f1-b79e-4640-86c4-670dd8a3864a
 title: Freeze the item file format
 type: docs
 status: done

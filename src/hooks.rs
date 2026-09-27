@@ -76,6 +76,10 @@ pub fn item(cfg: &Config, store: &Store, event: Event, it: &Item) {
     let env = vec![
         ("CAIRN_ITEM_ID", it.id.to_string()),
         ("CAIRN_ITEM_REF", cfg.format_id(it.id)),
+        (
+            "CAIRN_ITEM_UID",
+            it.meta.uid.map(|u| u.to_string()).unwrap_or_default(),
+        ),
         ("CAIRN_ITEM_PATH", store.rel(&it.path)),
         ("CAIRN_ITEM_TITLE", it.title().to_string()),
         ("CAIRN_ITEM_STATUS", it.status().to_string()),

@@ -1,36 +1,30 @@
-"""Fixed native identities for reproducible recordings of real command output.
+"""Fixed tags for reproducible recordings of real command output.
 
-Importing an existing record preserves its UUID. Production creation still uses
-OS randomness; there is no seed or special identity mode in the program.
+Every item cairn creates gets a random `uid`, and a recording that changed on
+every run would be noise in every diff. The program has no seed or special
+identity mode, and should not: a tag is a line in a file, the file is the
+source of truth, and rewriting it is what anybody may do.
 """
-import json
-import subprocess
+import os
+import re
 
 
 def identity(n):
     return f"{n:08x}-0000-4000-8000-{n:012x}"
 
 
-def populate(cairn, work, env, extended=False):
-    items = [
-        {"title": "First usable version", "type": "milestone", "key": "v0.1",
-         "fields": {"due": "2026-12-01"}},
-        {"title": "Hardening", "type": "milestone", "key": "v0.2",
-         "fields": {"due": "2027-02-01"}},
-        {"title": "Support OAuth login", "type": "feature", "milestone": "v0.1",
-         "status": "doing" if extended else "backlog", "fields": {"priority": "p0"}},
-        {"title": "Rate-limit the public API", "type": "feature", "milestone": "v0.2",
-         "depends_on": [identity(3)], "fields": {"priority": "p1"}},
-    ]
-    if extended:
-        items.extend([
-            {"title": "Board shears on narrow terminals", "type": "bug",
-             "milestone": "v0.1", "status": "planned", "fields": {"priority": "p1"}},
-            {"title": "Document the export format", "type": "docs",
-             "milestone": "v0.2", "fields": {"priority": "p2"}},
-        ])
-    for n, item in enumerate(items, 1):
-        item.update(id=identity(n), created="2026-09-05", updated="2026-09-05")
-    subprocess.run([cairn, "import", "-"], cwd=work, env=env,
-                   input=json.dumps({"cairn": "2", "items": items}),
-                   text=True, capture_output=True, check=True)
+def pin_tags(work):
+    """Give each item the tag its number implies."""
+    items = os.path.join(work, "cairn", "items")
+    for name in sorted(os.listdir(items)):
+        if not name.endswith(".md"):
+            continue
+        path = os.path.join(items, name)
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+        number = re.search(r"^id: (\d+)$", text, re.M)
+        if number:
+            text = re.sub(r"^uid: .*$", f"uid: {identity(int(number.group(1)))}",
+                          text, count=1, flags=re.M)
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(text)

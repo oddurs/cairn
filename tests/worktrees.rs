@@ -88,7 +88,11 @@ fn next_leaves_out_work_held_elsewhere_and_says_so() {
 
     let offered = ids(&p.expect(&["next", "--ids"]));
     assert_eq!(offered.len(), 1, "{offered:?}");
-    assert!(p.id(2).starts_with(&offered[0]), "{offered:?}");
+    assert_eq!(
+        p.json(&["show", &offered[0], "--json"])["title"],
+        "Item 2",
+        "the free one is offered"
+    );
     assert_eq!(p.json(&["next", "--json"]).as_array().unwrap().len(), 1);
     assert_contains(
         &p.expect(&["next"]).stderr,
@@ -129,9 +133,14 @@ fn the_protocol_server_selects_and_refuses_the_same_way() {
     linked.expect(&["claim", &p.id(1)]);
 
     let next = p.mcp_call("next_items", serde_json::json!({}), None);
-    let text = tool_text(&next);
-    assert!(!text.contains(&p.id(1)), "held elsewhere:\n{text}");
-    assert!(text.contains(&p.id(2)), "free:\n{text}");
+    let listed: serde_json::Value = serde_json::from_str(&tool_text(&next)).unwrap();
+    let titles: Vec<&str> = listed["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|i| i["title"].as_str().unwrap())
+        .collect();
+    assert_eq!(titles, ["Item 2"], "only the free one is offered");
 
     let held = p.mcp_call("claim_item", serde_json::json!({ "id": p.id(1) }), None);
     assert!(refused(&held), "{held}");
@@ -139,7 +148,7 @@ fn the_protocol_server_selects_and_refuses_the_same_way() {
 
     let taken = p.mcp_call("claim_item", serde_json::json!({}), None);
     assert!(!refused(&taken), "{taken}");
-    assert_contains(&tool_text(&taken), &p.id(2), "took the free one");
+    assert_contains(&tool_text(&taken), "Item 2", "took the free one");
 }
 
 #[test]
@@ -169,27 +178,24 @@ fn a_worktree_that_never_touched_an_item_does_not_report_it() {
 fn items_filed_in_another_worktree_are_listed_committed_or_not() {
     let p = repository_of(1);
     let linked = worktree(&p, "feature");
-    let committed = linked.add("Committed there", &[]);
+    linked.add("Committed there", &[]);
     commit(&linked, "file one");
-    let loose = linked.add("Not yet added there", &[]);
+    linked.add("Not yet added there", &[]);
 
     let doc = p.json(&["worktrees", "--json"]);
     let there = &doc["worktrees"][0];
     assert_eq!(there["branch"], "feature");
-    let items = there["items"].as_array().unwrap();
-    let found: Vec<(&str, bool)> = items
+    let mut found: Vec<(&str, bool)> = there["items"]
+        .as_array()
+        .unwrap()
         .iter()
-        .map(|i| (i["id"].as_str().unwrap(), i["new"].as_bool().unwrap()))
+        .map(|i| (i["title"].as_str().unwrap(), i["new"].as_bool().unwrap()))
         .collect();
-    assert_eq!(found.len(), 2, "{found:?}");
-    for id in [&committed, &loose] {
-        assert!(
-            found
-                .iter()
-                .any(|(f, new)| f.starts_with(id.as_str()) && *new),
-            "{id} in {found:?}"
-        );
-    }
+    found.sort_unstable();
+    assert_eq!(
+        found,
+        [("Committed there", true), ("Not yet added there", true)]
+    );
     let text = p.expect(&["worktrees"]).stdout;
     assert_contains(&text, "feature", "branch heading");
     assert_contains(&text, "Not yet added there  (new)", "marked as filed there");
@@ -249,17 +255,24 @@ fn a_stale_claim_elsewhere_is_offered_and_taken_over_out_loud() {
 #[test]
 fn a_worktree_on_another_format_is_not_read_and_says_so() {
     let p = repository_of(1);
-    let linked = worktree(&p, "future");
+    let linked = worktree(&p, "other");
     linked.expect(&["claim", &p.id(1), "--as", "elsewhere"]);
-    let config = linked
-        .read("cairn.toml")
-        .replace("format = 4", "format = 5");
-    linked.write("cairn.toml", &config);
+    let ours = p.read("cairn.toml");
+    let line = ours
+        .lines()
+        .find(|l| l.starts_with("format = "))
+        .expect("the project records its format");
+    let format: u32 = line["format = ".len()..].trim().parse().unwrap();
+    let theirs = format - 1;
+    linked.write(
+        "cairn.toml",
+        &ours.replace(line, &format!("format = {theirs}")),
+    );
 
     p.expect(&["claim", &p.id(1), "--as", "here"]);
     assert_contains(
         &p.expect(&["worktrees"]).stderr,
-        "future is on format 5, not 4, and was not read",
+        &format!("other is on format {theirs}, not {format}, and was not read"),
         "a worktree left out is named",
     );
 }

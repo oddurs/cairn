@@ -124,13 +124,10 @@ fn seed(p: &Project) {
 }
 
 #[test]
-fn new_prints_a_short_unambiguous_identity() {
+fn new_prints_a_zero_padded_id() {
     let p = Project::new();
-    let first = p.add("First item", &[]);
-    let second = p.add("Second item", &[]);
-    assert_eq!(first.len(), 8);
-    assert_eq!(second.len(), 8);
-    assert_ne!(first, second);
+    assert_eq!(p.add("First item", &[]), "0001");
+    assert_eq!(p.add("Second item", &[]), "0002");
 }
 
 #[test]
@@ -265,9 +262,9 @@ fn closing_hides_an_item_and_reopening_restores_it() {
 #[test]
 fn the_filename_follows_the_title() {
     let p = seeded();
-    p.expect(&["set", &p.id(3), "title=Renamed item", "-q"]);
-    assert!(p.exists(&format!("cairn/items/{}-renamed-item.md", p.id(3))));
-    assert!(!p.exists(&format!("cairn/items/{}-third-item.md", p.id(3))));
+    p.expect(&["set", "3", "title=Renamed item", "-q"]);
+    assert!(p.exists("cairn/items/0003-renamed-item.md"));
+    assert!(!p.exists("cairn/items/0003-third-item.md"));
 }
 
 #[test]
@@ -293,12 +290,12 @@ fn check_rejects_an_unknown_status() {
 #[test]
 fn check_rejects_duplicate_ids() {
     let p = seeded();
-    p.write_uuid_fixture(
+    p.write(
         "cairn/items/0001-duplicate.md",
         "---\nid: 1\ntitle: Duplicate\nstatus: backlog\n---\nbody\n",
     );
     let out = p.fails(&["check"]);
-    assert_contains(&out.all(), "reconcile", "it names the remedy");
+    assert_contains(&out.all(), "renumber", "it names the remedy");
 }
 
 #[test]
@@ -730,12 +727,7 @@ fn dependencies_survive_an_export_and_import() {
     source.add("Foundation", &[]);
     source.add("Depends on the foundation", &[]);
     source.add("Also depends on it", &[]);
-    source.expect(&[
-        "set",
-        &source.id(2),
-        &source.id(3),
-        &format!("depends_on+={}", source.id(1)),
-    ]);
+    source.expect(&["set", "2", "3", "depends_on+=1"]);
 
     let document = source.expect(&["export"]).stdout;
 
@@ -751,18 +743,18 @@ fn dependencies_survive_an_export_and_import() {
         .iter()
         .find(|i| i["title"] == "Foundation")
         .expect("the foundation came back");
-    let foundation_id = foundation["id"].as_str().expect("UUID identity");
+    let foundation_id = foundation["id"].as_u64().expect("id");
 
     for title in ["Depends on the foundation", "Also depends on it"] {
         let item = items
             .iter()
             .find(|i| i["title"] == title)
             .unwrap_or_else(|| panic!("`{title}` came back"));
-        let deps: Vec<&str> = item["depends_on"]
+        let deps: Vec<u64> = item["depends_on"]
             .as_array()
             .expect("depends_on")
             .iter()
-            .map(|v| v.as_str().expect("UUID reference"))
+            .filter_map(serde_json::Value::as_u64)
             .collect();
         assert_eq!(
             deps,

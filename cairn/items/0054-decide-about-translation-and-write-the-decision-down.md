@@ -1,5 +1,6 @@
 ---
-id: b5d1ae51-45a9-4e49-b3cc-06fb0fea6b27
+id: 54
+uid: b5d1ae51-45a9-4e49-b3cc-06fb0fea6b27
 title: Decide about translation, and write the decision down
 type: docs
 status: done

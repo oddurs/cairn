@@ -102,7 +102,7 @@ impl Survey {
             handles.into_iter().filter_map(|h| h.join().ok()).collect()
         });
 
-        let id_format = cfg.id_format();
+        let formats = cfg.id_formats();
         let mut unread = Vec::new();
         let mut others: Vec<Other> = changed
             .into_iter()
@@ -121,7 +121,7 @@ impl Survey {
                     // A copy that does not parse is mid-edit, or broken where
                     // `cairn check` in that worktree will say so. Either way
                     // it tells this checkout nothing it could act on.
-                    .filter_map(|file| Item::load_with(file, Some(&id_format)).ok())
+                    .filter_map(|file| Item::load_with(file, &formats).ok())
                     .map(|item| Copy {
                         new: !ours.iter().any(|o| o.id == item.id),
                         item,

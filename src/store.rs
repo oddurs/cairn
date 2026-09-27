@@ -45,8 +45,11 @@ impl<'a> Store<'a> {
         if let Some(first) = problems.into_iter().next() {
             return Err(first);
         }
+        // A duplicated UUID is a copied file with nothing to repair it. A
+        // duplicated number is what a merge produces, and `renumber` has to be
+        // able to load it to fix it.
         let mut seen = std::collections::BTreeMap::new();
-        for item in &items {
+        for item in items.iter().filter(|_| self.cfg.uuid_ids()) {
             if let Some(previous) = seen.insert(item.id, &item.path) {
                 anyhow::bail!(
                     "duplicate identity {} in {} and {}; reconcile the copies before continuing",
@@ -70,14 +73,14 @@ impl<'a> Store<'a> {
         let mut paths = Vec::new();
         collect(&dir, &mut paths)?;
         paths.sort();
-        // Recovering an id from a filename needs the project's rendering.
-        let format = self.cfg.id_format();
+        // Recovering an id from a filename needs the project's renderings.
+        let formats = self.cfg.id_formats();
         let mut items = Vec::with_capacity(paths.len());
         let mut problems = Vec::new();
         for p in paths {
-            match Item::load_with(&p, Some(&format)) {
+            match Item::load_with(&p, &formats) {
                 Ok(mut item) => {
-                    if self.cfg.format() >= 4
+                    if self.cfg.uuid_ids()
                         && (item.meta.id.is_none()
                             || !item.id.is_uuid()
                             || item.meta.depends_on.iter().any(|id| !id.is_uuid())
@@ -96,7 +99,7 @@ impl<'a> Store<'a> {
                     } else {
                         // Full alternate spellings are accepted on read, but
                         // queries, JSON and the next write use one identity.
-                        if self.cfg.format() >= 4 {
+                        if self.cfg.uuid_ids() {
                             for def in self.cfg.all_ref_fields().iter().filter(|f| {
                                 f.by == crate::config::Addressing::Id && f.name != "depends_on"
                             }) {
@@ -122,7 +125,7 @@ impl<'a> Store<'a> {
             }
         }
         items.sort_by_key(|i| i.id);
-        self.cfg.remember_ids(items.iter().map(|i| i.id));
+        self.cfg.remember_items(&items);
         Ok((items, problems))
     }
 
@@ -209,39 +212,138 @@ impl<'a> Store<'a> {
             .ok_or_else(|| anyhow::anyhow!("no item with id {}", self.cfg.format_id(id)))
     }
 
-    /// An OS-random UUID, checked against the local set. The numeric allocator
-    /// remains only for the earlier steps of a legacy-format migration.
+    /// One more than the highest number anywhere this repository can see.
+    ///
+    /// Not only this directory: a sibling worktree's uncommitted items, and
+    /// every item file ever added on any local or remote-tracking branch. So
+    /// parallel agents, one worktree each, cannot take the same number, and a
+    /// number that was deleted, renumbered away or is waiting on an unmerged
+    /// branch is never handed out again. What this cannot see — a branch on
+    /// another machine that was never fetched — `renumber` repairs at the merge.
+    ///
+    /// `id_start` only ever applies to an empty project. Lowering it later does
+    /// nothing, because the maximum still wins.
     pub fn next_id(&self, items: &[Item]) -> Result<Id> {
-        if self.cfg.format() >= 4 {
-            loop {
-                let id = Id::new()?;
-                if !items.iter().any(|i| i.id == id)
-                    && !self
-                        .cfg
-                        .identities
-                        .borrow()
-                        .ids
-                        .as_ref()
-                        .is_some_and(|ids| ids.contains(&id))
-                {
-                    self.cfg.remember_id(id);
-                    return Ok(id);
+        let reserved = self
+            .cfg
+            .identities
+            .borrow()
+            .known
+            .iter()
+            .flat_map(|k| k.keys().filter_map(|id| id.number()).collect::<Vec<_>>())
+            .max();
+        let highest = items
+            .iter()
+            .filter_map(|i| i.id.number())
+            .chain(reserved)
+            .chain(self.highest_elsewhere())
+            .max();
+        let n = highest
+            .map_or(Some(self.cfg.project.id_start.max(1)), |n| n.checked_add(1))
+            .ok_or_else(|| anyhow::anyhow!("every item number up to {} is taken", u32::MAX))?;
+        let id = Id::Num(n);
+        self.cfg.remember_id(id);
+        Ok(id)
+    }
+
+    fn highest_elsewhere(&self) -> Option<u32> {
+        if let Some(cached) = self.cfg.identities.borrow().elsewhere.get() {
+            return *cached;
+        }
+        let found = self.numbers_elsewhere().into_iter().max();
+        let _ = self.cfg.identities.borrow().elsewhere.set(found);
+        found
+    }
+
+    /// Numbers in the filenames of item files other checkouts hold, or any
+    /// branch ever added. Nothing when this is not a repository.
+    fn numbers_elsewhere(&self) -> Vec<u32> {
+        let git = |args: &[&str]| -> Option<String> {
+            let out = std::process::Command::new("git")
+                .args(args)
+                .current_dir(&self.cfg.root)
+                .output()
+                .ok()?;
+            out.status
+                .success()
+                .then(|| String::from_utf8_lossy(&out.stdout).into_owned())
+        };
+        let Some(toplevel) = git(&["rev-parse", "--show-toplevel"]) else {
+            return Vec::new();
+        };
+        let toplevel = PathBuf::from(toplevel.trim());
+        let dir = self.cfg.items_dir();
+        let relative = dir
+            .canonicalize()
+            .ok()
+            .and_then(|d| {
+                d.strip_prefix(toplevel.canonicalize().ok()?)
+                    .ok()
+                    .map(Path::to_path_buf)
+            })
+            .unwrap_or_else(|| PathBuf::from(&self.cfg.project.dir));
+        let relative = relative.to_string_lossy().replace('\\', "/");
+
+        let mut names: Vec<String> = Vec::new();
+        // Renames off, so a renamed file is an add of its new name.
+        if let Some(out) = git(&[
+            "log",
+            "--all",
+            "--no-renames",
+            "--diff-filter=A",
+            "--name-only",
+            "--format=",
+            "--",
+            &relative,
+        ]) {
+            names.extend(out.lines().map(str::to_string));
+        }
+        if let Some(out) = git(&["worktree", "list", "--porcelain"]) {
+            for tree in out.lines().filter_map(|l| l.strip_prefix("worktree ")) {
+                let mut paths = Vec::new();
+                if collect(&Path::new(tree).join(&relative), &mut paths).is_ok() {
+                    names.extend(paths.iter().map(|p| p.to_string_lossy().into_owned()));
                 }
             }
         }
-        let n = items
+        let formats = self.cfg.id_formats();
+        names
             .iter()
-            .filter_map(|i| i.id.legacy())
-            .max()
-            .map_or(Some(self.cfg.project.id_start.max(1)), |n| n.checked_add(1))
-            .ok_or_else(|| {
-                anyhow::anyhow!("legacy identifier space exhausted; migrate to UUID identities")
-            })?;
-        Ok(Id::Legacy(n))
+            .filter_map(|path| {
+                let name = path.rsplit(['/', '\\']).next()?;
+                // A format-4 name leads with a UUID, whose first digits are
+                // not a number anybody allocated.
+                if name
+                    .get(..36)
+                    .is_some_and(|u| crate::identity::parse_uid(u).is_ok())
+                {
+                    return None;
+                }
+                formats.iter().find_map(|f| f.id_in_filename(name))
+            })
+            .collect()
     }
 
-    pub fn path_for(&self, id: Id, title: &str) -> PathBuf {
-        self.cfg.items_dir().join(self.cfg.filename_for(id, title))
+    pub fn path_for(&self, id: Id, kind: Option<&str>, title: &str) -> PathBuf {
+        self.cfg
+            .items_dir()
+            .join(self.cfg.filename_for(id, kind, title))
+    }
+
+    /// Finish an item that is about to be written for the first time: give it
+    /// its tag, name its file for its final type, and let this run's later
+    /// lookups know it exists.
+    pub fn stamp_new(&self, item: &mut Item) -> Result<()> {
+        if !self.cfg.uuid_ids() && item.meta.uid.is_none() {
+            item.meta.uid = Some(crate::identity::new_uid()?);
+        }
+        let parent = item
+            .path
+            .parent()
+            .map_or_else(|| self.cfg.items_dir(), Path::to_path_buf);
+        item.path = parent.join(self.cfg.filename_for(item.id, item.kind(), item.title()));
+        self.cfg.remember_item(item);
+        Ok(())
     }
 
     /// Keep the filename in step with the title, preserving whatever
@@ -250,7 +352,7 @@ impl<'a> Store<'a> {
         if self.cfg.legacy_filename_matches_title(item) {
             return Ok(Renamed::Unchanged);
         }
-        let want_name = self.cfg.filename_for(item.id, item.title());
+        let want_name = self.cfg.filename_for(item.id, item.kind(), item.title());
         let parent = item
             .path
             .parent()
@@ -275,6 +377,15 @@ impl<'a> Store<'a> {
             .to_string_lossy()
             .replace('\\', "/")
     }
+}
+
+/// Every item file under a directory, without reading one.
+pub fn item_paths(dir: &Path) -> Result<Vec<PathBuf>> {
+    let mut out = Vec::new();
+    if dir.exists() {
+        collect(dir, &mut out)?;
+    }
+    Ok(out)
 }
 
 /// Files an interrupted `renumber` moved aside.

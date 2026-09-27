@@ -20,7 +20,8 @@ item's body does not tell you enough to start, that is a bug in the item; say so
 Cairn is project memory versioned with the code. Harrow is the human interface
 for watching and triaging it; Git carries history and review. Keep the core
 small: try a schema choice, query, hook, or external reader before expanding
-the program. Item 0067 records the format-4 identity decision and its migration;
+the program. Item 0067 records the format-4 identity decision, and the decision
+that superseded it with format 5 is linked from the format-5 item;
 use the selected queue for the next engineering slice.
 
 | Status | Meaning here |
@@ -187,9 +188,9 @@ schema would not do. What it costs if you get it wrong is in the manual, under
 > same pull request, before the code.
 
 A specification written after the code is a description. Written before it, it
-is a design tool. The format-4 identity decision began with the full stored UUID,
-short command reference, frozen legacy alias, and recovery contracts; each had
-to be expressible without referring to a particular implementation.
+is a design tool. The format-5 identity work began with the number, the tag,
+per-type renderings and the migration back from format 4; each had to be
+expressible without referring to a particular implementation.
 
 Two things follow from doing it in that order. Somebody has to decide whether
 the change is additive, and therefore free under the compatibility rules,

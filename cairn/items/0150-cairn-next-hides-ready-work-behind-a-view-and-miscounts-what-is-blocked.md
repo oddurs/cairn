@@ -1,5 +1,6 @@
 ---
-id: d2178d3e-c637-48df-be42-60fafc12e212
+id: 150
+uid: d2178d3e-c637-48df-be42-60fafc12e212
 title: cairn next hides ready work behind a view and miscounts what is blocked
 type: bug
 status: done

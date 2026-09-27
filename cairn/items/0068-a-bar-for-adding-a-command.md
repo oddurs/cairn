@@ -1,5 +1,6 @@
 ---
-id: 8da2fb92-5891-4e57-9108-e9719688725d
+id: 68
+uid: 8da2fb92-5891-4e57-9108-e9719688725d
 title: A bar for adding a command
 type: chore
 status: done

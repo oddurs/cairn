@@ -1,5 +1,6 @@
 ---
-id: 78d66180-56c1-40fc-a89b-4fe88b1e5898
+id: 93
+uid: 78d66180-56c1-40fc-a89b-4fe88b1e5898
 title: cairn check never checks the schema itself
 type: feature
 status: done

@@ -1,0 +1,22 @@
+{
+  "assignee": null,
+  "body": "Body line one.\nBody line two.\n",
+  "category": "open",
+  "claimed": null,
+  "created": null,
+  "created_by": null,
+  "depends_on": [],
+  "fields": {},
+  "id": "00000009-0000-4000-8000-000000000009",
+  "key": null,
+  "labels": [],
+  "milestone": null,
+  "owner": null,
+  "ref": "00000009",
+  "source": null,
+  "status": "backlog",
+  "title": "Written on a system that uses CRLF",
+  "type": null,
+  "updated": null,
+  "closed_at": null
+}

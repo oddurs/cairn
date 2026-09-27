@@ -1,5 +1,6 @@
 ---
-id: 5c756383-b994-4bea-a5ce-726211c89e23
+id: 48
+uid: 5c756383-b994-4bea-a5ce-726211c89e23
 title: Choose an editor that exists on the platform
 type: bug
 status: done

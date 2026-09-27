@@ -1,5 +1,6 @@
 ---
-id: 61a7b092-679a-425f-b962-ae07cd171be3
+id: 115
+uid: 61a7b092-679a-425f-b962-ae07cd171be3
 title: A grouping type's items are unusable without a key
 type: bug
 status: done

@@ -63,8 +63,8 @@ fn version_carries_the_licence_notice() {
 #[test]
 fn diagnostics_name_the_program_the_file_and_the_line() {
     let p = seeded();
-    p.write_uuid_fixture(
-        &format!("cairn/items/{}-bad.md", p.id(90)),
+    p.write(
+        "cairn/items/0090-bad.md",
         "---\nid: 90\ntitle: Bad\nstatus: bogus\n---\nbody\n",
     );
     let first = p
@@ -78,7 +78,7 @@ fn diagnostics_name_the_program_the_file_and_the_line() {
         first.starts_with("cairn:"),
         "the program names itself: {first}"
     );
-    assert_contains(&first, &format!("{}-bad.md:4:", p.id(90)), "file and line");
+    assert_contains(&first, "0090-bad.md:4:", "file and line");
     assert_eq!(first.lines().count(), 1, "one diagnostic per line");
 }
 
@@ -244,11 +244,7 @@ fn a_nonsensical_board_width_is_clamped_not_obeyed() {
     let out = p
         .expect(&["board", "--width", "0", "--color", "never"])
         .stdout;
-    assert_contains(
-        &out,
-        &p.reference(1)[..7],
-        "the narrow board still shows the item reference",
-    );
+    assert_contains(&out, "0001", "an id still fits");
 }
 
 #[test]
@@ -269,8 +265,7 @@ fn the_clock_can_be_pinned_for_a_reproducible_run() {
         .unwrap();
     assert!(out.status.success());
 
-    let reference = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    let item = p.json(&["show", &reference, "--json"]);
+    let item = p.json(&["show", "1", "--json"]);
     assert_eq!(item["created"], "2026-09-05");
     assert_eq!(item["updated"], "2026-09-05");
 
@@ -285,8 +280,7 @@ fn the_clock_can_be_pinned_for_a_reproducible_run() {
         .output()
         .unwrap();
     assert!(out.status.success(), "a malformed value is not fatal");
-    let reference = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    assert!(p.json(&["show", &reference, "--json"])["created"].is_string());
+    assert!(p.json(&["show", "2", "--json"])["created"].is_string());
 }
 // --- where to take a problem ------------------------------------------------
 
@@ -375,10 +369,10 @@ fn bug_report_survives_a_project_that_will_not_load() {
 #[test]
 fn a_missing_editor_explains_how_to_choose_one() {
     let p = Project::new();
-    p.add("A thing", &[]);
+    p.expect(&["new", "A thing"]);
 
     let out = p.run_env(
-        &["edit", &p.id(1)],
+        &["edit", "1"],
         &[("EDITOR", Some("cairn-no-such-editor")), ("VISUAL", None)],
     );
     assert!(!out.ok(), "editing with a missing editor should fail");
@@ -401,10 +395,10 @@ fn a_missing_editor_explains_how_to_choose_one() {
 #[test]
 fn visual_is_preferred_to_editor() {
     let p = Project::new();
-    p.add("A thing", &[]);
+    p.expect(&["new", "A thing"]);
 
     let out = p.run_env(
-        &["edit", &p.id(1)],
+        &["edit", "1"],
         &[
             ("VISUAL", Some("cairn-visual-editor")),
             ("EDITOR", Some("cairn-plain-editor")),
@@ -423,10 +417,10 @@ fn visual_is_preferred_to_editor() {
 #[test]
 fn an_empty_editor_variable_is_ignored() {
     let p = Project::new();
-    p.add("A thing", &[]);
+    p.expect(&["new", "A thing"]);
 
     let out = p.run_env(
-        &["edit", &p.id(1)],
+        &["edit", "1"],
         &[("VISUAL", Some("")), ("EDITOR", Some("cairn-real-choice"))],
     );
     let said = out.all();

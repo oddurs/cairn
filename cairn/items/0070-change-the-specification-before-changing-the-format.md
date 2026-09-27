@@ -1,5 +1,6 @@
 ---
-id: 2697545a-9bb5-4c2c-ad41-82ba6df56d8e
+id: 70
+uid: 2697545a-9bb5-4c2c-ad41-82ba6df56d8e
 title: Change the specification before changing the format
 type: chore
 status: done

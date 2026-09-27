@@ -5,8 +5,8 @@ use crate::identity::{Id, LEGACY_MAP, LegacyMap, MIGRATION_JOURNAL};
 use anyhow::{Context, Result, bail};
 use serde::Deserialize;
 use std::cell::RefCell;
-use std::collections::BTreeSet;
 use std::collections::HashSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 pub const CONFIG_FILE: &str = "cairn.toml";
@@ -40,12 +40,24 @@ pub const CONFIG_FILE: &str = "cairn.toml";
 ///   needs a new format number, a major release, and a migration.
 /// * A project recording a format this build does not know is refused with an
 ///   explanation, rather than misread.
-pub const CURRENT_FORMAT: u32 = 4;
+pub const CURRENT_FORMAT: u32 = 5;
 
+/// What the loaded backlog says about each identity, so an id can be rendered
+/// and read back without the item in hand. Filled whenever items load.
 #[derive(Debug, Clone, Default)]
 pub struct IdentityIndex {
-    pub ids: Option<BTreeSet<Id>>,
+    pub known: Option<BTreeMap<Id, Known>>,
     pub legacy: LegacyMap,
+    /// The highest number other checkouts and branches hold, asked of git once
+    /// per run: an import allocating two hundred numbers asks once, not two
+    /// hundred times.
+    pub elsewhere: std::cell::OnceCell<Option<u32>>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct Known {
+    pub kind: Option<String>,
+    pub uid: Option<uuid::Uuid>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -209,6 +221,11 @@ pub struct ItemType {
     /// Markdown skeleton inserted into the body of new items of this type.
     #[serde(default)]
     pub template: Option<String>,
+    /// How this type writes its identifiers, overriding the project's:
+    /// `BUG-{n}`. Every type draws from the one counter, so the number alone
+    /// stays unique and retyping an item changes how it reads, not what it is.
+    #[serde(default)]
+    pub id_format: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Default)]
@@ -613,6 +630,16 @@ impl IdFormat {
         )
     }
 
+    /// The template this reads as, for a program that needs to write ids.
+    pub fn render_template(&self) -> String {
+        let n = if self.pad > 1 {
+            format!("{{n:0{}}}", self.pad)
+        } else {
+            "{n}".to_string()
+        };
+        format!("{}{n}{}", self.prefix, self.suffix)
+    }
+
     /// A typical rendered width, for budgeting filename length.
     pub fn width(&self) -> usize {
         self.prefix.chars().count() + self.pad.max(4) + self.suffix.chars().count()
@@ -645,6 +672,22 @@ impl IdFormat {
             let example = self.render(12);
             bail!("`{raw}` is not a valid item id (expected {example}, or 12)")
         }
+    }
+
+    /// The number, only when the text carries this template's own prefix and
+    /// suffix. What tells `BUG-42` from `42`, which every template accepts.
+    pub fn read_prefixed(&self, s: &str) -> Option<u32> {
+        if self.prefix.is_empty() && self.suffix.is_empty() {
+            return None;
+        }
+        let mut rest = strip_prefix_ci(s.trim(), &self.prefix)?;
+        if !self.suffix.is_empty() {
+            rest = strip_suffix_ci(rest, &self.suffix)?;
+        }
+        if rest.is_empty() || !rest.bytes().all(|b| b.is_ascii_digit()) {
+            return None;
+        }
+        rest.parse().ok()
     }
 
     /// The identifier a filename begins with, if it is one this format could
@@ -942,6 +985,7 @@ impl Config {
         if let Some(template) = &self.project.id_format {
             IdFormat::compile(template).map_err(|e| anyhow::anyhow!("{CONFIG_FILE}: {e}"))?;
         }
+        self.validate_type_formats()?;
         if self.statuses.is_empty() {
             bail!("{CONFIG_FILE}: at least one [[status]] must be defined");
         }
@@ -1079,19 +1123,32 @@ impl Config {
             .find(|s| s.category() == Category::Done)
     }
 
+    /// Whether identities are format 4's UUIDs. Every other format numbers.
+    pub fn uuid_ids(&self) -> bool {
+        self.format() == 4
+    }
+
+    /// An id as people read it, in its type's template when the backlog says
+    /// what type it is.
     pub fn format_id(&self, id: Id) -> String {
-        if let Some(n) = id.legacy() {
-            return self.id_format().render(n);
+        if let Some(n) = id.number() {
+            let index = self.identities.borrow();
+            let kind = index
+                .known
+                .as_ref()
+                .and_then(|k| k.get(&id))
+                .and_then(|k| k.kind.as_deref());
+            return self.id_format_for(kind).render(n);
         }
         let index = self.identities.borrow();
-        let Some(ids) = &index.ids else {
+        let Some(known) = &index.known else {
             return id.to_string();
         };
         let compact = id.compact();
         for width in 8..=32 {
             let prefix = &compact[..width];
-            if !ids
-                .iter()
+            if !known
+                .keys()
                 .any(|other| *other != id && other.compact().starts_with(prefix))
                 && index.legacy.resolve(prefix).is_none_or(|other| other == id)
             {
@@ -1099,6 +1156,15 @@ impl Config {
             }
         }
         id.to_string()
+    }
+
+    /// An id as an item of this type would show it, for an item the index
+    /// has not met yet.
+    pub fn format_id_as(&self, id: Id, kind: Option<&str>) -> String {
+        match id.number() {
+            Some(n) => self.id_format_for(kind).render(n),
+            None => self.format_id(id),
+        }
     }
 
     /// The project's identifier rendering.
@@ -1117,16 +1183,151 @@ impl Config {
         }
     }
 
-    /// Read an identifier the user typed: the rendered form, or the bare
-    /// number, or either with a leading `#`.
-    ///
-    /// Both are accepted because requiring a prefix somebody already knows is
-    /// friction for nothing, and because every reference written before the
-    /// project adopted a key is a bare number.
-    pub fn parse_id(&self, s: &str) -> Result<Id> {
-        if self.format() < 4 {
-            return self.id_format().read(s).map(Id::Legacy);
+    /// The rendering for items of a type: its own template, or the project's.
+    pub fn id_format_for(&self, kind: Option<&str>) -> IdFormat {
+        kind.and_then(|k| self.item_type(k))
+            .and_then(|t| t.id_format.as_deref())
+            .and_then(|t| IdFormat::compile(t).ok())
+            .unwrap_or_else(|| self.id_format())
+    }
+
+    /// Every rendering an id in a filename could have been written in: the
+    /// project's, then each type's.
+    pub fn id_formats(&self) -> Vec<IdFormat> {
+        std::iter::once(self.id_format())
+            .chain(self.type_formats().into_iter().map(|(_, f)| f))
+            .collect()
+    }
+
+    /// Every template a type declares, with the type it belongs to.
+    fn type_formats(&self) -> Vec<(&str, IdFormat)> {
+        self.types
+            .iter()
+            .filter_map(|t| {
+                let template = t.id_format.as_deref()?;
+                Some((t.name.as_str(), IdFormat::compile(template).ok()?))
+            })
+            .collect()
+    }
+
+    /// A type's template must compile, and must not read like another's:
+    /// `BUG-42` has to say which type it names, or the check that catches a
+    /// mistyped prefix has nothing to check against.
+    fn validate_type_formats(&self) -> Result<()> {
+        let mut seen: Vec<(String, String)> = vec![{
+            let f = self.id_format();
+            (f.prefix.to_lowercase(), f.suffix.to_lowercase())
+        }];
+        for t in &self.types {
+            let Some(template) = &t.id_format else {
+                continue;
+            };
+            let f = IdFormat::compile(template)
+                .map_err(|e| anyhow::anyhow!("{CONFIG_FILE}: type `{}`: {e}", t.name))?;
+            if f.prefix.is_empty() && f.suffix.is_empty() {
+                bail!(
+                    "{CONFIG_FILE}: type `{}`: id_format `{template}` has no prefix or \
+                     suffix, so it cannot be told from the project's own; drop it to \
+                     inherit the project's, or give it one like `{}-{{n}}`",
+                    t.name,
+                    t.name.to_uppercase()
+                );
+            }
+            let shape = (f.prefix.to_lowercase(), f.suffix.to_lowercase());
+            if seen.contains(&shape) {
+                bail!(
+                    "{CONFIG_FILE}: type `{}`: id_format `{template}` reads the same \
+                     as another template, so an id written that way could name either",
+                    t.name
+                );
+            }
+            seen.push(shape);
         }
+        Ok(())
+    }
+
+    /// Read an identifier the user typed.
+    ///
+    /// A number in any spelling the project writes: bare, padded, with `#`, or
+    /// in the project's or a type's template. A type's prefix is checked
+    /// against the item, so `BUG-42` for a feature is refused rather than
+    /// quietly meaning `FEAT-42`. The tag works too, whole or as a prefix of at
+    /// least eight hex digits with a letter in it — which is what keeps format
+    /// 4 references, in commit trailers and notes, pointing somewhere.
+    pub fn parse_id(&self, s: &str) -> Result<Id> {
+        if self.uuid_ids() {
+            return self.parse_uuid_id(s);
+        }
+        let raw = s.trim().trim_start_matches('#').trim();
+        if !raw.is_empty() && raw.bytes().all(|b| b.is_ascii_digit()) {
+            return raw
+                .parse::<u32>()
+                .map(Id::Num)
+                .map_err(|_| anyhow::anyhow!("`{s}` is not a valid item id"));
+        }
+        for (kind, format) in self.type_formats() {
+            if let Some(n) = format.read_prefixed(raw) {
+                let id = Id::Num(n);
+                self.ensure_loaded()?;
+                let index = self.identities.borrow();
+                if let Some(actual) = index
+                    .known
+                    .as_ref()
+                    .and_then(|k| k.get(&id))
+                    .and_then(|k| k.kind.as_deref())
+                    .filter(|actual| !actual.eq_ignore_ascii_case(kind))
+                {
+                    bail!(
+                        "`{s}` names a {kind}, but {n} is a {actual} — {}",
+                        self.id_format_for(Some(actual)).render(n)
+                    );
+                }
+                return Ok(id);
+            }
+        }
+        if let Ok(n) = self.id_format().read(raw) {
+            return Ok(Id::Num(n));
+        }
+        if let Ok(uid) = crate::identity::parse_uid(raw) {
+            return self.by_uid(s, |u| u == uid);
+        }
+        if crate::identity::is_uid_prefix(raw) {
+            let prefix = raw.to_ascii_lowercase();
+            return self.by_uid(s, |u| u.simple().to_string().starts_with(&prefix));
+        }
+        let example = self.id_format().render(12);
+        bail!("`{s}` is not a valid item id (expected {example}, or 12)")
+    }
+
+    /// The one item whose tag matches, refusing none and refusing several.
+    fn by_uid(&self, s: &str, matches: impl Fn(uuid::Uuid) -> bool) -> Result<Id> {
+        self.ensure_loaded()?;
+        let index = self.identities.borrow();
+        let found: Vec<Id> = index
+            .known
+            .iter()
+            .flatten()
+            .filter(|(_, k)| k.uid.is_some_and(&matches))
+            .map(|(id, _)| *id)
+            .collect();
+        match found.as_slice() {
+            [id] => Ok(*id),
+            [] => bail!("`{s}` is not the tag of any item"),
+            _ => bail!(
+                "`{s}` is the start of {} items' tags; use more of it",
+                found.len()
+            ),
+        }
+    }
+
+    fn ensure_loaded(&self) -> Result<()> {
+        if self.identities.borrow().known.is_none() {
+            crate::store::Store::new(self).load_all()?;
+        }
+        Ok(())
+    }
+
+    fn parse_uuid_id(&self, s: &str) -> Result<Id> {
         let raw = s.trim().trim_start_matches('#').trim();
         if (raw.len() == 32 || raw.len() == 36)
             && let Ok(id) = raw.parse::<Id>()
@@ -1134,9 +1335,7 @@ impl Config {
         {
             return Ok(id);
         }
-        if self.identities.borrow().ids.is_none() {
-            crate::store::Store::new(self).load_all()?;
-        }
+        self.ensure_loaded()?;
         let index = self.identities.borrow();
         let mut matches = BTreeSet::new();
         if let Some(id) = index.legacy.resolve(raw) {
@@ -1144,7 +1343,7 @@ impl Config {
         }
         if (8..=32).contains(&raw.len()) && raw.bytes().all(|b| b.is_ascii_hexdigit()) {
             let prefix = raw.to_ascii_lowercase();
-            for id in index.ids.iter().flatten() {
+            for id in index.known.iter().flat_map(BTreeMap::keys) {
                 if id.is_uuid() && id.compact().starts_with(&prefix) {
                     matches.insert(*id);
                 }
@@ -1181,29 +1380,78 @@ impl Config {
         Ok(())
     }
 
-    pub fn remember_ids(&self, ids: impl IntoIterator<Item = Id>) {
-        self.identities.borrow_mut().ids = Some(ids.into_iter().collect());
+    /// Merged rather than replaced: a reload in the middle of a command must
+    /// not forget an item this run created but has not written yet, or a
+    /// number it has already handed out.
+    pub fn remember_items(&self, items: &[crate::item::Item]) {
+        let mut index = self.identities.borrow_mut();
+        let known = index.known.get_or_insert_with(BTreeMap::new);
+        for item in items {
+            known.insert(item.id, Self::known(item));
+        }
     }
 
+    pub fn remember_item(&self, item: &crate::item::Item) {
+        self.identities
+            .borrow_mut()
+            .known
+            .get_or_insert_with(BTreeMap::new)
+            .insert(item.id, Self::known(item));
+    }
+
+    /// Reserve an identity before its item exists, so a second allocation in
+    /// the same run cannot hand it out again.
     pub fn remember_id(&self, id: Id) {
         self.identities
             .borrow_mut()
-            .ids
-            .get_or_insert_with(BTreeSet::new)
-            .insert(id);
+            .known
+            .get_or_insert_with(BTreeMap::new)
+            .entry(id)
+            .or_default();
     }
 
+    fn known(item: &crate::item::Item) -> Known {
+        Known {
+            kind: item.kind().map(str::to_string),
+            uid: item.meta.uid,
+        }
+    }
+
+    /// The id an item has now, for an id read out of history.
+    ///
+    /// Format 4 wrote UUIDs, and a format-4 migration mapped old numbers onto
+    /// them. Since format 5, a UUID is a tag, and it resolves to whichever item
+    /// carries it today — which is how a revision from before a renumber, or
+    /// from the format-4 months, is recognised as the same work.
     pub fn canonical_id(&self, id: Id) -> Id {
-        self.identities.borrow().legacy.canonical(id)
+        if self.uuid_ids() {
+            return self.identities.borrow().legacy.canonical(id);
+        }
+        let Id::Uuid(uid) = id else {
+            return id;
+        };
+        let _ = self.ensure_loaded();
+        self.identities
+            .borrow()
+            .known
+            .iter()
+            .flatten()
+            .find(|(_, k)| k.uid == Some(uid))
+            .map_or(id, |(current, _)| *current)
     }
 
     /// Reserve the identifier namespace even before a matching item exists.
     pub fn looks_like_id(&self, raw: &str) -> bool {
         let raw = raw.trim().trim_start_matches('#');
         self.id_format().read(raw).is_ok()
-            || (self.format() >= 4
+            || self
+                .type_formats()
+                .iter()
+                .any(|(_, f)| f.read_prefixed(raw).is_some())
+            || crate::identity::is_uid_prefix(raw)
+            || raw.parse::<Id>().is_ok_and(Id::is_uuid)
+            || (self.uuid_ids()
                 && ((8..=32).contains(&raw.len()) && raw.bytes().all(|b| b.is_ascii_hexdigit())
-                    || raw.parse::<Id>().is_ok_and(Id::is_uuid)
                     || self.identities.borrow().legacy.resolve(raw).is_some()))
     }
 
@@ -1252,28 +1500,27 @@ impl Config {
 
     /// Bytes available for the slug part of a filename, once the id prefix,
     /// separator and `.md` extension are accounted for.
-    pub fn slug_budget(&self) -> usize {
+    pub fn slug_budget(&self, kind: Option<&str>) -> usize {
         self.project
             .filename_max
             // The rendered identifier, the separating dash, and ".md".
-            .saturating_sub(if self.format() >= 4 {
+            .saturating_sub(if self.uuid_ids() {
                 36 + 4
             } else {
-                self.id_format().width() + 4
+                self.id_format_for(kind).width() + 4
             })
             .max(8)
     }
 
-    /// The filename an item with this id and title should have.
-    pub fn filename_for(&self, id: Id, title: &str) -> String {
+    /// The filename an item with this id, type and title should have.
+    pub fn filename_for(&self, id: Id, kind: Option<&str>, title: &str) -> String {
         format!(
             "{}-{}.md",
-            if id.is_uuid() {
-                id.to_string()
-            } else {
-                self.format_id(id)
+            match id.number() {
+                Some(n) => self.id_format_for(kind).render(n),
+                None => id.to_string(),
             },
-            crate::item::slug(title, self.slug_budget())
+            crate::item::slug(title, self.slug_budget(kind))
         )
     }
 }
@@ -1281,6 +1528,7 @@ impl Config {
 /// Field names that are always present on an item and cannot be redefined.
 pub const RESERVED_FIELDS: &[&str] = &[
     "id",
+    "uid",
     "key",
     "title",
     "type",

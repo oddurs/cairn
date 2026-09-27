@@ -1,5 +1,6 @@
 ---
-id: 9f99e6fe-6c8d-4285-a1a8-88a0b53e2c93
+id: 2
+uid: 9f99e6fe-6c8d-4285-a1a8-88a0b53e2c93
 title: Ship shell completions and a man page with the release
 type: chore
 status: done

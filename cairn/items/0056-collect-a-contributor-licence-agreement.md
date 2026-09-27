@@ -1,5 +1,6 @@
 ---
-id: 441cb3e4-a775-4c81-bf79-39496c539c31
+id: 56
+uid: 441cb3e4-a775-4c81-bf79-39496c539c31
 title: Collect a contributor licence agreement
 type: chore
 status: dropped

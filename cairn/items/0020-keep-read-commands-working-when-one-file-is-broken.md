@@ -1,5 +1,6 @@
 ---
-id: 81dcef7b-d702-4eb3-8ae0-51c94cc101c8
+id: 20
+uid: 81dcef7b-d702-4eb3-8ae0-51c94cc101c8
 title: Keep read commands working when one file is broken
 type: bug
 status: done

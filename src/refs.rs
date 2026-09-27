@@ -298,6 +298,56 @@ pub fn is_many(def: &FieldDef) -> bool {
     def.cardinality == Cardinality::Many
 }
 
+/// The ids an item names through an id-addressed field, which `depends_on` is.
+/// A field holding anything that does not read as an id is skipped: that is a
+/// `cairn check` error, and guessing at it would be worse.
+pub fn ids_in(item: &Item, def: &FieldDef) -> Option<Vec<Id>> {
+    if def.name == "depends_on" {
+        return Some(item.meta.depends_on.clone());
+    }
+    values(item, def)
+        .iter()
+        .map(|v| v.trim().trim_start_matches('#').parse::<Id>().ok())
+        .collect()
+}
+
+/// Rewrite what an item names through every id-addressed field, one field at
+/// a time. Whether anything changed, so a caller writes only what it touched.
+pub fn edit_id_refs(
+    cfg: &Config,
+    item: &mut Item,
+    mut edit: impl FnMut(&FieldDef, Vec<Id>) -> Vec<Id>,
+) -> bool {
+    let mut changed = false;
+    for def in cfg
+        .all_ref_fields()
+        .iter()
+        .filter(|f| f.by == Addressing::Id)
+    {
+        let Some(before) = ids_in(item, def) else {
+            continue;
+        };
+        if before.is_empty() {
+            continue;
+        }
+        let mut after = edit(def, before.clone());
+        let mut seen = HashSet::new();
+        after.retain(|id| seen.insert(*id));
+        if after == before {
+            continue;
+        }
+        changed = true;
+        if def.name == "depends_on" {
+            item.meta.depends_on = after;
+        } else if is_many(def) {
+            item.set_extra_ids(&def.name, &after);
+        } else {
+            item.set_extra_id(&def.name, after.first().copied());
+        }
+    }
+    changed
+}
+
 /// Refuse a write that leaves a ref naming nothing, or closing a cycle.
 ///
 /// Both are things `cairn check` reports, and an ordinary command must not be
@@ -772,7 +822,7 @@ fn as_item(cfg: &Config, id: Id, m: &crate::config::Milestone) -> Item {
         id,
         meta: Default::default(),
         body: String::new(),
-        path: cfg.items_dir().join(cfg.filename_for(id, &title)),
+        path: cfg.items_dir().join(cfg.filename_for(id, None, &title)),
         front: String::new(),
         eol: Default::default(),
     };
@@ -792,8 +842,8 @@ fn as_item(cfg: &Config, id: Id, m: &crate::config::Milestone) -> Item {
     }
     // Declaration order is the order, which is what the chain the migration
     // writes will encode permanently.
-    if let Some(n) = id.legacy().filter(|n| *n > 1) {
-        item.meta.depends_on = vec![Id::Legacy(n - 1)];
+    if let Some(n) = id.number().filter(|n| *n > 1) {
+        item.meta.depends_on = vec![Id::Num(n - 1)];
     }
     item
 }

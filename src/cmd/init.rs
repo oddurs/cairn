@@ -148,7 +148,7 @@ pub fn run(args: Args) -> Result<i32> {
             ),
             ("later", "Someday", None, "Good ideas without a date yet."),
         ] {
-            let id = Id::new()?;
+            let id = store::Store::new(&cfg).next_id(&[])?;
             let path = write_milestone(&cfg, &items_dir, id, previous, key, title, due, why)?;
             previous = Some(id);
             println!(
@@ -161,7 +161,7 @@ pub fn run(args: Args) -> Result<i32> {
 
     if !args.bare {
         // After the milestones, and pointing at the first of them.
-        let id = Id::new()?;
+        let id = store::Store::new(&cfg).next_id(&[])?;
         let milestone = has_milestones.then_some("v0.1");
         let path = write_example(&cfg, &items_dir, id, milestone)?;
         println!(
@@ -212,8 +212,9 @@ fn write_example(cfg: &Config, dir: &Path, id: Id, milestone: Option<&str>) -> R
                 .find(|t| !cfg.is_container(Some(&t.name)))
                 .map(|t| t.name.clone())
         });
-    let mut front = format!("---\nid: {id}\ntitle: Adopt cairn for the roadmap\n");
-    if let Some(k) = kind {
+    let uid = crate::identity::new_uid()?;
+    let mut front = format!("---\nid: {id}\nuid: {uid}\ntitle: Adopt cairn for the roadmap\n");
+    if let Some(k) = &kind {
         front.push_str(&format!("type: {k}\n"));
     }
     front.push_str(&format!("status: {}\n", cfg.initial_status()));
@@ -224,10 +225,7 @@ fn write_example(cfg: &Config, dir: &Path, id: Id, milestone: Option<&str>) -> R
     front.push_str(&format!("created: {today}\nupdated: {today}\n---\n"));
     front.push_str(EXAMPLE_BODY);
 
-    let path = dir.join(format!(
-        "{}-adopt-cairn-for-the-roadmap.md",
-        cfg.format_id(id)
-    ));
+    let path = dir.join(cfg.filename_for(id, kind.as_deref(), "Adopt cairn for the roadmap"));
     crate::store::write_atomic(&path, front.as_bytes())?;
     Ok(path)
 }
@@ -265,11 +263,12 @@ const STANDARD: &str = r#"# cairn.toml — the schema for this project's roadmap
 
 # On-disk format version. cairn refuses to open a project written in a format it
 # does not know, rather than misreading it. See "Compatibility" in the manual.
-format = 4
+format = 5
 
 [project]
 name = "{{name}}"
 dir = "{{dir}}"           # where item files live, relative to this file
+# id_format = "ABC-{n}"   # how ids read; the default is 0001
 default_type = "feature"
 default_status = "backlog"
 # filename_max = 255      # longest filename your filesystem accepts, in bytes;
@@ -298,6 +297,7 @@ template = """
 name = "bug"
 icon = "!"
 color = "red"
+# id_format = "BUG-{n}"   # a type may read its own way; the number is shared
 template = """
 ## What happens
 
@@ -498,7 +498,7 @@ const MINIMAL: &str = r#"# cairn.toml — roadmap and issue schema.
 # Start here and add types, fields, milestones and views as you need them.
 # See `cairn init --preset standard` for a fully commented example.
 
-format = 4
+format = 5
 
 [project]
 name = "{{name}}"
@@ -556,7 +556,7 @@ fn write_milestone(
     due: Option<&str>,
     body: &str,
 ) -> Result<std::path::PathBuf> {
-    let path = items_dir.join(cfg.filename_for(id, title));
+    let path = items_dir.join(cfg.filename_for(id, None, title));
     let mut item = crate::item::Item {
         id,
         meta: Default::default(),
@@ -578,8 +578,9 @@ fn write_milestone(
         item.set_extra("due", Some(crate::item::Field::Text(d.to_string())));
     }
     item.set_body(body);
+    store::Store::new(cfg).stamp_new(&mut item)?;
     item.save()?;
-    Ok(path)
+    Ok(item.path)
 }
 
 /// Start from another project's schema.
