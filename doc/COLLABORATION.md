@@ -1,15 +1,34 @@
 # The daily loop across Git working copies
 
 Cairn records intent and evidence beside code. Git owns transport, branches,
-review and commits. No claim is a distributed lock.
+review and commits. No claim is a distributed lock; within one repository on
+one machine, claims are seen across worktrees.
 
 ## Assign before splitting
 
 In one item directory, `claim --next --view next` chooses and claims under one
-lock. A second writer sees that claim. A separate branch, linked worktree or
-clone has its own files: both can successfully claim the same item.
+lock. A second writer sees that claim.
 
-Agree on assignments before splitting work. Carry the claim in a shared base
+A linked worktree has its own files, so its claim is not in yours until the
+branch merges. Cairn reads it anyway: `next` and `claim` ask Git which items
+each other worktree of the repository has changed since it diverged from this
+one, uncommitted edits included. An item one of them has claimed or finished is
+not offered, and `claim <ID>` refuses it, naming the branch, unless `--force`.
+A claim also holds a lock in Git's common directory, so two worktrees claiming
+at once cannot both take the same item.
+
+```sh
+cairn worktrees          # what every other worktree has changed or filed
+cairn show <ID>          # an `elsewhere` line per branch that changed it
+```
+
+Nothing is written: the record, filters and `list` stay this checkout's. Only
+format 4 and later are read, and only worktrees on the same format. A copy a
+branch merely carries from before `main` moved is not work, and is ignored.
+
+A clone has its own files and its own Git directory: it is not read, and both
+can successfully claim the same item. Agree on assignments before splitting
+work across clones. Carry the claim in a shared base
 commit through the repository's normal review process, or explicitly assign
 different items through your coordinator. Do not interpret a local successful
 claim as a remote reservation. A direct user assignment can name an item
@@ -112,5 +131,6 @@ cairn show <ID>
 Use the actual base branch. The item says why, the code shows how, and the
 acceptance criteria say what was verified. History remains ordinary Git history.
 Executable examples live in `tests/collaboration.rs`: local exclusion,
-committed handoff, independent worktree claims, clone setup, hook paths, branch
+committed handoff, claims seen across worktrees, clone setup, hook paths, branch
 creation without renumbering, rebase, cherry-pick, and review.
+`tests/worktrees.rs` covers what is and is not read from other worktrees.

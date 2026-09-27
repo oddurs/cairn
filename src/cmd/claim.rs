@@ -11,6 +11,7 @@ use crate::config::{Category, Config};
 use crate::filter::Ctx;
 use crate::lock::Lock;
 use crate::store::{Store, today, whoami};
+use crate::worktree::Survey;
 use crate::{Assign, hooks, style};
 use anyhow::{Result, bail};
 use clap::ArgAction;
@@ -82,10 +83,13 @@ pub fn claim(args: ClaimArgs) -> Result<i32> {
     let store = Store::new(&cfg);
     // Taken before anything is read, so choosing an item, checking who holds it
     // and writing the claim are one indivisible step. Without it two claimers
-    // can both pass the check before either writes.
+    // can both pass the check before either writes. The first spans every
+    // worktree of the repository, the second this item directory.
+    let across = Lock::acquire_across_worktrees(&cfg)?;
     let lock = Lock::acquire(&cfg)?;
     let items = store.load_all()?;
     let ctx = Ctx::new(&cfg, &items);
+    let survey = Survey::take(&cfg, &items);
 
     let id = match (&args.id, args.next) {
         (Some(raw), _) => cfg.parse_id(raw)?,
@@ -94,6 +98,7 @@ pub fn claim(args: ClaimArgs) -> Result<i32> {
                 &cfg,
                 &ctx,
                 &items,
+                &survey,
                 &crate::cmd::next::Args {
                     limit: 1,
                     assignee: None,
@@ -146,6 +151,32 @@ pub fn claim(args: ClaimArgs) -> Result<i32> {
         );
     }
 
+    // The same, for a claim this checkout cannot see. Refused on the same
+    // terms, and taken over on the same terms when nobody is honouring it.
+    if !args.force {
+        if let Some((there, copy)) = survey.holder(&cfg, id) {
+            bail!(
+                "{} is already {} on {} ({})\nuse --force to take it anyway",
+                cfg.format_id(id),
+                elsewhere(copy),
+                there.branch,
+                there.path.display()
+            );
+        }
+        for (there, copy) in survey.copies(id) {
+            if let Some(holder) = copy.meta.assignee.as_deref()
+                && crate::worktree::stale(&cfg, copy)
+            {
+                let days = crate::filter::held_days(copy).unwrap_or_default();
+                eprintln!(
+                    "{} taken over from {holder} on {}, who has held it for {days} day(s)",
+                    style::yellow("note:"),
+                    there.branch
+                );
+            }
+        }
+    }
+
     // What the last person to hand this back knew is the first thing the next
     // one should read.
     if let Some(reason) = item.last_note("Released by") {
@@ -189,6 +220,7 @@ pub fn claim(args: ClaimArgs) -> Result<i32> {
     item.touch(&today());
     item.save()?;
     drop(lock);
+    drop(across);
     hooks::item(&cfg, &store, hooks::Event::AfterChange, &item);
 
     if args.quiet {
@@ -211,6 +243,15 @@ pub fn claim(args: ClaimArgs) -> Result<i32> {
         );
     }
     Ok(0)
+}
+
+/// How another worktree's copy stands, for a refusal: who has it, or what it
+/// became there.
+pub fn elsewhere(copy: &crate::item::Item) -> String {
+    match copy.meta.assignee.as_deref() {
+        Some(holder) if !holder.is_empty() => format!("claimed by {holder}"),
+        _ => copy.status().to_string(),
+    }
 }
 
 pub fn release(args: ReleaseArgs) -> Result<i32> {

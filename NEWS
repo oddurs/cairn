@@ -8,6 +8,18 @@ Please send bug reports and suggestions through the project's issue tracker.
 
 * Noteworthy changes in release 1.0.0-alpha.1 (unreleased)
 
+** Claims are seen across worktrees
+
+An agent's claim lands in its own worktree's copy of the item, so another
+worktree used to take the same item. next, claim and the MCP tools now read
+what the other worktrees of the repository have changed since they diverged,
+uncommitted edits included. Work claimed or finished in one is not offered in
+another, and claiming it is refused with the branch named unless --force.
+Concurrent claims in separate worktrees are serialised by a lock in Git's
+common directory. cairn worktrees lists what every other worktree has changed
+or filed; cairn show adds an elsewhere line. Nothing is stored, and separate
+clones are not read.
+
 ** Immutable identities for independent Git work
 
 Format 4 replaces sequential numbers with UUIDv4 identities. Creation needs no

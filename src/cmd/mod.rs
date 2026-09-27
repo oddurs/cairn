@@ -24,6 +24,7 @@ pub mod search;
 pub mod set;
 pub mod show;
 pub mod tick;
+pub mod worktrees;
 
 use crate::config::{Category, Config};
 use crate::item::Item;
