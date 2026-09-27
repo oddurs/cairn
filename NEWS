@@ -8,6 +8,21 @@ Please send bug reports and suggestions through the project's issue tracker.
 
 * Noteworthy changes in release 1.0.0-alpha.1 (unreleased)
 
+** cairn next explains an empty selection
+
+cairn next --blocked now lists only blocked work, each item with what blocks
+it; before, it added blocked work to the ranked list, and the top five were
+usually ready work. MCP next_items keeps include_blocked as it was. Every count
+cairn next prints is taken over the list's own selection, so the summary, the
+blocked hint and list --filter blocked=true agree within a view. Finished items
+no longer count as blocked in any summary. An empty view says how much ready
+work lies outside it, and the hint keeps the view and filters it was given.
+
+cairn agent --view notes a view that excludes the status cairn new assigns, or
+that has nothing ready while work waits outside it, and names the file it was
+written to in its regenerate line. cairn check notes a generated block whose
+view has nothing ready; it is a note, so check --strict still passes.
+
 ** Claims are seen across worktrees
 
 An agent's claim lands in its own worktree's copy of the item, so another

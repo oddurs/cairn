@@ -1557,7 +1557,7 @@ ID    STATUS       MILESTONE  BLOCKED BY  TITLE
 @command{cairn next} lists work that is @dfn{ready}: not finished, and with no
 unfinished dependencies. Work already under way is ranked first, on the grounds
 that the most useful next action is usually finishing something. @option{--blocked}
-includes blocked work, annotated with what blocks it.
+lists only blocked work, each item with the unfinished items in its way.
 
 Readiness is not approval: an untriaged idea or an external wait can have no
 unfinished dependencies. Select your project's approved queue explicitly with
@@ -1579,6 +1579,24 @@ not access control: an explicitly named claim remains an assignment.
 Over MCP, pass @code{"view":"next"} to @code{next_items} and to
 @code{claim_item} without an id. Regenerate instructions with the same
 @option{--view}; omitting it deliberately generates the unscoped workflow.
+
+Every count @command{cairn next} prints is taken over the same selection as
+its list: open work, containers excluded, within the view and filters given.
+When a view holds nothing ready, it says how much ready work lies outside it,
+and its hint for blocked work repeats the view:
+
+@example
+$ cairn next --view next
+nothing is ready in view `next` (status=planned)
+87 ready item(s) outside it — `cairn next` to see them
+12 item(s) in view `next` are blocked — `cairn next --view next --blocked` to see what by
+@end example
+
+@command{cairn agent --view} notes a view that excludes the status
+@command{cairn new} assigns, or that has nothing ready while work waits outside
+it. @command{cairn check} notes the second for every generated block at the top
+of the project. Both are notes rather than warnings: an empty approved queue is
+a state a project passes through, and @option{--strict} must not fail on it.
 
 @example
 $ cairn claim --next
@@ -3186,7 +3204,7 @@ uncoloured). Aliased as @command{cairn ls}.
 Ready work, ranked. @xref{Working the backlog}. @option{--limit} bounds the
 list, @option{--mine} restricts to work assigned to you or to nobody,
 @option{--view} intersects a saved view's filter with @option{--filter},
-@option{--blocked} includes blocked items, and @option{--json} and
+@option{--blocked} lists only blocked items and what blocks them, and @option{--json} and
 @option{--ids} are for programs.
 
 @section cairn search

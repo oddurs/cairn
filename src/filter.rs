@@ -189,6 +189,26 @@ impl Filter {
     pub fn matches(&self, item: &Item, ctx: &Ctx) -> bool {
         self.clauses.iter().all(|c| c.matches(item, ctx))
     }
+
+    /// Whether the status and category clauses let an item in this status
+    /// through. Only equality is judged; anything subtler is assumed to admit
+    /// it, because this feeds a note and a false one teaches people to skip it.
+    pub fn admits_status(&self, cfg: &Config, status: &str) -> bool {
+        let category = cfg.category(status).as_str();
+        self.clauses.iter().all(|c| {
+            let value = match c.key.as_str() {
+                "status" => status,
+                "category" => category,
+                _ => return true,
+            };
+            let named = c.values.iter().any(|v| v.eq_ignore_ascii_case(value));
+            match c.op {
+                Op::Eq => named,
+                Op::Ne => !named,
+                _ => true,
+            }
+        })
+    }
 }
 
 // Longest operators first so `!=` is not read as `!` + `=`.

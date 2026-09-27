@@ -109,6 +109,7 @@ pub fn claim(args: ClaimArgs) -> Result<i32> {
                     filter: args.filter.clone(),
                     view: args.view.clone(),
                     blocked: false,
+                    include_blocked: false,
                     json: false,
                     ids: false,
                     plain: false,
