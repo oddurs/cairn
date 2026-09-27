@@ -35,10 +35,6 @@ Safe to keep: an explicit compatibility contract, tested recovery, useful retrie
 - [ ] [`0140`](https://github.com/oddurs/cairn/blob/main/cairn/items/0140-exercise-years-of-history-and-interrupted-work.md) Exercise years of history and interrupted work <sup>chore · p1</sup>
 - [ ] [`0147`](https://github.com/oddurs/cairn/blob/main/cairn/items/0147-migrate-harrow-rim-and-nun-to-format-5.md) Migrate harrow, rim and nun to format 5 <sup>chore · p1</sup>
 
-### in progress
-
-- [ ] [`0145`](https://github.com/oddurs/cairn/blob/main/cairn/items/0145-format-5-readable-configurable-ids-with-a-hidden-uid.md) Format 5: readable configurable ids with a hidden uid <sup>feature · p1</sup>
-
 ### waiting
 
 - [ ] [`0052`](https://github.com/oddurs/cairn/blob/main/cairn/items/0052-sign-releases-and-ship-a-source-tarball.md) Sign releases and ship a source tarball <sup>chore · p2 · needs-a-key</sup>

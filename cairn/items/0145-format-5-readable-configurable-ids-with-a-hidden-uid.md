@@ -3,14 +3,14 @@ id: 145
 uid: 49543fc8-23b5-4987-acd9-4a1c680693e3
 title: 'Format 5: readable configurable ids with a hidden uid'
 type: feature
-status: doing
+status: done
 milestone: v1.0
 assignee: oddurs
-claimed: 2026-09-26
 depends_on:
 - 146
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p1
 area: format
 effort: xl
@@ -47,7 +47,7 @@ readable, configurable numbers with the UUID kept as a hidden `uid` tag.
 - [x] A merge collision renumbers the arriving item and retargets references that arrived with it
 - [x] Migration 4→5 restores legacy numbers, numbers the rest by creation, renames files, and is resumable
 - [x] Migration 3→5 tags every item and changes nothing else in them
-- [ ] cairn's own backlog is migrated in its own commit, with numbers and history verified
+- [x] cairn's own backlog is migrated in its own commit, with numbers and history verified
 - [x] `make check` and `make durability` pass
 
 ## 2026-09-26
@@ -61,3 +61,7 @@ Two real bugs found by the restored format-3 tests. (1) arrival_side asked git l
 ## 2026-09-26
 
 renumber does not tag hand-written untagged items: doing so at every post-merge left unrelated uncommitted changes after ordinary merges (found by at_a_merge_the_side_already_published_keeps_its_identifier). Only cairn-created items carry a uid. CAIRN_ITEM_ID is the number (format 4 meaning, machine id) and CAIRN_ITEM_REF the rendering; format 3 put the rendering in CAIRN_ITEM_ID. Verified: make check green; make durability pieces green — 400-op and concurrent soak, 20000 fuzz vectors, conformance 63 cases over current + formats 1-4; recordings regenerate byte-identically.
+
+## 2026-09-26
+
+Migrated this backlog in d24f7f5. Independent check against the removed _legacy-ids.toml: 144 aliases restored exactly, 147 bodies byte-identical, every other frontmatter value unchanged, depends_on mapped through the same table; new items are 0145-0147. log --range over the migration reports nothing changed; item 67's history runs unbroken from format 3 through 4 into 5, and old UUID prefixes (49543fc8) still resolve. make check green after migration.
