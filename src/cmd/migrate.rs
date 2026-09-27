@@ -104,6 +104,9 @@ pub fn run(args: Args) -> Result<i32> {
     }
 
     if args.dry_run {
+        if steps.contains(&(4, 5)) {
+            preview_numbers(&cfg, &items)?;
+        }
         let total = steps
             .iter()
             .map(|(a, b)| effect_of(*a, *b, &cfg, &items))
@@ -451,33 +454,7 @@ fn restore_numbers(cfg: &Config, items: &[crate::item::Item]) -> Result<()> {
     target.project.id_format.clone_from(&template);
     refuse_keys_that_read_as_ids(&target, items)?;
 
-    // Every number the map holds is spoken for, including those whose items
-    // have since been removed: a number is never handed to different work.
-    let mut numbers: BTreeMap<uuid::Uuid, u32> = BTreeMap::new();
-    for (number, id) in &legacy.ids {
-        let n: u32 = number.parse()?;
-        cfg.remember_id(Id::Num(n));
-        if let Id::Uuid(uid) = id {
-            numbers.insert(*uid, n);
-        }
-    }
-    let mut fresh: Vec<&crate::item::Item> = items
-        .iter()
-        .filter(|i| matches!(i.id, Id::Uuid(u) if !numbers.contains_key(&u)))
-        .collect();
-    fresh.sort_by(|a, b| {
-        a.meta
-            .created
-            .cmp(&b.meta.created)
-            .then_with(|| a.id.cmp(&b.id))
-    });
-    for item in fresh {
-        let Id::Uuid(uid) = item.id else { continue };
-        let Id::Num(n) = store.next_id(&[])? else {
-            bail!("the allocator returned a UUID");
-        };
-        numbers.insert(uid, n);
-    }
+    let numbers = numbers_for(cfg, items)?;
 
     let number_of = |id: Id| -> Result<Id> {
         match id {
@@ -583,6 +560,76 @@ fn restore_numbers(cfg: &Config, items: &[crate::item::Item]) -> Result<()> {
             files,
         },
     )
+}
+
+/// The number each format-4 item gets: the one it had, from the map, or for an
+/// item created since, the next free one in the order they were created.
+///
+/// Every number the map holds is spoken for, including those whose items have
+/// since been removed: a number is never handed to different work. So is every
+/// number any branch has used, through the ordinary allocator.
+fn numbers_for(cfg: &Config, items: &[crate::item::Item]) -> Result<BTreeMap<uuid::Uuid, u32>> {
+    let store = Store::new(cfg);
+    let legacy = cfg.identities.borrow().legacy.clone();
+    let mut numbers: BTreeMap<uuid::Uuid, u32> = BTreeMap::new();
+    for (number, id) in &legacy.ids {
+        let n: u32 = number.parse()?;
+        cfg.remember_id(Id::Num(n));
+        if let Id::Uuid(uid) = id {
+            numbers.insert(*uid, n);
+        }
+    }
+    let mut fresh: Vec<&crate::item::Item> = items
+        .iter()
+        .filter(|i| matches!(i.id, Id::Uuid(u) if !numbers.contains_key(&u)))
+        .collect();
+    fresh.sort_by(|a, b| {
+        a.meta
+            .created
+            .cmp(&b.meta.created)
+            .then_with(|| a.id.cmp(&b.id))
+    });
+    for item in fresh {
+        let Id::Uuid(uid) = item.id else { continue };
+        let Id::Num(n) = store.next_id(&[])? else {
+            bail!("the allocator returned a UUID");
+        };
+        numbers.insert(uid, n);
+    }
+    Ok(numbers)
+}
+
+/// What a dry run shows for format 4: the numbers items without one will get,
+/// which is the one thing about the migration nobody can work out beforehand.
+fn preview_numbers(cfg: &Config, items: &[crate::item::Item]) -> Result<()> {
+    let restored = cfg.identities.borrow().legacy.clone();
+    let template = IdFormat::compile(&restored.id_format)?;
+    let numbers = numbers_for(cfg, items)?;
+    let mut fresh: Vec<(u32, &crate::item::Item)> = items
+        .iter()
+        .filter_map(|i| match i.id {
+            Id::Uuid(u) if !restored.ids.values().any(|v| *v == i.id) => {
+                numbers.get(&u).map(|n| (*n, i))
+            }
+            _ => None,
+        })
+        .collect();
+    fresh.sort_by_key(|(n, _)| *n);
+    println!(
+        "\n  {} item(s) get back the number they had; {} created since are numbered:",
+        items.len() - fresh.len(),
+        fresh.len()
+    );
+    for (n, item) in fresh {
+        println!(
+            "    {} {} {}  {}",
+            style::dim(&item.id.compact()[..8]),
+            style::dim("->"),
+            style::bold(&template.render(n)),
+            item.title()
+        );
+    }
+    Ok(())
 }
 
 /// A key a reference names must not read as an id under the format arriving,

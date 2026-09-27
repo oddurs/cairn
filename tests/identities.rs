@@ -312,7 +312,13 @@ fn format_four_is_read_but_not_written() {
 fn migrating_format_four_restores_numbers_and_keeps_each_uuid_as_the_tag() {
     let p = format_four();
     let body = p.read("cairn/items/CRN-0067-first.md");
-    p.expect(&["migrate", "--dry-run"]);
+    let preview = p.expect(&["migrate", "--dry-run"]).stdout;
+    assert_contains(&preview, "2 item(s) get back the number they had", "");
+    assert_contains(
+        &preview,
+        "b93f26b1 -> CRN-0069  Third",
+        "the new numbers, before",
+    );
     assert_eq!(p.read("cairn/items/CRN-0067-first.md"), body, "a dry run");
 
     p.expect(&["migrate"]);
