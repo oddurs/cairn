@@ -43,8 +43,15 @@ pub struct Other {
 
 pub struct Copy {
     pub item: Item,
-    /// Filed there: this checkout has no item with its id.
-    pub new: bool,
+    /// The item here this is a copy of. `None` when it was filed there, or
+    /// collided there with a number this checkout gives to something else.
+    pub ours: Option<Id>,
+}
+
+impl Copy {
+    pub fn is_new(&self) -> bool {
+        self.ours.is_none()
+    }
 }
 
 impl Survey {
@@ -123,7 +130,7 @@ impl Survey {
                     // it tells this checkout nothing it could act on.
                     .filter_map(|file| Item::load_with(file, &formats).ok())
                     .map(|item| Copy {
-                        new: !ours.iter().any(|o| o.id == item.id),
+                        ours: counterpart(ours, &item),
                         item,
                     })
                     .collect(),
@@ -139,7 +146,7 @@ impl Survey {
         self.others.iter().flat_map(move |o| {
             o.copies
                 .iter()
-                .filter(move |c| c.item.id == id)
+                .filter(move |c| c.ours == Some(id))
                 .map(move |c| (o, &c.item))
         })
     }
@@ -149,6 +156,28 @@ impl Survey {
     pub fn holder(&self, cfg: &Config, id: Id) -> Option<(&Other, &Item)> {
         self.copies(id).find(|(_, copy)| taken(cfg, copy))
     }
+}
+
+/// Which item here a copy is a copy of.
+///
+/// By tag where both carry one: a merge that renumbered the item on one side
+/// leaves the numbers different and the tag the same. Otherwise by id, unless
+/// the item here carries a different tag — then the number collided, and the
+/// copy is a different item that happens to share it. Format 4's ids are the
+/// tags themselves, so there the id alone decides.
+fn counterpart(ours: &[Item], copy: &Item) -> Option<Id> {
+    if let Some(uid) = copy.meta.uid
+        && let Some(item) = ours.iter().find(|o| o.meta.uid == Some(uid))
+    {
+        return Some(item.id);
+    }
+    ours.iter()
+        .find(|o| o.id == copy.id)
+        .filter(|o| match (o.meta.uid, copy.meta.uid) {
+            (Some(here), Some(there)) => here == there,
+            _ => true,
+        })
+        .map(|o| o.id)
 }
 
 /// Somebody has it there, or it has moved on from open there. A claim nobody
