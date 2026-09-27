@@ -7,7 +7,7 @@ use crate::config::{CONFIG_FILE, Config, FieldKind};
 use crate::style;
 use anyhow::Result;
 use clap::{ArgAction, CommandFactory};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(clap::Args)]
 pub struct ConfigArgs {
@@ -321,22 +321,40 @@ pub fn agent(args: AgentArgs) -> Result<i32> {
         .load_lenient()
         .map(|(items, _)| items)
         .unwrap_or_default();
+    // Said now, while someone is choosing the view, rather than discovered
+    // later by an agent that was told there is nothing to do.
+    if let Some(name) = args.view.as_deref() {
+        let ctx = crate::filter::Ctx::new(&cfg, &items);
+        for note in gap_notes(
+            &cfg,
+            &crate::cmd::next::gaps(&cfg, &ctx, &items, name)?,
+            name,
+        ) {
+            eprintln!("{} {note}", style::yellow("note:"));
+        }
+    }
+    let full = args.write.as_ref().map(|path| {
+        if path.is_absolute() {
+            path.clone()
+        } else {
+            cfg.root.join(path)
+        }
+    });
+    let target = full
+        .as_deref()
+        .map_or_else(|| "AGENTS.md".to_string(), |f| from_root(&cfg.root, f));
     let block = agent_block(
         &cfg,
         &crate::refs::Milestones::new(&cfg, &items),
         args.view.as_deref(),
+        &target,
     );
 
-    let Some(path) = args.write else {
+    let Some(full) = full else {
         print!("{block}");
         return Ok(0);
     };
 
-    let full = if path.is_absolute() {
-        path.clone()
-    } else {
-        cfg.root.join(&path)
-    };
     let existing = std::fs::read_to_string(&full).unwrap_or_default();
     // Replace an existing block in place so the file can be edited around it.
     let updated = match (existing.find(BEGIN), existing.find(END)) {
@@ -362,20 +380,88 @@ pub fn agent(args: AgentArgs) -> Result<i32> {
     Ok(0)
 }
 
+/// How a command run from the project root names `full`: relative when it is
+/// inside the project, whichever spelling of the root it was given in.
+///
+/// Joined with `/` on every platform. The name lands in a shell command in a
+/// Markdown file, which every supported shell reads with `/`, and a file
+/// written on Windows must read the same as one written anywhere else.
+fn from_root(root: &Path, full: &Path) -> String {
+    let canon = |p: &Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+    let full = match (full.parent(), full.file_name()) {
+        (Some(dir), Some(name)) => canon(dir).join(name),
+        _ => full.to_path_buf(),
+    };
+    match full.strip_prefix(canon(root)) {
+        Ok(rel) => rel
+            .components()
+            .map(|c| c.as_os_str().to_string_lossy())
+            .collect::<Vec<_>>()
+            .join("/"),
+        Err(_) => full.display().to_string(),
+    }
+}
+
+/// The sentence that says which view an instructions block selects from.
+/// `check` reads it back, so the two cannot drift.
+const SELECTION: &str = "Selection uses saved view `";
+
+/// Every generated instructions block at the top of the project, and the view
+/// it tells agents to select from.
+pub fn selecting_files(cfg: &Config) -> Vec<(String, String)> {
+    let Ok(entries) = std::fs::read_dir(&cfg.root) else {
+        return Vec::new();
+    };
+    let mut found: Vec<(String, String)> = entries
+        .filter_map(|e| {
+            let path = e.ok()?.path();
+            if path.extension()? != "md" {
+                return None;
+            }
+            let text = std::fs::read_to_string(&path).ok()?;
+            let block = &text[text.find(BEGIN)?..];
+            let block = &block[..block.find(END)?];
+            let rest = &block[block.find(SELECTION)? + SELECTION.len()..];
+            let view = &rest[..rest.find('`')?];
+            Some((
+                path.file_name()?.to_string_lossy().into_owned(),
+                view.to_string(),
+            ))
+        })
+        .collect();
+    found.sort();
+    found
+}
+
+/// What `gaps` found, as sentences for someone about to rely on the view.
+pub fn gap_notes(cfg: &Config, gaps: &crate::cmd::next::Gaps, name: &str) -> Vec<String> {
+    let mut notes = Vec::new();
+    if gaps.excludes_new {
+        notes.push(format!(
+            "new items start as `{}`, which view `{name}` excludes; agents see them only \
+             once they are moved into it",
+            cfg.initial_status()
+        ));
+    }
+    if gaps.ready_outside > 0 {
+        notes.push(format!(
+            "view `{name}` has nothing ready; {} ready item(s) outside it",
+            gaps.ready_outside
+        ));
+    }
+    notes
+}
+
 /// The instructions block. Generated from the live schema so it can never
 /// describe a workflow the project does not actually have.
-fn agent_block(cfg: &Config, milestones: &crate::refs::Milestones, view: Option<&str>) -> String {
+fn agent_block(
+    cfg: &Config,
+    milestones: &crate::refs::Milestones,
+    view: Option<&str>,
+    target: &str,
+) -> String {
     let scope = view.map_or_else(String::new, |name| {
-        let word = if !name.is_empty()
-            && name
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || "_-./".contains(c))
-        {
-            name.to_string()
-        } else {
-            format!("'{}'", name.replace('\'', "'\\''"))
-        };
-        format!(" --view {word}")
+        format!(" --view {}", crate::cmd::shell_word(name))
     });
     let mut s = String::new();
     s.push_str(BEGIN);
@@ -438,16 +524,26 @@ you tried, what to watch for.\n",
     if let Some(name) = view {
         let argument = serde_json::json!({"view": name});
         s.push_str(&format!(
-            "Selection uses saved view `{name}`. Additional filters only narrow it; the view's \
+            "{SELECTION}{name}`. Additional filters only narrow it; the view's \
 sort and columns do not change `next` ranking. Over MCP, pass `{argument}` to `next_items` \
 and to `claim_item` without an id. A direct claim is an explicit assignment outside this \
-selection policy. Regenerate these instructions with `cairn agent{scope} --write AGENTS.md`.\n\n"
+selection policy. Regenerate these instructions with `cairn agent{scope} --write {}`.\n\n",
+            crate::cmd::shell_word(target)
         ));
     }
-    s.push_str(
-        "Claims coordinate writers in the same item directory, not separate branches, \
+    if cfg.format() >= 4 {
+        s.push_str(
+            "Claims coordinate writers in the same item directory and are seen across the \
+worktrees of this repository: `next` leaves out what another worktree has claimed, `claim` \
+refuses it, and `cairn worktrees` shows what each is doing. Separate clones are not read. \
+Agree on assignments before splitting work across clones.\n\n",
+        );
+    } else {
+        s.push_str(
+            "Claims coordinate writers in the same item directory, not separate branches, \
 worktrees, or clones. Agree on assignments before splitting work.\n\n",
-    );
+        );
+    }
     if cfg.uuid_ids() {
         s.push_str(
             "Item identities are immutable UUIDv4 strings. Use full `id` values from JSON \

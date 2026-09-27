@@ -70,8 +70,27 @@ impl Lock {
         Lock::acquire_unchecked(cfg)
     }
 
+    /// Take the lock every worktree of the repository shares, for as long as
+    /// a claim reads what the others hold and writes its own.
+    ///
+    /// The item directory's lock cannot do this: each worktree has its own
+    /// directory, so two agents claiming at the same moment each read the
+    /// other's worktree before either had written, and both took the same
+    /// item. Git's common directory is the one place all of them share.
+    /// Outside a repository there is nothing else to exclude, and `None` is
+    /// returned.
+    pub fn acquire_across_worktrees(cfg: &Config) -> Result<Option<Lock>> {
+        match crate::worktree::common_dir(&cfg.root) {
+            Some(common) => Lock::acquire_at(common.join("cairn-claim.lock")).map(Some),
+            None => Ok(None),
+        }
+    }
+
     fn acquire_unchecked(cfg: &Config) -> Result<Lock> {
-        let path = Self::path(cfg);
+        Lock::acquire_at(Self::path(cfg))
+    }
+
+    fn acquire_at(path: PathBuf) -> Result<Lock> {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)
                 .with_context(|| format!("creating {}", parent.display()))?;

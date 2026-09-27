@@ -14,6 +14,7 @@ mod render;
 mod store;
 mod style;
 mod table;
+mod worktree;
 
 use anyhow::Result;
 use clap::{ArgAction, Parser, Subcommand, ValueEnum};
@@ -123,6 +124,9 @@ enum Command {
 
     /// Give an item back: clear the assignee and stop work
     Release(cmd::claim::ReleaseArgs),
+
+    /// What other worktrees of this repository have changed in the backlog
+    Worktrees(cmd::worktrees::Args),
 
     /// Show one item in full
     Show(cmd::show::Args),
@@ -264,6 +268,7 @@ fn run(command: Command) -> Result<i32> {
         Command::Next(a) => cmd::next::run(a),
         Command::Search(a) => cmd::search::run(a),
         Command::Claim(a) => cmd::claim::claim(a),
+        Command::Worktrees(a) => cmd::worktrees::run(a),
         Command::Release(a) => cmd::claim::release(a),
         Command::Show(a) => cmd::show::run(a),
         Command::Log(a) => cmd::log::run(a),
