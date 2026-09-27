@@ -9,7 +9,7 @@ assignee: oddurs
 depends_on:
 - 145
 created: 2026-09-26
-updated: 2026-09-26
+updated: 2026-09-27
 closed_at: 2026-09-26
 priority: p1
 area: cli
@@ -58,3 +58,7 @@ Verification runs on the journaled plan, before the journal is written: each ite
 ## 2026-09-26
 
 The offer re-execs the command after migrating, because everything it had read was read at the old format. Checked by hand in a real pty with expect: answering y migrated, verified, printed next steps and then created the item it was asked to; answering n refused as before. The integration test covers the non-interactive refusal; the gate itself is unit-tested (may_offer). migrate --all does not search hidden or build directories, so a checkout's .worktrees copies are not migrated twice.
+
+## 2026-09-27
+
+CI failed on Linux: migrate --commit runs git itself, and the runner has no git identity (macOS guesses one from the hostname, so it passed locally). Reproduced with user.useConfigOnly=true and no global config; the fixture repository now sets its own user.name and user.email. After merging #105: make check 643 passed (with the CI-like git settings), soak 400 ops, fuzz 20000, conformance 63 cases, agreement 5/5 against Harrow f59a46a.
