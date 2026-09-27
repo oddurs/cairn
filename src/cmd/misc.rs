@@ -441,10 +441,19 @@ and to `claim_item` without an id. A direct claim is an explicit assignment outs
 selection policy. Regenerate these instructions with `cairn agent{scope} --write AGENTS.md`.\n\n"
         ));
     }
-    s.push_str(
-        "Claims coordinate writers in the same item directory, not separate branches, \
+    if cfg.format() >= 4 {
+        s.push_str(
+            "Claims coordinate writers in the same item directory and are seen across the \
+worktrees of this repository: `next` leaves out what another worktree has claimed, `claim` \
+refuses it, and `cairn worktrees` shows what each is doing. Separate clones are not read. \
+Agree on assignments before splitting work across clones.\n\n",
+        );
+    } else {
+        s.push_str(
+            "Claims coordinate writers in the same item directory, not separate branches, \
 worktrees, or clones. Agree on assignments before splitting work.\n\n",
-    );
+        );
+    }
     if cfg.format() >= 4 {
         s.push_str(
             "Item identities are immutable UUIDv4 strings. Use full `id` values from JSON \

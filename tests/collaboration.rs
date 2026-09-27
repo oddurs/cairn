@@ -166,7 +166,7 @@ fn a_clone_must_opt_into_its_own_executable_integration() {
 }
 
 #[test]
-fn claims_exclude_local_writers_but_do_not_reserve_other_worktrees() {
+fn claims_are_seen_across_worktrees_but_stay_in_each_worktree_s_files() {
     let p = unintegrated();
     let linked = worktree(&p, "independent");
     p.expect(&["claim", &p.id(1), "--as", "first"]);
@@ -175,7 +175,14 @@ fn claims_exclude_local_writers_but_do_not_reserve_other_worktrees() {
         "already claimed",
         "same-directory exclusion",
     );
-    linked.expect(&["claim", &p.id(1), "--as", "second"]);
+    assert_contains(
+        &linked.fails(&["claim", &p.id(1), "--as", "second"]).all(),
+        "already claimed by first on main",
+        "another worktree of the repository is read",
+    );
+    // Seen is not shared: overriding writes only this worktree's copy, and
+    // the two stay independent until they merge.
+    linked.expect(&["claim", &p.id(1), "--as", "second", "--force"]);
     assert_eq!(p.json(&["show", &p.id(1), "--json"])["assignee"], "first");
     assert_eq!(
         linked.json(&["show", &p.id(1), "--json"])["assignee"],

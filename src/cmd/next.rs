@@ -14,6 +14,7 @@ use crate::item::Item;
 use crate::store::Store;
 use crate::style;
 use crate::table::{Cell, Table};
+use crate::worktree::Survey;
 use anyhow::{Result, bail};
 use clap::ArgAction;
 
@@ -77,7 +78,8 @@ pub fn run(args: Args) -> Result<i32> {
     let store = Store::new(&cfg);
     let items = store.load_for_reading()?;
     let ctx = Ctx::new(&cfg, &items);
-    let picked = select(&cfg, &ctx, &items, &args)?;
+    let survey = Survey::take(&cfg, &items);
+    let picked = select(&cfg, &ctx, &items, &survey, &args)?;
 
     if args.count {
         println!("{}", picked.len());
@@ -130,6 +132,7 @@ pub fn run(args: Args) -> Result<i32> {
     if picked.is_empty() {
         let blocked = items.iter().filter(|i| ctx.is_blocked(i)).count();
         eprintln!("{}", style::dim("nothing is ready to start"));
+        say_elsewhere(&cfg, &ctx, &items, &survey);
         if blocked > 0 && !args.blocked {
             eprintln!(
                 "{}",
@@ -207,15 +210,38 @@ pub fn run(args: Args) -> Result<i32> {
     // "What should I do now" has a shape as well as a list.
     let all: Vec<&Item> = items.iter().collect();
     println!("\n{}", style::dim(&summary(&ctx, &all)));
+    say_elsewhere(&cfg, &ctx, &items, &survey);
     Ok(0)
+}
+
+/// What was left out because another worktree has it, said so that a short
+/// list is not mistaken for a short backlog.
+fn say_elsewhere(cfg: &Config, ctx: &Ctx, items: &[Item], survey: &Survey) {
+    let away = items
+        .iter()
+        .filter(|i| !ctx.is_closed(i) && survey.holder(cfg, i.id).is_some())
+        .count();
+    if away > 0 {
+        eprintln!(
+            "{}",
+            style::dim(&format!(
+                "{away} item(s) under way in other worktrees are not offered — `cairn worktrees` to see them"
+            ))
+        );
+    }
 }
 
 /// Ranked, filtered candidates. Shared with the MCP server so both surfaces
 /// answer "what next?" identically.
+///
+/// Work another worktree holds is never a candidate. Its copy there is the
+/// claim this checkout cannot see, and offering it is how two agents came to
+/// build the same thing.
 pub fn select<'a>(
     cfg: &Config,
     ctx: &Ctx,
     items: &'a [Item],
+    survey: &Survey,
     args: &Args,
 ) -> Result<Vec<&'a Item>> {
     let mut filter = view_filter(cfg, args.view.as_deref())?;
@@ -249,6 +275,7 @@ pub fn select<'a>(
         .filter(|i| !cfg.is_container(i.kind()))
         .filter(|i| !ctx.is_closed(i))
         .filter(|i| args.blocked || !ctx.is_blocked(i))
+        .filter(|i| survey.holder(cfg, i.id).is_none())
         .filter(|i| filter.matches(i, ctx))
         // `--mine` means work nobody else has taken: assigned to me, owned by
         // me, or claimed by nobody. Owning and working are different questions

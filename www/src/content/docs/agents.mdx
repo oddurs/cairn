@@ -89,9 +89,12 @@ somebody's write. Forty processes creating items simultaneously produce forty
 distinct identifiers, and twelve agents racing for one item produce exactly one
 owner and eleven refusals that name the holder.
 
-This exclusion holds within one item directory. Separate branches, worktrees,
-and clones can claim the same item independently. Agree on assignments before
-splitting work, and review the item changes when merging.
+This exclusion holds within one item directory. Across the worktrees of one
+repository on one machine, cairn reads what each other worktree has claimed:
+`next` leaves it out, `claim` refuses it without `--force`, and `cairn
+worktrees` lists it. Separate clones can still claim the same item
+independently. Agree on assignments before splitting work across clones, and
+review the item changes when merging.
 
 Identifiers can also collide across branches. `cairn init --git` installs merge
 support once per working copy; validation and review still matter after a merge.

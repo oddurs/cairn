@@ -181,6 +181,21 @@ pub fn run(args: Args) -> Result<i32> {
         rows.push(("updated", u.clone()));
     }
     rows.push(("file", style::dim(&store.rel(&item.path))));
+    // Beside the record, never in place of it: what this item looks like in
+    // each other worktree that has changed it since diverging from this one.
+    let survey = crate::worktree::Survey::take(&cfg, &all);
+    for (there, copy) in survey.copies(item.id) {
+        let mut text = format!("{}  {}", there.branch, paint_status(&cfg, copy.status()));
+        if let Some(who) = copy
+            .meta
+            .assignee
+            .as_deref()
+            .filter(|_| crate::worktree::held(copy))
+        {
+            text.push_str(&format!("  {who}"));
+        }
+        rows.push(("elsewhere", text));
+    }
 
     let width = rows.iter().map(|(k, _)| k.len()).max().unwrap_or(0);
     for (k, v) in rows {
