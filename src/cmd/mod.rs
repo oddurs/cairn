@@ -30,6 +30,17 @@ use crate::config::{Category, Config};
 use crate::item::Item;
 use crate::style;
 
+/// A relative path written with `/` on every platform. What cairn prints
+/// about a project's files is read by people and pasted into commands, and
+/// every supported shell reads `/`; a Windows run must say what any other
+/// run says.
+pub fn slashed(rel: &std::path::Path) -> String {
+    rel.components()
+        .map(|c| c.as_os_str().to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
 /// Colour a status using the palette declared in cairn.toml, falling back to
 /// something sensible derived from its category.
 /// Display text for a status — icon and label, uncoloured.
@@ -375,4 +386,13 @@ pub fn a_date(raw: &str) -> anyhow::Result<String> {
         return Ok(text.to_string());
     }
     anyhow::bail!("`{raw}` is not a date; use YYYY-MM-DD")
+}
+
+#[cfg(test)]
+mod slashed_tests {
+    #[test]
+    fn a_nested_path_reads_with_forward_slashes_everywhere() {
+        let path = std::path::Path::new("apps").join("old").join("items");
+        assert_eq!(super::slashed(&path), "apps/old/items");
+    }
 }

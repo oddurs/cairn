@@ -414,7 +414,7 @@ fn all(dir: &std::path::Path, args: &Args) -> Result<i32> {
         let dir = p.parent().unwrap_or(p);
         match dir.strip_prefix(&root) {
             Ok(r) if r.as_os_str().is_empty() => ".".into(),
-            Ok(r) => r.display().to_string(),
+            Ok(r) => crate::cmd::slashed(r),
             Err(_) => dir.display().to_string(),
         }
     };
