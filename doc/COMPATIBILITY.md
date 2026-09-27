@@ -4,18 +4,20 @@ Cairn is the writer and command interface; Harrow is the independent reader and
 human interface. They share a documented format and behavior tests, not a Rust
 library, database, service or process on every read.
 
-The 1.0.0-alpha.1 development line writes **format 4**, with immutable UUIDv4
-identities. The paired Harrow 0.2.0-alpha.1 development line reads formats 1–4.
-Neither alpha is a declaration that the broader 1.0 milestone is finished.
-Cairn 0.3.0 and Harrow 0.1.0 cannot read format 4: upgrade both before migrating.
-Exact tested revisions, not package version alone, establish the pair; Cairn
-pins Harrow in [`spec/harrow-revision`](../spec/harrow-revision).
+The 1.0.0-alpha.1 development line writes **format 5**: numbered items, each
+with an optional `uid` tag, and per-type id renderings. It reads formats 1–4
+and writes none of them. The pinned Harrow reads formats 1–4 and **not yet
+5**: do not migrate a project Harrow watches until a Harrow that reads format 5
+is pinned here. Neither alpha is a declaration that the broader 1.0 milestone is
+finished. Exact tested revisions, not package version alone, establish the
+pair; Cairn pins Harrow in [`spec/harrow-revision`](../spec/harrow-revision).
 
-Files, JSON, hooks, dependencies and declared ID references carry full UUIDs.
-Human commands accept unique prefixes of at least eight hex digits; these
-prefixes are display handles, never persisted identities. Migration freezes old
-numbers in `_legacy-ids.toml`, preserves filenames and body bytes, and bridges
-historical lookup without rewriting Git. Commit one migration and merge it to
+Files, JSON, dependencies and declared ID references carry numbers; JSON and
+hooks also carry the `uid`. Commands accept the number in any rendering the
+project declares, a full `uid`, or a `uid` prefix of at least eight hex digits
+containing a letter. Migration from format 4 restores every number from
+`_legacy-ids.toml`, moves each UUID to `uid`, rewrites references, renames
+UUID-named files and removes the map. Commit one migration and merge it to
 other branches; do not independently migrate copies of the same backlog.
 
 ```sh
@@ -30,7 +32,8 @@ PR and main push. Harrow's required CI reciprocally tests a pinned Cairn revisio
 
 The gate compares machine-readable item sets for all eight views in Cairn's
 own project and semantic fixtures for dates, categories, dependency readiness,
-criteria, hierarchy, filter operators, UUIDs, prefixes and migrated aliases.
+criteria, hierarchy, filter operators, UUIDs, prefixes and migrated aliases —
+the format-4 contract the pinned revision was verified against.
 The ordinary Harrow suite reads the vendored 49-case corpus across formats 1–4;
 its PROVENANCE identifies the upstream commit. To
 advance the pin, review both projects' contract changes, refresh upstream

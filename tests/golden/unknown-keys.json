@@ -13,12 +13,12 @@
       "b": "two"
     }
   },
-  "id": "00000003-0000-4000-8000-000000000003",
+  "id": 3,
   "key": null,
   "labels": [],
   "milestone": null,
   "owner": null,
-  "ref": "00000003",
+  "ref": "0003",
   "source": null,
   "status": "backlog",
   "title": "Keys this cairn has never heard of",

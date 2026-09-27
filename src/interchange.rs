@@ -42,7 +42,7 @@ pub fn document(cfg: &Config, store: &Store, items: &[Item], today: &str) -> Val
         .collect();
 
     json!({
-        "cairn": if cfg.format() >= 4 { FORMAT_VERSION } else { "1" },
+        "cairn": if cfg.uuid_ids() { FORMAT_VERSION } else { "1" },
         "exported": today,
         "project": {
             "name": cfg.project.name,
@@ -62,6 +62,10 @@ pub fn document(cfg: &Config, store: &Store, items: &[Item], today: &str) -> Val
 pub struct Incoming {
     #[serde(default)]
     pub id: Option<Id>,
+    /// The item's tag. Numbers are local to the project that wrote them; the
+    /// tag is not, so it is what says an arriving item is one already here.
+    #[serde(default, deserialize_with = "de_uid")]
+    pub uid: Option<uuid::Uuid>,
     #[serde(default)]
     pub title: Option<String>,
     /// The handle a key-addressed reference names. Without it a milestone
@@ -107,6 +111,15 @@ pub struct Incoming {
     pub body: Option<String>,
     #[serde(default)]
     pub fields: std::collections::BTreeMap<String, Value>,
+}
+
+fn de_uid<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<uuid::Uuid>, D::Error> {
+    match Option::<String>::deserialize(d)? {
+        None => Ok(None),
+        Some(raw) => crate::identity::parse_uid(&raw)
+            .map(Some)
+            .map_err(serde::de::Error::custom),
+    }
 }
 
 /// Accepts a full interchange document, or a bare array of items, or a single

@@ -33,6 +33,11 @@ Safe to keep: an explicit compatibility contract, tested recovery, useful retrie
 
 - [ ] [`7934b7b6`](https://github.com/oddurs/cairn/blob/main/cairn/items/0140-exercise-years-of-history-and-interrupted-work.md) Exercise years of history and interrupted work <sup>chore · p1</sup>
 - [ ] [`8fa2cde9`](https://github.com/oddurs/cairn/blob/main/cairn/items/0139-recover-the-reason-for-a-change-after-a-long-absence.md) Recover the reason for a change after a long absence <sup>feature · p1</sup>
+- [ ] [`c7ac551e`](https://github.com/oddurs/cairn/blob/main/cairn/items/c7ac551e-b7f3-4da0-b7a1-94fd027ea098-migrate-harrow-rim-and-nun-to-format-5.md) Migrate harrow, rim and nun to format 5 <sup>chore · p1</sup>
+
+### in progress
+
+- [ ] [`49543fc8`](https://github.com/oddurs/cairn/blob/main/cairn/items/49543fc8-23b5-4987-acd9-4a1c680693e3-format-5-readable-configurable-ids-with-a-hidden-uid.md) Format 5: readable configurable ids with a hidden uid <sup>feature · p1</sup>
 
 ### waiting
 

@@ -34,8 +34,18 @@ pub fn bin() -> &'static str {
     env!("CARGO_BIN_EXE_cairn")
 }
 
-pub fn fixture_id(n: usize) -> String {
+/// A synthetic format-4 identity for fixture handle `n`.
+pub fn fixture_uuid(n: usize) -> String {
     format!("{n:08x}-0000-4000-8000-{n:012x}")
+}
+
+/// An id as JSON carries it: a number since format 5, a UUID string in 4.
+pub fn id_text(value: &serde_json::Value) -> String {
+    match value {
+        serde_json::Value::String(s) => s.clone(),
+        serde_json::Value::Number(n) => n.to_string(),
+        other => panic!("not an id: {other}"),
+    }
 }
 
 /// A `PATH` with the binary's directory first, so a hook or a merge driver that
@@ -642,7 +652,7 @@ impl Schema {
     /// status.
     pub fn bare() -> Schema {
         Schema {
-            format: Some(4),
+            format: Some(5),
             name: "Testbed".into(),
             description: None,
             dir: "cairn/items".into(),
@@ -1120,25 +1130,35 @@ impl Project {
         let mut args = vec!["new", title, "-q"];
         args.extend_from_slice(extra);
         let reference = self.expect(&args).trimmed();
-        let id = self.json(&["show", &reference, "--json"])["id"]
-            .as_str()
-            .expect("UUID identity")
-            .to_string();
+        let id = id_text(&self.json(&["show", &reference, "--json"])["id"]);
         let mut created = self.created.lock().unwrap();
         let next = created.keys().next_back().copied().unwrap_or(0) + 1;
         created.insert(next, id);
         reference
     }
 
-    /// The full identity of the Nth item created by this fixture (one-based).
-    /// This is a fixture handle, not a numeric identifier accepted by Cairn.
+    /// The machine id of the Nth item created by this fixture (one-based).
     pub fn id(&self, n: usize) -> String {
         self.created
             .lock()
             .unwrap()
             .get(&n)
             .cloned()
-            .unwrap_or_else(|| fixture_id(n))
+            .unwrap_or_else(|| {
+                if self.format() == 4 {
+                    fixture_uuid(n)
+                } else {
+                    n.to_string()
+                }
+            })
+    }
+
+    /// The format this project's `cairn.toml` records.
+    pub fn format(&self) -> i64 {
+        toml::from_str::<toml::Value>(&self.read("cairn.toml"))
+            .ok()
+            .and_then(|c| c.get("format").and_then(toml::Value::as_integer))
+            .unwrap_or(1)
     }
 
     pub fn reference(&self, n: usize) -> String {
@@ -1199,7 +1219,7 @@ impl Project {
             .as_array()
             .unwrap()
             .iter()
-            .map(|item| item["id"].as_str().expect("UUID identity").to_string())
+            .map(|item| id_text(&item["id"]))
             .collect()
     }
 
@@ -1229,6 +1249,18 @@ impl Project {
     /// command output.
     pub fn write_uuid_fixture(&self, rel: &str, contents: &str) {
         use serde_yaml_ng::Value;
+        if self.format() != 4 {
+            // Numbers are what a fixture is written in; nothing to expand.
+            if let Some(n) = contents
+                .lines()
+                .find_map(|l| l.strip_prefix("id:"))
+                .and_then(|v| v.trim().parse::<usize>().ok())
+            {
+                self.created.lock().unwrap().insert(n, n.to_string());
+            }
+            self.write(rel, contents);
+            return;
+        }
         let eol = if contents.contains("\r\n") {
             "\r\n"
         } else {
@@ -1566,7 +1598,9 @@ pub fn keyed(template: &str, start: Option<u32>) -> Project {
     if let Some(n) = start {
         replacement.push_str(&format!("\nid_start = {n}"));
     }
-    let cfg = p.read("cairn.toml").replace("id_width = 4", &replacement);
+    let cfg = p
+        .read("cairn.toml")
+        .replacen("[project]", &format!("[project]\n{replacement}"), 1);
     p.write("cairn.toml", &cfg);
     p
 }
@@ -1634,7 +1668,7 @@ pub fn merge(p: &Project, branch: &str) -> Out {
 /// naming them by the same string they use today.
 pub fn format_one() -> Project {
     let p = Project::new();
-    let cfg = p.read("cairn.toml").replace("format = 4", "format = 1")
+    let cfg = p.read("cairn.toml").replace("format = 5", "format = 1")
         + "\n[[milestone]]\nname = \"v0.1\"\ntitle = \"First\"\ndue = \"2026-12-01\"\n\
            description = \"The first one.\"\n\n[[milestone]]\nname = \"later\"\n\
            title = \"Someday\"\n";

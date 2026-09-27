@@ -229,10 +229,112 @@ fn id_with_title(p: &Project, title: &str) -> String {
         .unwrap()
         .iter()
         .find(|i| i["title"] == title)
-        .unwrap()["id"]
-        .as_str()
+        .map(|i| id_text(&i["id"]))
         .unwrap()
-        .to_string()
+}
+
+/// A second machine: a clone that has never seen the other side's branches,
+/// so its allocator cannot either.
+fn clone_of(p: &Project) -> Project {
+    let other = Project::empty();
+    git(&other, &["clone", "-q", p.root().to_str().unwrap(), "."]);
+    other.expect(&["init", "--git"]);
+    other
+}
+
+fn depends_on(p: &Project, title: &str) -> serde_json::Value {
+    p.json(&["show", &id_with_title(p, title), "--json"])["depends_on"].clone()
+}
+
+/// The one collision the allocator cannot prevent: two machines, neither
+/// having fetched the other, each numbering its next item the same. The merge
+/// renumbers the item that arrived, and the references that arrived with it
+/// follow it rather than being left on the item that kept the number.
+#[test]
+fn a_collision_between_clones_is_renumbered_and_its_references_follow() {
+    let p = repository();
+    let other = clone_of(&p);
+    git(&other, &["checkout", "-qb", "elsewhere"]);
+    let parent = other.add("Parent from the clone", &[]);
+    other.add("Dependent from the clone", &["-d", &parent]);
+    commit(&other, "clone work");
+
+    let parent = p.add("Parent here", &[]);
+    p.add("Dependent here", &["-d", &parent]);
+    commit(&p, "local work");
+    assert_eq!(
+        id_with_title(&p, "Parent here"),
+        id_with_title(&other, "Parent from the clone"),
+        "the collision this test is about"
+    );
+
+    git(
+        &p,
+        &["fetch", "-q", other.root().to_str().unwrap(), "elsewhere"],
+    );
+    git(&p, &["merge", "--no-edit", "FETCH_HEAD"]);
+
+    assert_eq!(p.count_all(), 5, "nothing was lost");
+    for side in ["here", "from the clone"] {
+        assert_eq!(
+            depends_on(&p, &format!("Dependent {side}")),
+            serde_json::json!([id_with_title(&p, &format!("Parent {side}"))
+                .parse::<u64>()
+                .unwrap()]),
+            "the {side} dependent still names the {side} parent"
+        );
+    }
+    let kept = id_with_title(&p, "Parent here");
+    let moved = id_with_title(&p, "Parent from the clone");
+    assert_ne!(kept, moved);
+    // The one that moved keeps its tag, which is what makes it the same work.
+    let tag = |p: &Project, id: &str| p.json(&["show", id, "--json"])["uid"].clone();
+    assert_eq!(
+        tag(&p, &moved),
+        tag(&other, &id_with_title(&other, "Parent from the clone"))
+    );
+    p.expect(&["check", "--strict"]);
+}
+
+/// An item that existed before the branches parted, given a dependency on the
+/// contested number on both sides, meant both items: it keeps the number and
+/// gains the moved one.
+#[test]
+fn a_reference_added_on_both_sides_names_both_items() {
+    let p = repository();
+    let shared = p.add("Shared", &[]);
+    commit(&p, "shared");
+    let other = clone_of(&p);
+    git(&other, &["checkout", "-qb", "elsewhere"]);
+    let there = other.add("Blocker from the clone", &[]);
+    other.expect(&["set", &shared, &format!("depends_on+={there}")]);
+    commit(&other, "clone work");
+
+    let here = p.add("Blocker here", &[]);
+    p.expect(&["set", &shared, &format!("depends_on+={here}")]);
+    commit(&p, "local work");
+    assert_eq!(here, there, "the collision this test is about");
+
+    git(
+        &p,
+        &["fetch", "-q", other.root().to_str().unwrap(), "elsewhere"],
+    );
+    git(&p, &["merge", "--no-edit", "FETCH_HEAD"]);
+
+    let mut blockers: Vec<u64> = depends_on(&p, "Shared")
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_u64().unwrap())
+        .collect();
+    blockers.sort_unstable();
+    let mut expected: Vec<u64> = ["Blocker here", "Blocker from the clone"]
+        .iter()
+        .map(|t| id_with_title(&p, t).parse().unwrap())
+        .collect();
+    expected.sort_unstable();
+    assert_eq!(blockers, expected);
+    p.expect(&["check", "--strict"]);
 }
 
 #[test]
@@ -260,7 +362,7 @@ fn independent_branch_creation_preserves_identity_and_references_without_repair(
     for (parent, child) in [a, b] {
         assert_eq!(
             p.json(&["show", &child, "--json"])["depends_on"],
-            serde_json::json!([parent])
+            serde_json::json!([parent.parse::<u64>().unwrap()])
         );
     }
     assert_eq!(p.count_all(), 5);

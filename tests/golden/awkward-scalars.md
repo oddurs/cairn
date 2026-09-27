@@ -1,5 +1,5 @@
 ---
-id: 00000008-0000-4000-8000-000000000008
+id: 8
 title: "Quotes: colons, #hashes and *stars"
 status: backlog
 assignee: "no"

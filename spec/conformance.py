@@ -114,7 +114,7 @@ def run(corpus, frozen=False):
             expected = {k: v for k, v in json.load(f).items() if k not in PROJECT_LEVEL}
 
         try:
-            version = int(os.path.basename(corpus).split("-")[-1]) if frozen else 4
+            version = int(os.path.basename(corpus).split("-")[-1]) if frozen else 5
             got = reader.read(path, format=version)
         except reader.NotAnItem as e:
             print(f"  ✗  {case}: the reference reader rejected it: {e}")

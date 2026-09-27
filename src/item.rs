@@ -79,6 +79,9 @@ impl Field {
 pub struct Meta {
     #[serde(default)]
     pub id: Option<Id>,
+    /// The tag that outlives the number: written once, never renumbered.
+    #[serde(default, deserialize_with = "de_uid")]
+    pub uid: Option<uuid::Uuid>,
     #[serde(default)]
     pub title: Option<String>,
     /// A short human handle, unique among items of this type.
@@ -235,6 +238,10 @@ impl Item {
             "closed_at" => opt(self.meta.closed_at.as_deref()),
             "updated" => opt(self.meta.updated.as_deref()),
             "source" => opt(self.meta.source.as_deref()),
+            "uid" => match self.meta.uid {
+                Some(uid) => Field::Text(uid.to_string()),
+                None => Field::Missing,
+            },
             "labels" | "label" => Field::List(self.meta.labels.clone()),
             "depends_on" => Field::List(self.meta.depends_on.iter().map(Id::to_string).collect()),
             "body" => Field::Text(self.body.clone()),
@@ -425,7 +432,7 @@ impl Item {
     }
 
     pub fn parse(path: &Path, text: &str) -> Result<Item> {
-        Item::parse_with(path, text, None)
+        Item::parse_with(path, text, &[])
     }
 
     /// Parse, optionally recovering a missing `id` through the project's
@@ -439,7 +446,7 @@ impl Item {
     pub fn parse_with(
         path: &Path,
         text: &str,
-        format: Option<&crate::config::IdFormat>,
+        formats: &[crate::config::IdFormat],
     ) -> Result<Item> {
         let eol = Eol::detect(text);
         // Everything is handled as LF internally; the original ending is
@@ -462,10 +469,13 @@ impl Item {
             .or_else(|| id_from_filename(path))
             .or_else(|| {
                 let name = path.file_name()?.to_str()?;
-                format?.id_in_filename(name).map(Id::Legacy)
+                formats
+                    .iter()
+                    .find_map(|f| f.id_in_filename(name))
+                    .map(Id::Num)
             })
             .ok_or_else(|| {
-                let expected = match format {
+                let expected = match formats.first() {
                     Some(f) => format!("does not match `{}`", f.render(12)),
                     None => "does not start with a number".to_string(),
                 };
@@ -497,10 +507,10 @@ impl Item {
             .map(|i| i + 2)
     }
 
-    pub fn load_with(path: &Path, format: Option<&crate::config::IdFormat>) -> Result<Item> {
+    pub fn load_with(path: &Path, formats: &[crate::config::IdFormat]) -> Result<Item> {
         let text =
             std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
-        Item::parse_with(path, &text, format)
+        Item::parse_with(path, &text, formats)
     }
 
     pub fn load(path: &Path) -> Result<Item> {
@@ -516,6 +526,9 @@ impl Item {
             m.insert(Value::String(k.to_string()), v);
         };
         put("id", self.id.yaml());
+        if let Some(uid) = self.meta.uid {
+            put("uid", Value::String(uid.to_string()));
+        }
         if let Some(v) = &self.meta.key {
             put("key", Value::String(v.clone()));
         }
@@ -818,6 +831,15 @@ fn de_string_list<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<String>, D::Err
         Some(Value::Sequence(seq)) => seq.iter().filter_map(scalar_string).collect(),
         Some(other) => scalar_string(&other).into_iter().collect(),
     })
+}
+
+fn de_uid<'de, D: Deserializer<'de>>(d: D) -> Result<Option<uuid::Uuid>, D::Error> {
+    match Option::<String>::deserialize(d)? {
+        None => Ok(None),
+        Some(raw) => crate::identity::parse_uid(&raw)
+            .map(Some)
+            .map_err(serde::de::Error::custom),
+    }
 }
 
 fn de_id_list<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<Id>, D::Error> {

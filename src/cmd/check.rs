@@ -158,12 +158,58 @@ fn collect_inner(
                         others.join(", "),
                         if id.is_uuid() {
                             "reconcile the duplicate copies; identities are immutable"
+                        } else if cfg.format() >= 5 {
+                            "run `cairn renumber`"
                         } else {
                             "repair with a legacy Cairn before migrating"
                         }
                     ),
                 );
             }
+        }
+    }
+
+    // A tag names one item. Two files sharing one is a copy, and no number can
+    // say which of them the history meant.
+    let mut tagged: HashMap<uuid::Uuid, Vec<&Item>> = HashMap::new();
+    for i in items {
+        if let Some(uid) = i.meta.uid {
+            tagged.entry(uid).or_default().push(i);
+        }
+    }
+    for (uid, dupes) in &tagged {
+        if dupes.len() > 1 {
+            let others: Vec<String> = dupes.iter().map(|i| store.rel(&i.path)).collect();
+            for it in dupes {
+                r.error_at(
+                    &store.rel(&it.path),
+                    it,
+                    "uid",
+                    format!(
+                        "uid {uid} is carried by {} files ({}) — a copied file; remove the \
+                         copy, or delete its `uid:` line if it really is separate work",
+                        dupes.len(),
+                        others.join(", ")
+                    ),
+                );
+            }
+        }
+    }
+    // Work that was filed on a branch while the project was format 4, merged
+    // after it moved to format 5, arrives with a UUID where its number goes.
+    if !cfg.uuid_ids() {
+        for i in items
+            .iter()
+            .filter(|i| i.id.is_uuid() || i.meta.depends_on.iter().any(|d| d.is_uuid()))
+        {
+            r.error_at(
+                &store.rel(&i.path),
+                i,
+                "id",
+                "carries a format-4 UUID identity or reference — `cairn renumber` numbers \
+                 it and rewrites what refers to it"
+                    .to_string(),
+            );
         }
     }
 
@@ -385,7 +431,7 @@ fn collect_inner(
             }
         }
 
-        let expected = cfg.filename_for(item.id, item.title());
+        let expected = cfg.filename_for(item.id, item.kind(), item.title());
         let actual = item
             .path
             .file_name()

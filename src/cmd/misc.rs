@@ -236,15 +236,17 @@ pub fn schema_json(cfg: &Config, milestones: &crate::refs::Milestones) -> serde_
     json!({
         "format": cfg.format(),
         "identity": {
-            "kind": if cfg.format() >= 4 { "uuidv4" } else { "integer" },
-            "immutable": cfg.format() >= 4,
-            "minimum_prefix": if cfg.format() >= 4 { Some(8) } else { None },
+            "kind": if cfg.uuid_ids() { "uuidv4" } else { "integer" },
+            "immutable": cfg.uuid_ids(),
+            "minimum_prefix": if cfg.uuid_ids() { Some(8) } else { None },
+            "tag": if cfg.format() >= 5 { Some("uid") } else { None },
+            "id_format": if cfg.uuid_ids() { None } else { Some(cfg.id_format().render_template()) },
         },
         "project": {
             "name": cfg.project.name,
             "description": cfg.project.description,
             "dir": cfg.project.dir,
-            "id_width": if cfg.format() < 4 { Some(cfg.project.id_width) } else { None },
+            "id_width": if cfg.uuid_ids() { None } else { Some(cfg.project.id_width) },
             "default_type": cfg.project.default_type,
             "default_status": cfg.initial_status(),
             "root": cfg.root.display().to_string(),
@@ -257,7 +259,8 @@ pub fn schema_json(cfg: &Config, milestones: &crate::refs::Milestones) -> serde_
                 Some(crate::config::Groups::Many) => Some("many"),
                 None => None,
             },
-            "inverse": t.inverse
+            "inverse": t.inverse,
+            "id_format": t.id_format,
         })).collect::<Vec<_>>(),
         "statuses": cfg.statuses.iter().map(|s| json!({
             "name": s.name, "label": s.label, "category": s.category().as_str(),
@@ -445,13 +448,21 @@ selection policy. Regenerate these instructions with `cairn agent{scope} --write
         "Claims coordinate writers in the same item directory, not separate branches, \
 worktrees, or clones. Agree on assignments before splitting work.\n\n",
     );
-    if cfg.format() >= 4 {
+    if cfg.uuid_ids() {
         s.push_str(
             "Item identities are immutable UUIDv4 strings. Use full `id` values from JSON \
 for durable references; commands also accept unambiguous prefixes of at least 8 hex digits. \
 Store full identities in ID-reference fields, never prefixes. Migrated legacy numbers \
 remain lookup aliases; new items do not receive numbers.\n\n",
         );
+    } else if cfg.format() >= 5 {
+        s.push_str(&format!(
+            "Items are numbered: `{}`, and commands accept the bare number too. Write the \
+number in `depends_on` and other id references. Each item also carries a `uid` tag; leave it \
+alone. If a merge gives two items one number, `cairn renumber` moves the one that arrived \
+and retargets the references that came with it.\n\n",
+            cfg.id_format().render(12)
+        ));
     }
     s.push_str("### Schema\n\n");
     if !cfg.types.is_empty() {

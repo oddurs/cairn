@@ -1,0 +1,23 @@
+{
+  "assignee": null,
+  "body": "Body.\n",
+  "category": "open",
+  "claimed": null,
+  "created": null,
+  "created_by": null,
+  "depends_on": [],
+  "fields": {},
+  "id": 14,
+  "key": null,
+  "labels": [],
+  "milestone": null,
+  "owner": null,
+  "ref": "0014",
+  "source": null,
+  "status": "backlog",
+  "title": "A tagged item, independent of its filename",
+  "type": null,
+  "updated": null,
+  "closed_at": null,
+  "uid": "0000000b-0000-4000-8000-00000000000b"
+}

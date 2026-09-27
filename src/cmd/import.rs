@@ -116,11 +116,18 @@ pub fn run(args: Args) -> Result<i32> {
     let mut updated = 0usize;
     let mut skipped = 0usize;
     let mut warnings: Vec<String> = Vec::new();
-    // UUIDs cross project boundaries unchanged. Legacy adapter numbers are
-    // local to the document and receive a new identity once, before fields
-    // resolve, so forward references work in every declared id-ref field.
+    // Numbers are local to the document they arrive in, and each receives a
+    // local one once, before fields resolve, so forward references work in
+    // every declared id-ref field. A tag crosses the boundary unchanged: an
+    // item whose tag is already here is that item, however it was numbered
+    // there. A format-4 document's UUID ids are tags.
+    let by_uid: HashMap<uuid::Uuid, Id> = existing
+        .iter()
+        .filter_map(|i| i.meta.uid.map(|u| (u, i.id)))
+        .collect();
     let mut id_map: HashMap<Id, Id> = HashMap::new();
     let mut destinations = Vec::new();
+    let mut uids = Vec::new();
     let mut seen_destinations = HashSet::new();
     for inc in &incoming {
         let source = inc
@@ -128,19 +135,22 @@ pub fn run(args: Args) -> Result<i32> {
             .clone()
             .or_else(|| inc.id.map(|id| format!("{origin}#{id}")));
         let from_source = source.as_ref().and_then(|s| by_source.get(s)).copied();
-        let id = match inc.id.filter(|id| id.is_uuid()) {
-            Some(id) => {
-                if from_source.is_some_and(|old| old != id) {
-                    bail!(
-                        "source {source:?} already belongs to a different UUID; refusing to conflate identities"
-                    );
-                }
-                id
-            }
-            None => match from_source {
-                Some(id) => id,
-                None => store.next_id(&existing)?,
-            },
+        let uid = inc.uid.or(match inc.id {
+            Some(Id::Uuid(u)) => Some(u),
+            _ => None,
+        });
+        let from_uid = uid.and_then(|u| by_uid.get(&u)).copied();
+        if let (Some(a), Some(b)) = (from_uid, from_source)
+            && a != b
+        {
+            bail!(
+                "source {source:?} and tag {} name different items here; refusing to conflate them",
+                uid.expect("matched by tag")
+            );
+        }
+        let id = match from_uid.or(from_source) {
+            Some(id) => id,
+            None => store.next_id(&existing)?,
         };
         if !seen_destinations.insert(id) {
             bail!("import names identity {id} more than once");
@@ -152,6 +162,7 @@ pub fn run(args: Args) -> Result<i32> {
         }
         cfg.remember_id(id);
         destinations.push(id);
+        uids.push(uid);
     }
     // Each created item is kept beside the index of the incoming record that
     // produced it. Matching them up afterwards by any *field* is what broke
@@ -239,7 +250,7 @@ pub fn run(args: Args) -> Result<i32> {
             id,
             meta: Default::default(),
             body: String::new(),
-            path: store.path_for(id, &title),
+            path: store.path_for(id, None, &title),
             front: String::new(),
             eol: Default::default(),
         };
@@ -262,6 +273,8 @@ pub fn run(args: Args) -> Result<i32> {
             &arriving,
             &id_map,
         )?;
+        item.meta.uid = uids[index];
+        store.stamp_new(&mut item)?;
 
         if args.create_milestones
             && let Some(m) = &item.meta.milestone
@@ -690,7 +703,7 @@ fn read_github(args: &Args) -> Result<(Vec<Incoming>, String)> {
                 .unwrap_or("OPEN")
                 .to_lowercase();
             Incoming {
-                id: Some(Id::Legacy(number)),
+                id: Some(Id::Num(number)),
                 title: v.get("title").and_then(|t| t.as_str()).map(str::to_string),
                 status: Some(state.clone()),
                 category: Some(if state == "closed" {
@@ -775,7 +788,7 @@ fn create_milestones(cfg: &Config, store: &Store, names: &[&String]) -> Result<(
             id: next,
             meta: Default::default(),
             body: String::new(),
-            path: store.path_for(next, name),
+            path: store.path_for(next, None, name),
             front: String::new(),
             eol: Default::default(),
         };
@@ -788,6 +801,7 @@ fn create_milestones(cfg: &Config, store: &Store, names: &[&String]) -> Result<(
         }
         item.meta.status = Some(cfg.initial_status().to_string());
         item.meta.created = Some(today());
+        store.stamp_new(&mut item)?;
         item.save()?;
         items.push(item);
     }

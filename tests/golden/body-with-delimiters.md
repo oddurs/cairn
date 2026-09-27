@@ -1,5 +1,5 @@
 ---
-id: 00000006-0000-4000-8000-000000000006
+id: 6
 title: A body containing frontmatter delimiters
 status: backlog
 ---

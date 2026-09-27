@@ -54,15 +54,15 @@ fn every_selection_surface_uses_the_same_explicit_view() {
     );
     let reply = payload(p.mcp_call("next_items", json!({"view":"approved"}), None));
     assert_eq!(reply["count"], 2);
-    assert_eq!(reply["items"][0]["id"], ready[0]);
-    assert_eq!(reply["items"][1]["id"], ready[1]);
+    assert_eq!(id_text(&reply["items"][0]["id"]), ready[0]);
+    assert_eq!(id_text(&reply["items"][1]["id"]), ready[1]);
     assert_eq!(
         p.expect(&["claim", "--next", "--view", "approved", "-q"])
             .trimmed(),
         references[0]
     );
     let claimed = payload(p.mcp_call("claim_item", json!({"view":"approved"}), Some("second")));
-    assert_eq!(claimed["id"], ready[1]);
+    assert_eq!(id_text(&claimed["id"]), ready[1]);
     assert_eq!(claimed["status"], "working");
     let block = p.expect(&["agent", "--view", "approved"]).stdout;
     assert_contains(&block, "cairn next --view approved", "selected next");

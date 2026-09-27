@@ -1082,7 +1082,7 @@ fn an_identifier_can_have_a_suffix() {
     p.write(
         "cairn.toml",
         &p.read("cairn.toml")
-            .replace("format = 4", "format = 3")
+            .replace("format = 5", "format = 3")
             .replace("[project]", "[project]\nid_format = \"[{n:03}]\""),
     );
     p.write_item("[001]-first.md", "id: 1\ntitle: First\nstatus: backlog", "");
@@ -1136,7 +1136,7 @@ fn a_configuration_with_no_project_block_works() {
     let p = Project::empty();
     p.write(
         "cairn.toml",
-        "format = 4\n[[status]]\nname = \"todo\"\ncategory = \"open\"\n",
+        "format = 5\n[[status]]\nname = \"todo\"\ncategory = \"open\"\n",
     );
     std::fs::create_dir_all(p.path("cairn/items")).unwrap();
 
@@ -1576,7 +1576,7 @@ fn close_without_a_done_status_asks_for_one() {
     let p = Project::empty();
     p.write(
         "cairn.toml",
-        "format = 4\n[project]\nname = \"T\"\n\
+        "format = 5\n[project]\nname = \"T\"\n\
          [[status]]\nname = \"todo\"\ncategory = \"open\"\n\
          [[status]]\nname = \"doing\"\ncategory = \"active\"\n",
     );
@@ -1682,25 +1682,21 @@ fn criteria_can_be_confined_to_one_section() {
 /// `renumber --dry-run` and `--compact`, which are the two ways of asking it
 /// not to do the obvious thing.
 #[test]
-fn renumber_never_reassigns_a_duplicate_immutable_identity() {
+fn renumber_can_describe_itself_before_acting() {
     let p = Project::new();
     p.add("Keeper", &[]);
-    p.write_uuid_fixture(
+    p.write(
         "cairn/items/0001-a-copy.md",
         "---\nid: 1\ntitle: A copy\nstatus: backlog\n---\nbody\n",
     );
     let before = p.files("cairn/items");
 
-    let out = p.fails(&["renumber", "--dry-run"]).all();
-    assert_contains(&out, "duplicate identity", "");
+    let out = p.expect(&["renumber", "--dry-run"]).all();
+    assert_contains(&out, "would be renumbered", "");
     assert_eq!(before, p.files("cairn/items"), "a dry run moved a file");
 
-    p.fails(&["renumber"]);
-    assert_eq!(
-        before,
-        p.files("cairn/items"),
-        "duplicates need reconciliation, never a replacement identity"
-    );
+    p.expect(&["renumber"]);
+    assert!(p.run(&["check"]).ok(), "{}", p.run(&["check"]).all());
 }
 
 /// Every `--json` shape a script might read, asserted to parse.
@@ -1893,7 +1889,7 @@ fn new_can_set_everything_an_item_carries() {
     assert_eq!(json["milestone"], "v0.1");
     assert_eq!(json["assignee"], "somebody");
     assert_eq!(json["labels"], serde_json::json!(["one", "two"]));
-    assert_eq!(json["depends_on"], serde_json::json!([p.id(1)]));
+    assert_eq!(json["depends_on"], serde_json::json!([1]));
     assert_eq!(json["fields"]["priority"], "p0");
     assert_contains(json["body"].as_str().unwrap(), "A body of its own.", "");
 
@@ -2395,7 +2391,7 @@ fn an_agent_can_ask_for_only_the_keys_it_needs() {
     let keys: Vec<&String> = first.as_object().expect("an object").keys().collect();
     assert_eq!(keys.len(), 5, "got more than was asked for: {keys:?}");
     // A result nothing can be acted on is worth less than the bytes it took.
-    assert!(first["id"].is_string(), "id must survive: {first}");
+    assert!(first["id"].is_number(), "id must survive: {first}");
 }
 
 /// A milestone carries no priority. Asking for one across a mixed list is a

@@ -10,7 +10,7 @@
 // This generates adversarial ones — titles that collide when slugged, bodies
 // full of the syntax the format is made of, dependency graphs — and checks the
 // property directly: everything that went out comes back, and the dependencies
-// still point at the same items with their identities unchanged.
+// still point at the same items even though the identifiers may not survive.
 mod support;
 use support::*;
 
@@ -65,7 +65,8 @@ use std::collections::BTreeMap;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 struct Shape {
-    id: String,
+    /// The tag crosses the boundary unchanged, even where the number cannot.
+    uid: String,
     title: String,
     kind: String,
     status: String,
@@ -81,11 +82,11 @@ fn shapes(p: &Project) -> Vec<Shape> {
         serde_json::from_str(&p.expect(&["export"]).stdout).expect("export is JSON");
     let items = doc["items"].as_array().expect("items").clone();
 
-    let titles: BTreeMap<&str, String> = items
+    let titles: BTreeMap<u64, String> = items
         .iter()
         .map(|i| {
             (
-                i["id"].as_str().expect("UUID identity"),
+                i["id"].as_u64().expect("id"),
                 i["title"].as_str().unwrap_or_default().to_string(),
             )
         })
@@ -108,14 +109,14 @@ fn shapes(p: &Project) -> Vec<Shape> {
                 .as_array()
                 .map(|a| {
                     a.iter()
-                        .map(|v| v.as_str().expect("UUID reference"))
+                        .filter_map(serde_json::Value::as_u64)
                         .map(|d| titles.get(&d).cloned().unwrap_or_else(|| format!("?{d}")))
                         .collect()
                 })
                 .unwrap_or_default();
             depends_on.sort();
             Shape {
-                id: i["id"].as_str().expect("UUID identity").to_string(),
+                uid: i["uid"].as_str().expect("every item is tagged").to_string(),
                 title,
                 kind: i["type"].as_str().unwrap_or_default().to_string(),
                 status: i["status"].as_str().unwrap_or_default().to_string(),
@@ -173,7 +174,7 @@ fn a_backlog_survives_leaving_and_coming_back() {
         .trimmed();
     source.expect(&["set", &m, "type=milestone", "key=v0.1"]);
 
-    let mut created: Vec<String> = Vec::new();
+    let mut created: Vec<u32> = Vec::new();
     for n in 0..count {
         // Titles repeat on purpose: items whose slugs collide are exactly the
         // ones a filename-keyed round trip would lose.
@@ -181,40 +182,42 @@ fn a_backlog_survives_leaving_and_coming_back() {
         // `--` for the same reason as the bodies below: several of these
         // titles begin with a dash, which is what makes them worth generating.
         let out = source.expect(&["new", "-q", "--", &title]);
-        let id = source.json(&["show", &out.trimmed(), "--json"])["id"]
-            .as_str()
-            .expect("UUID identity")
-            .to_string();
-        created.push(id.clone());
+        let id: u32 = out.trimmed().parse().expect("an id");
+        created.push(id);
 
         source.expect(&[
             "set",
-            &id,
+            &id.to_string(),
             &format!("status={}", rng.choose(STATUSES)),
             &format!("type={}", rng.choose(TYPES)),
             "-q",
         ]);
         if rng.below(2) == 0 {
-            source.expect(&["set", &id, &format!("labels+={}", rng.choose(LABELS)), "-q"]);
+            source.expect(&[
+                "set",
+                &id.to_string(),
+                &format!("labels+={}", rng.choose(LABELS)),
+                "-q",
+            ]);
         }
         if rng.below(3) == 0 {
-            source.expect(&["set", &id, "assignee=someone", "-q"]);
+            source.expect(&["set", &id.to_string(), "assignee=someone", "-q"]);
         }
         if rng.below(3) == 0 {
-            source.expect(&["set", &id, "milestone=v0.1", "-q"]);
+            source.expect(&["set", &id.to_string(), "milestone=v0.1", "-q"]);
         }
         let body = rng.choose(BODY_SHAPES);
         if !body.is_empty() {
             // After `--`, so a body beginning with a dash is text rather
             // than a flag. This is ordinary command-line behaviour and the
             // reason the corpus contains such bodies at all.
-            source.expect(&["note", &id, "--bare", "-q", "--", body]);
+            source.expect(&["note", &id.to_string(), "--bare", "-q", "--", body]);
         }
         // A dependency on something already created, never on itself.
         if !created.is_empty() && rng.below(3) == 0 {
-            let dep = &created[rng.below(created.len())];
-            if dep != &id {
-                source.run(&["set", &id, &format!("depends_on+={dep}"), "-q"]);
+            let dep = created[rng.below(created.len())];
+            if dep != id {
+                source.run(&["set", &id.to_string(), &format!("depends_on+={dep}"), "-q"]);
             }
         }
     }
@@ -252,14 +255,9 @@ fn a_backlog_survives_leaving_and_coming_back() {
 fn importing_the_same_document_twice_changes_nothing_the_second_time() {
     let source = Project::with_init(&["init", "--bare", "--name", "Source"]);
     for title in ["First", "Second", "Third"] {
-        source.add(title, &[]);
+        source.expect(&["new", title, "-q"]);
     }
-    source.expect(&[
-        "set",
-        &source.id(2),
-        &format!("depends_on+={}", source.id(1)),
-        "-q",
-    ]);
+    source.expect(&["set", "2", "depends_on+=1", "-q"]);
     let document = source.expect(&["export"]).stdout;
 
     let mirror = Project::with_init(&["init", "--bare", "--name", "Mirror"]);

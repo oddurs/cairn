@@ -44,61 +44,77 @@ Git's [path resolution](https://git-scm.com/docs/git-worktree#_details) handles
 the shared/private directory distinction. A tracked `.gitattributes` declares
 intent, but cannot install an executable merge driver in another person's clone.
 
-## Merge and review
+## Numbers, merges and repair
 
-Format 4 allocates random UUIDv4 identities. Two branches can create items
-independently: their IDs and references stay unchanged when Git merges them.
-There is no central allocator, timestamp dependency, or per-branch counter.
+Items are numbered, and each carries a `uid` tag that never changes. A new item
+takes one more than the highest number this clone can see: the working tree,
+every linked worktree's uncommitted items, and every item file ever added on
+any local or remote-tracking branch. Agents working in parallel, one worktree
+each, therefore never collide, and a number that was deleted or is waiting on
+an unmerged branch is never handed out again.
 
-The installed post-merge hook regenerates the roadmap after the item merge.
-It still invokes `renumber` for compatibility, but that command changes no
-UUID and retains migrated filenames. Changes remain unstaged and uncommitted.
+What allocation cannot see is a branch on another machine that was never
+fetched. Two such branches can give the same number to different work. A
+successful local merge runs the installed post-merge hook, which repairs it:
 
-Sequence additions merge by ancestor-aware union; removals stay removed.
-Conflicting scalar values and body edits stay ordinary Git conflicts. Resolve
-the intended meaning, then validate:
+- the item already published keeps the number, and the arriving one moves to
+  the next free number;
+- a reference to the contested number that only the arriving side added moves
+  with it;
+- one that both sides added meant both items, so it keeps the number and gains
+  the new one.
+
+The tag is what makes this exact rather than a guess: it finds each item on
+both sides of the merge, however its file was renamed. Changes are left
+uncommitted and unstaged. Review them; Cairn never amends a merge commit.
 
 ```sh
-cairn render
 cairn check --render --strict
 git diff
 ```
 
-A manually duplicated UUID is an error. Determine whether the files are two
-copies of one item or genuinely different work; do not blindly give one a new
-ID and leave its incoming references pointing at the other copy.
+Sequence additions merge by ancestor-aware union; removals stay removed.
+Conflicting scalar values and body edits stay ordinary Git conflicts. Resolve
+the intended meaning, then validate. Prose links and commit messages that
+named a moved number are yours to review; the tag still resolves in any
+command, so `cairn show <uid prefix>` finds the item wherever it went.
+
+A file carrying another file's tag is a copy, and `cairn check` reports it.
+Remove the copy, or delete its `uid:` line if it really is separate work.
 
 ## Rebase, cherry-pick, and forge merges
 
-These operations do not run the successful local merge's post-merge hook.
-Independent UUID creation needs no repair, but the generated roadmap may be
-stale and conflicting edits still need review. Run `render` and
-`check --render --strict` after the operation. Commit resulting changes
-explicitly. CI should run the same validation.
+These do not run the post-merge hook. After the operation, run
+`cairn renumber --dry-run`, inspect, `cairn renumber`, `render`, and
+`check --render --strict`, and commit the result. Outside a merge, `renumber`
+cannot tell which side a reference came from, so it leaves references on the
+retained item and says so: audit them. CI should run the same validation, since
+a forge merge cannot run your local hook.
 
 Git documents the [post-merge hook's scope](https://git-scm.com/docs/githooks#_post_merge).
 A clean Git status is not validation of the backlog.
 
 ## Migrate an existing project once
 
-Upgrade Cairn and its readers, back up the complete project, and stop concurrent
-writers. Preview with `cairn migrate --dry-run`, then run `cairn migrate`.
-Review and commit the config, item frontmatter, and `_legacy-ids.toml`
-together. Migration keeps filenames and body bytes; Git history is not rewritten.
+Back up the complete project and stop concurrent writers. Preview with
+`cairn migrate --dry-run`, then run `cairn migrate`, and commit the result as
+one commit.
 
-Carry this single migration commit to other branches. Independently migrating
-the same old numeric backlog produces different UUID maps and is not supported.
-First reconcile legacy branches with the old writer, or replay their work
-deliberately against the migrated baseline.
+- From format 3, every item gains one `uid:` line. Nothing else changes.
+- From format 4, every item gets back the number it had, from
+  `_legacy-ids.toml`; items created since get the next free numbers in creation
+  order. Each UUID becomes the item's `uid`, references are rewritten to
+  numbers, UUID-named files are renamed, the project's `id_format` returns, and
+  the map is removed.
 
-Old numbers remain lookup aliases, including their old prefix rendering.
-New items get no numeric aliases; deleting an item never recycles its alias.
-Keep the map tracked: it also lets history comparisons bridge the migration.
+Carry this single migration commit to other branches rather than migrating
+each one. Work filed on a branch before the migration arrives afterwards with a
+UUID where its number goes; `cairn check` names it and `cairn renumber` numbers
+it, keeping the UUID as its tag and rewriting every reference to it.
 
-If interrupted, rerun `cairn migrate`. The saved
-`.identity-migration.json` plan is checked against disk before resuming;
-intervening edits are refused. Do not delete that plan to force normal writes.
-To roll back, restore the entire pre-migration backup, not only `cairn.toml`.
+If interrupted, rerun `cairn migrate`. The saved `.identity-migration.json`
+plan is checked against disk before resuming; intervening edits are refused.
+Do not delete that plan to force normal writes.
 
 ## Review the decision and the code together
 

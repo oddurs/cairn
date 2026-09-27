@@ -15,7 +15,6 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from recording import populate
 
 # --- the script being demonstrated ------------------------------------------
 # SETUP runs but is not shown; SCRIPT is shown with its real output. Keep it to
@@ -25,13 +24,17 @@ from recording import populate
 # features.
 SETUP = [
     "cairn init --name Nimbus --bare",
+    # A milestone is an item in format 2, and the roadmap needs two to be about.
+    "cairn new 'First usable version' -t milestone --set key=v0.1 --set due=2026-12-01 -q",
+    "cairn new 'Hardening' -t milestone --set key=v0.2 --set due=2027-02-01 -q",
 ]
 
 SCRIPT = [
-    "cairn list",
+    "cairn new 'Support OAuth login' -t feature -m v0.1 --set priority=p0",
+    "cairn new 'Rate-limit the public API' -t feature -m v0.2 --set priority=p1 -d 3",
     "cairn next",
     "cairn claim --next",
-    "cairn close 00000003",
+    "cairn close 3",
     "cairn next",
     "cairn board",
     # Ends on the roadmap rather than `render`, which the hooks have already
@@ -168,7 +171,6 @@ def main():
                 command.replace("cairn ", cairn + " ", 1),
                 shell=True, cwd=work, env=env, capture_output=True, text=True, check=True,
             )
-        populate(cairn, work, env)
 
         for command in SCRIPT:
             real = command.replace("cairn ", cairn + " ", 1)

@@ -8,27 +8,43 @@ Please send bug reports and suggestions through the project's issue tracker.
 
 * Noteworthy changes in release 1.0.0-alpha.1 (unreleased)
 
-** Immutable identities for independent Git work
+** Readable ids, a hidden tag, and collisions that repair themselves
 
-Format 4 replaces sequential numbers with UUIDv4 identities. Creation needs no
-shared counter or service. Stored references and machine-readable IDs use the
-full UUID; commands also accept unambiguous prefixes of at least eight hex
-digits. A short display reference is not a permanent identity.
+Format 5 numbers items again, and a project says how its numbers read, as
+before: id_format = "MP-{n}". New: a type may declare its own, so a bug reads
+BUG-12 beside a feature's 0013. Every type shares one counter, so the number
+alone is unique, and retyping an item changes how it reads, not what it is.
+Commands accept the bare number and every rendering; a prefix naming the wrong
+type is refused.
 
-Migration freezes old numbers and their rendering in _legacy-ids.toml, keeps
-existing filenames and body bytes, and carries numeric references to their
-new identities. Git history remains untouched and cairn log bridges the change.
-An interrupted identity migration must be resumed with cairn migrate; ordinary
-commands refuse a half-migrated project. Back up the whole project, migrate
-once, and share that commit. Upgrade counterpart readers before migrating.
+Every item cairn creates also carries a uid: a random UUID, written once and
+never shown in tables, filenames or references. JSON carries it, and hooks get
+CAIRN_ITEM_UID. Commands accept a uid, or a prefix of at least eight hex digits
+with a letter in it, so references written while a project was format 4 still
+resolve. CAIRN_ITEM_ID is the number and CAIRN_ITEM_REF its rendering.
 
-The JSON interchange version is 2 for format-4 projects. Native UUID imports
-retain identities, including forward references. Historical formats remain
-readable and export interchange version 1. CAIRN_ITEM_ID now carries the full
-identity; CAIRN_ITEM_REF carries the short display reference.
+A new number is one more than the highest the repository has seen anywhere:
+every linked worktree's uncommitted items and every item file ever added on any
+local or remote-tracking branch. Parallel agents in separate worktrees never
+collide, and a deleted number is never reused. A collision between machines is
+repaired by renumber, which the merge hook runs: the published item keeps its
+number, and references that arrived with the moved item follow it, found by
+its tag. Which side of a merge was published is now decided by tag; asking git
+which commit added each file mistook one new item for a rename of another.
 
-Renumber does not reassign UUIDs or rename old files. Duplicate identities
-require explicit reconciliation rather than an automatically invented identity.
+Migration from format 3 adds one uid line to each item and nothing else. The
+format-4 identities of the 1.0.0-alpha.1 development builds are undone: from
+format 4, every item gets back the number it had, read from _legacy-ids.toml,
+items created since are numbered in creation order, each UUID becomes the
+item's uid, references and UUID-named files are renumbered, id_format returns,
+and the map is removed. Format 4 projects are readable but not writable until
+migrated. Work filed on a branch before the migration and merged after is
+numbered by renumber. Migrations are journaled and resume exactly.
+
+The interchange document is version 1 for format 5 and carries uid; import
+recognises an item already here by its uid, and reads a format-4 document's
+UUIDs as uids. The format-4 corpus and specification are frozen beside the
+older ones.
 
 * Noteworthy changes in release 0.3.0 (2026-09-23)
 

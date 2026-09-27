@@ -81,7 +81,7 @@ pub fn run(args: Args) -> Result<i32> {
         id,
         meta: Default::default(),
         body: String::new(),
-        path: store.path_for(id, &args.title),
+        path: store.path_for(id, None, &args.title),
         front: String::new(),
         eol: Default::default(),
     };
@@ -230,6 +230,7 @@ pub fn run(args: Args) -> Result<i32> {
         );
     }
 
+    store.stamp_new(&mut item)?;
     crate::refs::validate_on_write(&cfg, &store, &item)?;
     if !item.meta.depends_on.is_empty() {
         crate::cmd::set::check_no_cycle(&store, &item)?;

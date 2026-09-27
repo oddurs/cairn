@@ -15,7 +15,7 @@ The corpus deliberately includes files cairn would not write itself — bare
 strings where a list is expected, CRLF endings, unknown keys —
 because those are what people, editors, and other tools produce.
 
-The current corpus is format 4: identities and ID references are full UUIDv4
-strings. Historical `format-1`, `format-2`, and `format-3` corpora are frozen,
-including numeric identities and their filename fallback. A recorded digest
-prevents changing those expectations to accommodate a new implementation.
+The current corpus is format 5: identities and ID references are numbers, and
+an item may carry a `uid` tag. Historical `format-1` to `format-4` corpora are
+frozen — format 4's with its UUID identities. A recorded digest prevents
+changing those expectations to accommodate a new implementation.

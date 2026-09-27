@@ -433,8 +433,16 @@ fn id_in(path: &str) -> Option<Id> {
 /// The migration bridge lets history keep its original bytes while comparisons
 /// name the same logical item on either side of the migration commit.
 fn canonical_history(cfg: &Config, mut item: Item) -> Item {
-    item.id = cfg.canonical_id(item.id);
-    item.meta.id = Some(item.id);
+    // The tag outranks the number: a number can have moved since.
+    item.id = match item.meta.uid {
+        Some(uid) => match cfg.canonical_id(Id::Uuid(uid)) {
+            Id::Uuid(_) => cfg.canonical_id(item.id),
+            current @ Id::Num(_) => current,
+        },
+        None => cfg.canonical_id(item.id),
+    };
+    // `meta.id` keeps the number the revision was written with, so a range
+    // can still tell that the same tagged work moved.
     item.meta.depends_on = item
         .meta
         .depends_on
@@ -710,6 +718,8 @@ fn range_report(cfg: &Config, store: &Store, range: &str, json: bool) -> Result<
 
     let mut found: Vec<(Id, String, Outcome)> = Vec::new();
     let mut found_status: std::collections::HashMap<Id, String> = std::collections::HashMap::new();
+    // Same tag, different number: a renumber, known rather than guessed.
+    let mut moved = 0usize;
     for id in ids {
         let (b, a) = (before.get(&id), after.get(&id));
         let outcome = match (b, a) {
@@ -723,6 +733,9 @@ fn range_report(cfg: &Config, store: &Store, range: &str, json: bool) -> Result<
                 } else if was && !now {
                     Outcome::Reopened
                 } else {
+                    if b.meta.id.is_some() && b.meta.id != a.meta.id {
+                        moved += 1;
+                    }
                     let changes = describe(b, a);
                     if changes.is_empty() {
                         continue;
@@ -740,7 +753,7 @@ fn range_report(cfg: &Config, store: &Store, range: &str, json: bool) -> Result<
     // A renumber moves an identifier, so the same work appears once as removed and
     // once as new. Paired up and counted, because reporting fifty items twice
     // would bury the one that matters.
-    let renumbered = pair_renumbered(&mut found, &before, &after);
+    let renumbered = moved + pair_renumbered(&mut found, &before, &after);
 
     found.sort_by_key(|(id, _, _)| *id);
 
@@ -888,8 +901,14 @@ fn pair_renumbered(
         if let Some((new_id, _, _)) = arrived {
             // Only when the work itself did not change, so a delete and an
             // unrelated create that happen to share a title are left alone.
+            // Two tags are two pieces of work, however alike they read; a
+            // tagged item that moved was matched by its tag already.
             let same = match (before.get(gone_id), after.get(new_id)) {
-                (Some(b), Some(a)) => b.status() == a.status() && b.body == a.body,
+                (Some(b), Some(a)) => {
+                    (b.meta.uid.is_none() || a.meta.uid.is_none())
+                        && b.status() == a.status()
+                        && b.body == a.body
+                }
                 _ => false,
             };
             if same {

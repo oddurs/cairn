@@ -1,0 +1,22 @@
+{
+  "assignee": "no",
+  "body": "A body whose first line looks like a key: value.\n",
+  "category": "open",
+  "claimed": null,
+  "created": null,
+  "created_by": null,
+  "depends_on": [],
+  "fields": {},
+  "id": "00000008-0000-4000-8000-000000000008",
+  "key": null,
+  "labels": [],
+  "milestone": null,
+  "owner": null,
+  "ref": "00000008",
+  "source": null,
+  "status": "backlog",
+  "title": "Quotes: colons, #hashes and *stars",
+  "type": null,
+  "updated": null,
+  "closed_at": null
+}

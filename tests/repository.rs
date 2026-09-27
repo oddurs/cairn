@@ -22,31 +22,35 @@ use std::process::{Command, Stdio};
 #[test]
 fn renumber_is_a_no_op_when_ids_are_unique() {
     let p = seeded();
-    assert_contains(&p.expect(&["renumber"]).all(), "immutable", "says so");
+    assert_contains(
+        &p.expect(&["renumber"]).all(),
+        "no duplicate ids",
+        "says so",
+    );
 }
 
 #[test]
-fn renumber_refuses_a_duplicate_immutable_identity_without_touching_files() {
+fn renumber_repairs_a_merge_collision() {
     let p = Project::new();
-    let id = p.add("Already here", &[]);
-    let path = p.expect(&["show", &id, "--path"]).trimmed();
-    let original = p.read(&path);
-    let copy = original.replace("Already here", "Arrived from another branch");
-    p.write("cairn/items/arriving.md", &copy);
-    for args in [
-        vec!["renumber"],
-        vec!["renumber", "--dry-run"],
-        vec!["check"],
-    ] {
-        assert_contains(
-            &p.fails(&args).all(),
-            "duplicate",
-            "an ambiguous identity needs review",
-        );
-        assert_eq!(p.read(&path), original);
-        assert_eq!(p.read("cairn/items/arriving.md"), copy);
-        assert!(!p.exists("cairn/items/.lock"));
-    }
+    p.add("Already here", &[]);
+    // What a merge of two branches produces: same id, different filename.
+    p.write(
+        "cairn/items/0001-arrived-from-another-branch.md",
+        "---\nid: 1\ntitle: Arrived from another branch\nstatus: backlog\n---\nbody\n",
+    );
+    p.fails(&["check"]);
+
+    let dry = p.expect(&["renumber", "--dry-run"]);
+    assert_contains(&dry.all(), "->", "the plan is shown");
+    p.fails(&["check"]);
+
+    p.expect(&["renumber"]);
+    p.expect(&["check"]);
+    assert_eq!(
+        p.json(&["show", "1", "--json"])["title"],
+        "Already here",
+        "the older item keeps the contested id"
+    );
 }
 
 /// Gaps in the identifier sequence are permanent, and that is the design.
@@ -57,32 +61,38 @@ fn renumber_refuses_a_duplicate_immutable_identity_without_touching_files() {
 /// and cairn has no way to rewrite any of those. That is a large, irreversible
 /// cost for a cosmetic benefit, and nothing outside its own test ever wanted it.
 #[test]
-fn removed_identities_are_never_reassigned_or_compacted() {
+fn renumber_repairs_duplicates_and_leaves_gaps_alone() {
     let p = Project::new();
     for n in 1..=4 {
         p.add(&format!("Item {n}"), &[]);
     }
-    let removed = p.id(2);
-    p.expect(&["remove", &removed, "--force"]);
-    p.add("Replacement", &[]);
+    p.expect(&["remove", "2", "--force"]);
+    p.write(
+        "cairn/items/0001-collision.md",
+        "---\nid: 1\ntitle: Collision\nstatus: backlog\n---\nbody\n",
+    );
+
     p.expect(&["renumber"]);
     p.expect(&["check"]);
-    let items = p.json(&["list", "-A", "--json"]);
-    let ids: std::collections::BTreeSet<_> = items
-        .as_array()
-        .unwrap()
+
+    // The gap left by removing item 2 is still there, and the duplicate has
+    // been given an id of its own.
+    let ids: Vec<u32> = p
+        .expect(&["list", "-A", "--ids"])
+        .lines()
         .iter()
-        .map(|i| i["id"].as_str().unwrap().to_owned())
+        .filter_map(|l| l.trim().parse().ok())
         .collect();
-    assert_eq!(ids.len(), 4);
-    assert!(!ids.contains(&removed));
-    for n in [1, 3, 4, 5] {
-        assert!(ids.contains(&p.id(n)));
-    }
+    assert!(!ids.contains(&2), "the gap was closed: {ids:?}");
+    let unique: std::collections::HashSet<_> = ids.iter().collect();
+    assert_eq!(unique.len(), ids.len(), "duplicates survived: {ids:?}");
+
+    // And the flag is gone rather than quietly accepted.
+    let out = p.fails(&["renumber", "--compact"]);
     assert_contains(
-        &p.fails(&["renumber", "--compact"]).all(),
+        &out.all(),
         "unexpected argument",
-        "compaction is not offered",
+        "--compact should no longer exist",
     );
 }
 // --- hooks ------------------------------------------------------------------
@@ -117,10 +127,7 @@ fn hooks_fire_in_the_portable_argv_form() {
     ));
 
     p.expect(&["new", "Triggers a hook", "-q"]);
-    let id = p.json(&["list", "-A", "--json"])[0]["id"]
-        .as_str()
-        .unwrap()
-        .to_owned();
+    let id = id_text(&p.json(&["list", "-A", "--json"])[0]["id"]);
     assert_eq!(side.count_all(), 1, "after-create fired");
     p.expect(&["set", &id, "status=doing", "-q"]);
     assert_eq!(side.count_all(), 2, "after-change fired");
@@ -138,10 +145,7 @@ fn a_hook_receives_the_item_as_json_on_stdin() {
     ));
 
     p.expect(&["new", "Distinctive title", "-q"]);
-    let captured_id = side.json(&["list", "-A", "--json"])[0]["id"]
-        .as_str()
-        .unwrap()
-        .to_owned();
+    let captured_id = id_text(&side.json(&["list", "-A", "--json"])[0]["id"]);
     let captured = side.json(&["show", &captured_id, "--json"]);
     assert_contains(
         captured["body"].as_str().unwrap(),
@@ -1003,33 +1007,22 @@ fn two_branches_adding_a_dependency_merge_by_union() {
     git(&p, &["add", "-A"]);
     git(&p, &["commit", "-qm", "three items"]);
 
-    on_branch(
-        &p,
-        "one",
-        "main",
-        &["set", &p.id(4), &format!("depends_on+={}", p.id(2))],
-    );
-    on_branch(
-        &p,
-        "two",
-        "main",
-        &["set", &p.id(4), &format!("depends_on+={}", p.id(3))],
-    );
+    on_branch(&p, "one", "main", &["set", "4", "depends_on+=2"]);
+    on_branch(&p, "two", "main", &["set", "4", "depends_on+=3"]);
 
     git(&p, &["checkout", "-q", "main"]);
     git(&p, &["merge", "--no-edit", "one"]);
     assert!(merge(&p, "two").ok(), "dependencies union too");
 
     let v: serde_json::Value =
-        serde_json::from_str(&p.expect(&["show", &p.id(4), "--json"]).stdout).expect("JSON");
-    let deps: Vec<String> = v["depends_on"]
+        serde_json::from_str(&p.expect(&["show", "4", "--json"]).stdout).expect("JSON");
+    let deps: Vec<u64> = v["depends_on"]
         .as_array()
         .expect("depends_on")
         .iter()
-        .map(|v| v.as_str().unwrap().to_owned())
+        .filter_map(serde_json::Value::as_u64)
         .collect();
-    let expected = vec![p.id(2), p.id(3)];
-    assert_eq!(deps, expected, "both, in a stable order");
+    assert_eq!(deps, vec![2, 3], "both, in a stable order");
 }
 
 /// A value one side deliberately removed must not come back because the other
@@ -1068,8 +1061,8 @@ fn a_disagreement_about_one_fact_is_still_a_conflict() {
     git(&p, &["add", "-A"]);
     git(&p, &["commit", "-qm", "an item"]);
 
-    on_branch(&p, "one", "main", &["set", &p.id(2), "priority=p0"]);
-    on_branch(&p, "two", "main", &["set", &p.id(2), "priority=p3"]);
+    on_branch(&p, "one", "main", &["set", "2", "priority=p0"]);
+    on_branch(&p, "two", "main", &["set", "2", "priority=p3"]);
 
     git(&p, &["checkout", "-q", "main"]);
     git(&p, &["merge", "--no-edit", "one"]);
@@ -1091,7 +1084,7 @@ fn a_disagreement_about_one_fact_is_still_a_conflict() {
         .find(|path| {
             path.file_name()
                 .and_then(|n| n.to_str())
-                .is_some_and(|n| n.starts_with(&p.id(2)))
+                .is_some_and(|n| n.starts_with("0002"))
         })
         .expect("the contested item");
     let text = std::fs::read_to_string(&path).expect("read");
@@ -1179,12 +1172,21 @@ fn renumber_is_idempotent() {
     let p = Project::new();
     p.add("First", &[]);
     p.add("Second", &[]);
+    p.write(
+        "cairn/items/0001-a-copy.md",
+        "---\nid: 1\ntitle: A copy\nstatus: backlog\n---\nbody\n",
+    );
+
     p.expect(&["renumber"]);
     let after_once: Vec<String> = p.expect(&["list", "-A", "--ids"]).lines();
     let files_once = p.files("cairn/items");
 
     let out = p.expect(&["renumber"]).all();
-    assert_contains(&out, "immutable", "the second pass has nothing to do");
+    assert_contains(
+        &out,
+        "no duplicate ids",
+        "the second pass has nothing to do",
+    );
     assert_eq!(after_once, p.expect(&["list", "-A", "--ids"]).lines());
     assert_eq!(files_once, p.files("cairn/items"), "and moved no file");
 }
@@ -1193,23 +1195,35 @@ fn renumber_is_idempotent() {
 /// still be able to repair the ids, because refusing would leave somebody with
 /// two problems and no way to fix either.
 #[test]
-fn renumber_does_not_change_identity_to_disguise_a_broken_graph() {
+fn renumber_repairs_ids_even_where_the_graph_is_broken() {
     let p = Project::new();
-    p.write_uuid_fixture(
-        "cairn/items/one.md",
-        "---\nid: 1\ntitle: One\nstatus: backlog\ndepends_on: [2]\n---\nbody\n",
+    p.add("One", &[]);
+    p.add("Two", &[]);
+    // A cycle, written by hand because the commands refuse to create one.
+    for (id, dep, name) in [(1u32, 2u32, "one"), (2, 1, "two")] {
+        p.write(
+            &format!("cairn/items/{id:04}-{name}.md"),
+            &format!(
+                "---\nid: {id}\ntitle: {name}\nstatus: backlog\ndepends_on:\n  - {dep}\n---\nbody\n"
+            ),
+        );
+    }
+    p.write(
+        "cairn/items/0002-a-collision.md",
+        "---\nid: 2\ntitle: A collision\nstatus: backlog\n---\nbody\n",
     );
-    p.write_uuid_fixture(
-        "cairn/items/two.md",
-        "---\nid: 2\ntitle: Two\nstatus: backlog\ndepends_on: [1]\n---\nbody\n",
+
+    assert!(
+        !p.run(&["check"]).ok(),
+        "the project is broken to begin with"
     );
-    let one = p.read("cairn/items/one.md");
-    let two = p.read("cairn/items/two.md");
-    p.fails(&["check"]);
-    p.expect(&["renumber"]);
-    assert_eq!(one, p.read("cairn/items/one.md"));
-    assert_eq!(two, p.read("cairn/items/two.md"));
-    p.fails(&["check"]);
+    let out = p.expect(&["renumber"]).all();
+    assert_contains(&out, "renumbered", "");
+
+    // The duplicate is gone even though the graph is still a cycle.
+    let ids = p.expect(&["list", "-A", "--ids"]).lines();
+    let unique: std::collections::HashSet<_> = ids.iter().collect();
+    assert_eq!(ids.len(), unique.len(), "duplicate ids survived");
 }
 
 /// A file the process cannot write is the interesting failure: what matters is
@@ -1221,7 +1235,7 @@ fn renumber_that_cannot_finish_leaves_everything_findable() {
 
     let p = Project::new();
     p.add("Keeper", &[]);
-    p.write_uuid_fixture(
+    p.write(
         "cairn/items/0001-a-copy.md",
         "---\nid: 1\ntitle: A copy\nstatus: backlog\n---\nbody\n",
     );
@@ -1240,12 +1254,7 @@ fn renumber_that_cannot_finish_leaves_everything_findable() {
         before,
         "an item went missing"
     );
-    assert!(!p.exists("cairn/items/.lock"), "the lock was left held");
-    assert_contains(
-        &p.fails(&["renumber"]).all(),
-        "duplicate",
-        "repeating the refusal is safe",
-    );
+    assert!(p.run(&["renumber"]).ok(), "the lock was left held");
 }
 
 /// A merge driver is per-clone configuration: git deliberately refuses to take
@@ -1472,7 +1481,7 @@ fn a_range_with_nothing_to_say_says_so() {
 }
 
 #[test]
-fn identical_prose_does_not_make_two_uuids_one_historical_item() {
+fn identical_prose_does_not_make_two_tagged_items_one() {
     let p = repository();
     let first = p.add("Recurring task", &[]);
     let first_id = p.id(2);
@@ -1488,7 +1497,7 @@ fn identical_prose_does_not_make_two_uuids_one_historical_item() {
     assert_missing(
         &history,
         "renumbered",
-        "UUID identity never uses a similarity heuristic",
+        "two tags are two pieces of work, however alike they read",
     );
     assert_contains(&history, "new", "a new identity arrived");
     assert_contains(&history, "removed", "the old identity left");
