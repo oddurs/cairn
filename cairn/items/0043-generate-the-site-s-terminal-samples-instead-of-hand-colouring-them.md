@@ -1,5 +1,6 @@
 ---
-id: 4a6d4683-33e8-443b-bafb-1c663d4a9074
+id: 43
+uid: 4a6d4683-33e8-443b-bafb-1c663d4a9074
 title: Generate the site's terminal samples instead of hand-colouring them
 type: bug
 status: done

@@ -1,5 +1,6 @@
 ---
-id: ba4f4b16-8e0f-44ea-8276-ffa541511fc3
+id: 23
+uid: ba4f4b16-8e0f-44ea-8276-ffa541511fc3
 title: Lock the repository for mutating commands
 type: feature
 status: done

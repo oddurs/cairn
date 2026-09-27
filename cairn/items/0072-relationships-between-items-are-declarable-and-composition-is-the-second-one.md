@@ -1,11 +1,12 @@
 ---
-id: a7146df0-b225-4c8c-8b0c-c91c741588bc
+id: 72
+uid: a7146df0-b225-4c8c-8b0c-c91c741588bc
 title: Relationships between items are declarable, and composition is the second one
 type: feature
 status: done
 milestone: v1.0
 depends_on:
-- 3fab728a-8c33-4748-aac8-967806b97c75
+- 79
 created: 2026-09-06
 updated: 2026-09-07
 priority: p0

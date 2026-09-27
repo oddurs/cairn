@@ -1,5 +1,6 @@
 ---
-id: a7383a96-4dde-438f-a721-400a171867ce
+id: 30
+uid: a7383a96-4dde-438f-a721-400a171867ce
 title: Cut a release candidate and verify every install path
 type: chore
 status: done

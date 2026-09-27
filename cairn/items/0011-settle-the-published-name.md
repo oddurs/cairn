@@ -1,5 +1,6 @@
 ---
-id: ae40c07c-1696-4750-948b-386bc6cb8d1c
+id: 11
+uid: ae40c07c-1696-4750-948b-386bc6cb8d1c
 title: Settle the published name
 type: chore
 status: done

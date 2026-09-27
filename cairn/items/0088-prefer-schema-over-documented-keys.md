@@ -1,5 +1,6 @@
 ---
-id: 16b12332-e3f3-4d6b-bfcf-15720e67f8f7
+id: 88
+uid: 16b12332-e3f3-4d6b-bfcf-15720e67f8f7
 title: Prefer schema over documented keys
 type: docs
 status: done

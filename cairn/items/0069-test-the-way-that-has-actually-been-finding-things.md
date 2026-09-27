@@ -1,5 +1,6 @@
 ---
-id: 8f5ba25d-2d90-4416-9936-5f6f1c9dc570
+id: 69
+uid: 8f5ba25d-2d90-4416-9936-5f6f1c9dc570
 title: Test the way that has actually been finding things
 type: chore
 status: done

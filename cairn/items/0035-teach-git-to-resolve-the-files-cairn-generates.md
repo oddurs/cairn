@@ -1,5 +1,6 @@
 ---
-id: 8e469599-1199-4964-a47a-cc2bdad0c41d
+id: 35
+uid: 8e469599-1199-4964-a47a-cc2bdad0c41d
 title: Teach git to resolve the files cairn generates
 type: feature
 status: done

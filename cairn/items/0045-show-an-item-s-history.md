@@ -1,5 +1,6 @@
 ---
-id: cf2b142b-c17d-48bd-a43a-7566733ac48c
+id: 45
+uid: cf2b142b-c17d-48bd-a43a-7566733ac48c
 title: Show an item's history
 type: feature
 status: done

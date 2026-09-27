@@ -1,5 +1,6 @@
 ---
-id: 04600403-e461-4862-b262-2e8bfa582ea0
+id: 113
+uid: 04600403-e461-4862-b262-2e8bfa582ea0
 title: A type declares that it groups work
 type: feature
 status: done

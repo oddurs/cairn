@@ -1,11 +1,12 @@
 ---
-id: c7ac551e-b7f3-4da0-b7a1-94fd027ea098
+id: 147
+uid: c7ac551e-b7f3-4da0-b7a1-94fd027ea098
 title: Migrate harrow, rim and nun to format 5
 type: chore
 status: backlog
 milestone: v1.0
 depends_on:
-- 49543fc8-23b5-4987-acd9-4a1c680693e3
+- 145
 created: 2026-09-26
 updated: 2026-09-26
 priority: p1

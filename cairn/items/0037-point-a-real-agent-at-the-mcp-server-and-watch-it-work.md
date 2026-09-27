@@ -1,5 +1,6 @@
 ---
-id: 3c2bda64-1dd9-412e-93aa-500eeb210aa3
+id: 37
+uid: 3c2bda64-1dd9-412e-93aa-500eeb210aa3
 title: Point a real agent at the MCP server and watch it work
 type: chore
 status: done

@@ -1,5 +1,6 @@
 ---
-id: 9a4f6297-f819-4e3f-b6e6-55ec7862a3bc
+id: 95
+uid: 9a4f6297-f819-4e3f-b6e6-55ec7862a3bc
 title: The obsolete milestone block names a command with nothing to do
 type: bug
 status: done

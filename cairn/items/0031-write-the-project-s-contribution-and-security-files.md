@@ -1,5 +1,6 @@
 ---
-id: 7a6e8987-aef7-4534-9bec-080f61292edf
+id: 31
+uid: 7a6e8987-aef7-4534-9bec-080f61292edf
 title: Write the project's contribution and security files
 type: docs
 status: done

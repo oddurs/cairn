@@ -1,5 +1,6 @@
 ---
-id: 49543fc8-23b5-4987-acd9-4a1c680693e3
+id: 145
+uid: 49543fc8-23b5-4987-acd9-4a1c680693e3
 title: 'Format 5: readable configurable ids with a hidden uid'
 type: feature
 status: doing
@@ -7,7 +8,7 @@ milestone: v1.0
 assignee: oddurs
 claimed: 2026-09-26
 depends_on:
-- c5ed8586-b105-44b1-b630-874997def019
+- 146
 created: 2026-09-26
 updated: 2026-09-26
 priority: p1

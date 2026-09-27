@@ -1,11 +1,12 @@
 ---
-id: 42419726-ca18-463a-bfdf-80e376e5b978
+id: 87
+uid: 42419726-ca18-463a-bfdf-80e376e5b978
 title: The corpus keeps every format that has ever existed
 type: chore
 status: done
 milestone: v1.0
 depends_on:
-- c10b2433-68c7-49de-bf31-c48096b39757
+- 86
 created: 2026-09-07
 updated: 2026-09-07
 priority: p0

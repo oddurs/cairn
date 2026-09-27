@@ -1,12 +1,13 @@
 ---
-id: 21879cb7-8376-4021-ad3b-76c9eb2ca5eb
+id: 73
+uid: 21879cb7-8376-4021-ad3b-76c9eb2ca5eb
 title: The hierarchy is a query, not a schema
 type: feature
 status: done
 milestone: v1.0
 depends_on:
-- a7146df0-b225-4c8c-8b0c-c91c741588bc
-- 3fab728a-8c33-4748-aac8-967806b97c75
+- 72
+- 79
 created: 2026-09-06
 updated: 2026-09-07
 priority: p1

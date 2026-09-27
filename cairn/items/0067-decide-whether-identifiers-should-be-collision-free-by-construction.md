@@ -1,12 +1,13 @@
 ---
-id: 46d85eb3-2873-4fb8-aad0-bb1bc1e5c599
+id: 67
+uid: 46d85eb3-2873-4fb8-aad0-bb1bc1e5c599
 title: Decide whether identifiers should be collision-free by construction
 type: decision
 status: done
 milestone: v1.0
 assignee: codex
 depends_on:
-- cff9b744-76f0-4d09-a2c4-0247bc73306c
+- 138
 created: 2026-09-06
 updated: 2026-09-23
 closed_at: 2026-09-23

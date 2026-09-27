@@ -1,5 +1,6 @@
 ---
-id: 96ea5ce3-b87d-4698-9fad-c8dcdd289b90
+id: 142
+uid: 96ea5ce3-b87d-4698-9fad-c8dcdd289b90
 title: Keep the core small and the project memory portable
 type: decision
 status: done

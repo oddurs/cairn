@@ -1,5 +1,6 @@
 ---
-id: ad048f6f-c8fc-4e9c-bcc1-844c0f0f00b7
+id: 14
+uid: ad048f6f-c8fc-4e9c-bcc1-844c0f0f00b7
 title: Define and publish platform support tiers
 type: docs
 status: done
