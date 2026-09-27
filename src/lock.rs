@@ -13,6 +13,7 @@
 use crate::config::Config;
 use crate::style;
 use anyhow::{Context, Result, bail};
+use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -40,6 +41,22 @@ impl Lock {
     /// > A format bump may cost somebody a command. It must never cost them
     /// > their data, and it must never cost them the ability to look.
     pub fn acquire(cfg: &Config) -> Result<Lock> {
+        // A person at a terminal is asked, rather than told to go and run
+        // something. On yes the project is migrated, and the command starts
+        // over, because everything it has read so far was read at the old
+        // format. Agents, pipes and scripts are never asked.
+        if cfg.format() < crate::config::CURRENT_FORMAT
+            && crate::cmd::migrate::may_offer(
+                std::io::stdin().is_terminal() && std::io::stderr().is_terminal(),
+                crate::store::acting_agent().is_some(),
+            )
+            && crate::cmd::migrate::offer(cfg)?
+        {
+            let status = std::process::Command::new(std::env::current_exe()?)
+                .args(std::env::args_os().skip(1))
+                .status()?;
+            std::process::exit(status.code().unwrap_or(1));
+        }
         if cfg.format() < crate::config::CURRENT_FORMAT {
             // What migrating costs, said where somebody is stopped by it rather
             // than only in the manual. The recurring one-line notice stays short

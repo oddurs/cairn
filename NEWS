@@ -8,6 +8,22 @@ Please send bug reports and suggestions through the project's issue tracker.
 
 * Noteworthy changes in release 1.0.0-alpha.1 (unreleased)
 
+** Migrating is one safe step
+
+cairn migrate refuses uncommitted changes to the files it rewrites
+(--allow-dirty overrides), names branches carrying items not yet merged, and,
+before writing anything, reads its own plan back and verifies that every item
+keeps its body and every non-identity value, that references still name what
+they named, and that restored numbers are the ones items had. It re-renders
+the roadmap, and --commit records the migration as one commit. The dry run
+counts files rather than listing them; --verbose lists them.
+
+cairn migrate --all [DIR] does this for every project under a directory,
+skipping, with the reason, any it should not touch, and exits non-zero if any
+migration failed. A write to an older project from a terminal now asks whether
+to migrate and, on yes, migrates and carries on; agents and scripts are still
+refused with the command to run.
+
 ** cairn next explains an empty selection
 
 cairn next --blocked now lists only blocked work, each item with what blocks
