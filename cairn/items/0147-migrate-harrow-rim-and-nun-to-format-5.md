@@ -39,3 +39,7 @@ Order changed: the pinned Harrow refuses format 5, and CI's agreement gate runs 
 ## 2026-09-27
 
 Step 1 done: Harrow reads format 5 (harrow#103, merged as f59a46a): numbers, uid tags, type renderings, tag queries; worktree copies match by uid. spec/harrow-revision now pins f59a46a, and make agreement passes 5/5 against it from this branch. Steps 2-3 (install the pair, migrate harrow, rim and nun) remain: installing this cairn makes every format-4 project read-only, so they follow this merge.
+
+## 2026-09-27
+
+Harrow's backlog is format 5 (harrow#105, one squashed migration commit: 110 numbers restored, 111-115 numbered, 34 references followed, verified by migrate). rim and nun are deferred at the owner's request until rim's merge queue is quiet: the installed cairn stays format 4 until then, because a format-5 cairn refuses writes to their format-4 backlogs. Meanwhile the cairn and harrow repositories need a format-5 build to write.
