@@ -179,13 +179,23 @@ pub fn run(args: Args) -> Result<i32> {
         .map(|r| r.author.chars().count())
         .max()
         .unwrap_or(0);
+    let mut previous_path: Option<&str> = None;
     for rev in &revisions {
         // A commit that renamed the file but changed no field still deserves a
         // line: it is how a retitled item leaves a trace, and a gap in a
-        // history is more alarming than an unexciting entry.
+        // history is more alarming than an unexciting entry. A commit that kept
+        // the name and changed no field rewrote how the file says the same
+        // thing — a format migration — and says that instead.
+        let moved = previous_path.is_some_and(|p| p != rev.path);
+        previous_path = Some(&rev.path);
         let changes = if rev.changes.is_empty() {
             vec![Change {
-                field: "file renamed".into(),
+                field: if moved {
+                    "file renamed"
+                } else {
+                    "rewritten, nothing changed"
+                }
+                .into(),
                 from: None,
                 to: None,
             }]

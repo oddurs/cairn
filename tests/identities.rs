@@ -529,6 +529,11 @@ fn history_follows_an_item_across_every_format() {
         history,
         "by its old UUID too"
     );
+    assert_contains(
+        &p.expect(&["log", "67"]).stdout,
+        "rewritten, nothing changed",
+        "a migration is not mistaken for a rename",
+    );
 }
 
 // --- work from format-4 branches, merged later --------------------------------
