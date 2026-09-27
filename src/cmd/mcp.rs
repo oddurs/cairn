@@ -169,8 +169,8 @@ fn initialize() -> Value {
     in the repository under a schema defined in cairn.toml. Call get_schema first to learn the \
     project's own statuses, types and fields; they are not fixed. Use next_items to find work that \
     is ready. When the project's instructions select a saved view, pass the same view to \
-    next_items and automatic claim_item; extra filters only narrow it. Claims coordinate the \
-    same item directory, not separate branches or clones. Use claim_item before starting, update_item as you go, and \
+    next_items and automatic claim_item; extra filters only narrow it. Claims coordinate this \
+    item directory and the other worktrees of this repository, not separate clones. Use claim_item before starting, update_item as you go, and \
     close_item when done. Never write TODO or PLAN files — create an item instead."
     })
 }
@@ -337,10 +337,12 @@ fn next_items(a: &Value) -> Result<String> {
     let store = Store::new(&cfg);
     let items = store.load_all()?;
     let ctx = Ctx::new(&cfg, &items);
+    let survey = crate::worktree::Survey::take(&cfg, &items);
     let picked = crate::cmd::next::select(
         &cfg,
         &ctx,
         &items,
+        &survey,
         &crate::cmd::next::Args {
             limit: n(a, "limit", 5),
             assignee: s(a, "assignee"),
@@ -568,9 +570,11 @@ fn claim_item(a: &Value) -> Result<String> {
     }
     let cfg = Config::discover()?;
     let store = Store::new(&cfg);
+    let across = Lock::acquire_across_worktrees(&cfg)?;
     let lock = Lock::acquire(&cfg)?;
     let items = store.load_all()?;
     let ctx = Ctx::new(&cfg, &items);
+    let survey = crate::worktree::Survey::take(&cfg, &items);
 
     let id = match a.get("id") {
         Some(Value::Null) | None => {
@@ -578,6 +582,7 @@ fn claim_item(a: &Value) -> Result<String> {
                 &cfg,
                 &ctx,
                 &items,
+                &survey,
                 &crate::cmd::next::Args {
                     limit: 1,
                     assignee: None,
@@ -617,6 +622,15 @@ fn claim_item(a: &Value) -> Result<String> {
             cfg.format_id(id)
         );
     }
+    if !force && let Some((there, copy)) = survey.holder(&cfg, id) {
+        bail!(
+            "{} is already {} on {} ({}); pass force to take it anyway",
+            cfg.format_id(id),
+            crate::cmd::claim::elsewhere(copy),
+            there.branch,
+            there.path.display()
+        );
+    }
     let blockers = ctx.blockers(&item);
     if !blockers.is_empty() && !force {
         let list: Vec<String> = blockers.iter().map(|x| cfg.format_id(*x)).collect();
@@ -639,6 +653,7 @@ fn claim_item(a: &Value) -> Result<String> {
     item.touch(&today());
     item.save()?;
     drop(lock);
+    drop(across);
     hooks::item(&cfg, &store, hooks::Event::AfterChange, &item);
 
     pretty(&json!({
@@ -1144,8 +1159,8 @@ fn tools() -> Vec<Value> {
             "name": "claim_item",
             "description": "Take an item before working on it: assigns it to you and moves it \
         to an active status, so no one else starts the same work. Omit id to claim the next ready \
-        unclaimed item. Refuses an item someone else holds, or one that is blocked, unless force is \
-        set. Returns the item's body so you can start immediately.",
+        unclaimed item. Refuses an item someone else holds, here or in another worktree of this \
+        repository, or one that is blocked, unless force is set. Returns the item's body so you can start immediately.",
             "inputSchema": obj(json!({
                 "id": id_prop("Item id; omit to take the next ready one"),
                 "as": str_prop("Claim as this name (default: CAIRN_USER, else git user.name)"),

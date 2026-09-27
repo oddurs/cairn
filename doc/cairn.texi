@@ -307,6 +307,13 @@ The lock file lives beside the items, where the item scan already ignores
 dotfiles, and @command{cairn init} writes a @file{.gitignore} for it so it never
 reaches the repository.
 
+@cindex worktrees, claiming across
+Each worktree has its own item directory, and so its own lock. A claim also
+takes @file{cairn-claim.lock} in Git's common directory, which every worktree
+of a repository shares, while it reads the other worktrees and writes. Two
+agents claiming at the same moment in two worktrees are serialised, and the
+second sees what the first took.
+
 @section Merging branches
 
 @cindex merging
@@ -331,9 +338,12 @@ working tree. Run setup in every clone and wherever a relative hook is needed.
 Tracked @file{.gitattributes} declares intent but cannot install an executable
 driver in another clone. @command{check} warns when that setup is missing.
 
-A claim excludes writers in the same item directory, not separate branches,
-worktrees, or clones. Agree on assignments before splitting. Publish the claim
-and reasoning with the code; use @command{release --reason} for a handoff.
+A claim excludes writers in the same item directory. It also reads the other
+worktrees of the same repository on this machine: work another worktree has
+claimed or finished is not offered, and claiming it is refused. Separate clones
+are not read. Agree on assignments before splitting across clones. Publish the
+claim and reasoning with the code; use @command{release --reason} for a
+handoff. @xref{Working the backlog}.
 
 Rebase, cherry-pick, forge merges, and merges stopped by conflicts do not run
 the successful local merge hook. Review the result, run @command{cairn render}
@@ -1609,6 +1619,32 @@ without altering anybody's git configuration.
 This is the whole coordination mechanism. There is no lock server and no
 daemon: a claim is a field in a file. Two workers on two branches merge like
 any other change, and @command{cairn check} catches what the merge could not.
+
+@cindex worktrees
+A claim made in another worktree lives in that worktree's copy of the item,
+which this checkout does not have until the branch merges. So @command{next}
+and @command{claim} ask Git what each other worktree of the repository has
+changed in the backlog since it diverged from this one, uncommitted edits
+included, and read those copies. An item one of them has claimed, or moved on
+from an open status, is not offered by @command{next} or by MCP
+@code{next_items}, and @command{claim} refuses it, naming the branch, unless
+@option{--force} is given. A claim there that has gone stale is offered as a
+stale claim here is.
+
+@example
+$ cairn worktrees
+feat/search  /home/me/src/.worktrees/project/feat/search
+  2f1c9a0e  in progress  agent-2  Search item bodies
+  7d3e4b12  backlog  Index the notes too  (new)
+@end example
+
+@command{cairn worktrees} shows what every other worktree has changed or filed,
+@option{--json} for programs, and @command{cairn show} adds an
+@samp{elsewhere} line per branch. Nothing is stored: the record, filters and
+@command{list} stay this checkout's. The survey is local to one machine and
+one repository; separate clones still need the handoff above. It needs format 4,
+whose identities name the same item in every checkout, and a worktree on a
+different format is reported and not read.
 
 @section Serving the backlog over MCP
 
@@ -3177,6 +3213,11 @@ Full-text over titles, bodies and labels, case-insensitively.
 
 @section cairn claim, cairn release
 Take an item or hand it back. @xref{Working the backlog}.
+
+@section cairn worktrees
+What each other worktree of the repository has changed or filed in the backlog
+since it diverged from this one. @option{--json} for programs.
+@xref{Working the backlog}.
 
 @section cairn mcp
 Serve the backlog over the Model Context Protocol.
