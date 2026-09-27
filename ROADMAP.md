@@ -40,6 +40,17 @@ Safe to keep: an explicit compatibility contract, tested recovery, useful retrie
 - [ ] [`0052`](https://github.com/oddurs/cairn/blob/main/cairn/items/0052-sign-releases-and-ship-a-source-tarball.md) Sign releases and ship a source tarball <sup>chore · p2 · needs-a-key</sup>
 - [ ] [`0066`](https://github.com/oddurs/cairn/blob/main/cairn/items/0066-find-three-people-who-are-not-the-author.md) Find three people who are not the author <sup>chore · p1</sup>
 
+## prompts — Items as prompts
+
+An item reads as a prompt that outlives the session, and cairn treats it as
+
+### up next
+
+- [ ] [`0155`](https://github.com/oddurs/cairn/blob/main/cairn/items/0155-a-finished-item-records-a-result-that-dependents-can-quote.md) A finished item records a Result that dependents can quote <sup>feature · p1</sup>
+- [ ] [`0156`](https://github.com/oddurs/cairn/blob/main/cairn/items/0156-compile-an-item-and-what-it-rests-on-into-one-prompt.md) Compile an item and what it rests on into one prompt <sup>feature · p1</sup>
+- [ ] [`0157`](https://github.com/oddurs/cairn/blob/main/cairn/items/0157-split-a-prompt-s-numbered-steps-into-sub-prompts.md) Split a prompt's numbered steps into sub-prompts <sup>feature · p2</sup>
+- [ ] [`0158`](https://github.com/oddurs/cairn/blob/main/cairn/items/0158-say-when-a-prompt-will-be-misread.md) Say when a prompt will be misread <sup>feature · p2</sup>
+
 ## later — Someday
 
 Options without a commitment to build them. Reconsider when an actual user task supplies evidence; nothing here belongs in an autonomous work queue merely because it is open.
