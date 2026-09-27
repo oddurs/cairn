@@ -337,10 +337,9 @@ pub fn agent(args: AgentArgs) -> Result<i32> {
             cfg.root.join(path)
         }
     });
-    let target = full.as_deref().map_or_else(
-        || "AGENTS.md".to_string(),
-        |f| from_root(&cfg.root, f).display().to_string(),
-    );
+    let target = full
+        .as_deref()
+        .map_or_else(|| "AGENTS.md".to_string(), |f| from_root(&cfg.root, f));
     let block = agent_block(
         &cfg,
         &crate::refs::Milestones::new(&cfg, &items),
@@ -380,14 +379,24 @@ pub fn agent(args: AgentArgs) -> Result<i32> {
 
 /// How a command run from the project root names `full`: relative when it is
 /// inside the project, whichever spelling of the root it was given in.
-fn from_root(root: &Path, full: &Path) -> PathBuf {
+///
+/// Joined with `/` on every platform. The name lands in a shell command in a
+/// Markdown file, which every supported shell reads with `/`, and a file
+/// written on Windows must read the same as one written anywhere else.
+fn from_root(root: &Path, full: &Path) -> String {
     let canon = |p: &Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
     let full = match (full.parent(), full.file_name()) {
         (Some(dir), Some(name)) => canon(dir).join(name),
         _ => full.to_path_buf(),
     };
-    full.strip_prefix(canon(root))
-        .map_or_else(|_| full.clone(), Path::to_path_buf)
+    match full.strip_prefix(canon(root)) {
+        Ok(rel) => rel
+            .components()
+            .map(|c| c.as_os_str().to_string_lossy())
+            .collect::<Vec<_>>()
+            .join("/"),
+        Err(_) => full.display().to_string(),
+    }
 }
 
 /// The sentence that says which view an instructions block selects from.
