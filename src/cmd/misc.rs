@@ -393,11 +393,7 @@ fn from_root(root: &Path, full: &Path) -> String {
         _ => full.to_path_buf(),
     };
     match full.strip_prefix(canon(root)) {
-        Ok(rel) => rel
-            .components()
-            .map(|c| c.as_os_str().to_string_lossy())
-            .collect::<Vec<_>>()
-            .join("/"),
+        Ok(rel) => crate::cmd::slashed(rel),
         Err(_) => full.display().to_string(),
     }
 }
