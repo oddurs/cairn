@@ -306,3 +306,48 @@ fn a_project_before_uuids_is_not_surveyed() {
     );
     assert_eq!(p.expect(&["next", "--count"]).trimmed(), "2");
 }
+
+/// Rewrite one frontmatter line of another worktree's copy, as a repair or
+/// a collision elsewhere would leave it.
+fn rewrite_line(w: &Project, id: &str, key: &str, value: &str) {
+    let file = w.expect(&["show", id, "--path"]).trimmed();
+    let text = std::fs::read_to_string(&file).unwrap();
+    let line = text
+        .lines()
+        .find(|l| l.starts_with(&format!("{key}: ")))
+        .unwrap_or_else(|| panic!("no {key} in {file}"))
+        .to_string();
+    std::fs::write(&file, text.replacen(&line, &format!("{key}: {value}"), 1)).unwrap();
+}
+
+#[test]
+fn a_copy_renumbered_in_another_worktree_still_holds_its_item() {
+    let p = repository_of(1);
+    let linked = worktree(&p, "renumbered");
+    linked.expect(&["claim", &p.id(1), "--as", "there"]);
+    rewrite_line(&linked, &p.id(1), "id", "99");
+    assert_contains(
+        &p.fails(&["claim", &p.id(1), "--as", "here"]).stderr,
+        "already claimed by there on renumbered",
+        "the tag names the item whatever its number there",
+    );
+}
+
+#[test]
+fn the_same_number_on_a_different_tag_is_a_different_item() {
+    let p = repository_of(1);
+    let linked = worktree(&p, "collided");
+    linked.expect(&["claim", &p.id(1), "--as", "there"]);
+    rewrite_line(
+        &linked,
+        &p.id(1),
+        "uid",
+        "00000000-0000-4000-8000-000000000001",
+    );
+    p.expect(&["claim", &p.id(1), "--as", "here"]);
+    let doc = p.json(&["worktrees", "--json"]);
+    assert_eq!(
+        doc["worktrees"][0]["items"][0]["new"], true,
+        "reported as filed there, not as this item"
+    );
+}

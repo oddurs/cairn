@@ -42,7 +42,7 @@ pub fn run(args: Args) -> Result<i32> {
                         "status": c.item.status(),
                         "assignee": c.item.meta.assignee,
                         "claimed": c.item.meta.claimed,
-                        "new": c.new,
+                        "new": c.is_new(),
                         "taken": taken(&cfg, &c.item),
                     })).collect::<Vec<_>>(),
                 })
@@ -95,7 +95,7 @@ pub fn run(args: Args) -> Result<i32> {
                 line.push_str(&format!("  {who}"));
             }
             line.push_str(&format!("  {}", item.title()));
-            if copy.new {
+            if copy.is_new() {
                 line.push_str(&format!("  {}", style::dim("(new)")));
             }
             println!("{line}");
