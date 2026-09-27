@@ -8,6 +8,10 @@ use support::*;
 fn committed_format_three(items: usize) -> Project {
     let p = Project::empty();
     git(&p, &["init", "-q", "-b", "main", "."]);
+    // `migrate --commit` runs git itself, outside the helper that supplies an
+    // author. A machine with no global identity — CI — would refuse it.
+    git(&p, &["config", "user.name", "test"]);
+    git(&p, &["config", "user.email", "test@example.invalid"]);
     p.expect(&["init", "--bare", "--name", "Old"]);
     for n in 1..=items {
         p.add(&format!("Item {n}"), &[]);
