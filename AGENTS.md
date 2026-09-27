@@ -48,7 +48,7 @@ Items are numbered: `0012`, and commands accept the bare number too. Write the n
 - **`sprint`**: one of s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12 — Historical durability sprint; retained for old items, not assigned to new work
 - **`area`**: free text — Subsystem: workflow, git, format, integration, cli, docs, distribution, or direction
 - **`due`**: date, YYYY-MM-DD — A committed date, YYYY-MM-DD; leave unset when the release is gated by evidence
-- **Milestones**: `v0.1`, `v0.2`, `v0.3`, `v1.0`, `later`
+- **Milestones**: `v0.1`, `v0.2`, `v0.3`, `v1.0`, `prompts`, `later`
 - **Saved views** (`cairn list --view NAME`): `now`, `next`, `waiting`, `dependencies`, `triage`, `later`, `decisions`, `history`
 
 ### Rules
