@@ -35,7 +35,7 @@ cairn render                      # regenerate ROADMAP.md
 
 Selection uses saved view `next`. Additional filters only narrow it; the view's sort and columns do not change `next` ranking. Over MCP, pass `{"view":"next"}` to `next_items` and to `claim_item` without an id. A direct claim is an explicit assignment outside this selection policy. Regenerate these instructions with `cairn agent --view next --write AGENTS.md`.
 
-Claims coordinate writers in the same item directory, not separate branches, worktrees, or clones. Agree on assignments before splitting work.
+Claims coordinate writers in the same item directory and are seen across the worktrees of this repository: `next` leaves out what another worktree has claimed, `claim` refuses it, and `cairn worktrees` shows what each is doing. Separate clones are not read. Agree on assignments before splitting work across clones.
 
 Items are numbered: `0012`, and commands accept the bare number too. Write the number in `depends_on` and other id references. Each item also carries a `uid` tag; leave it alone. If a merge gives two items one number, `cairn renumber` moves the one that arrived and retargets the references that came with it.
 
@@ -86,8 +86,9 @@ Set `CAIRN_AGENT` and an explicit working identity. Search finished and dropped
 items with `cairn search --all` before proposing work. Keep reasoning and
 verification evidence in the item; tick only what has been established.
 
-Claims coordinate one item directory, not separate worktrees or clones.
-Coordinate assignments before splitting work and review item changes with code.
+Claims are seen across this repository's worktrees on one machine, not across
+clones. `cairn worktrees` shows what the others are doing. Coordinate
+assignments before splitting work across clones and review item changes with code.
 Changing Harrow belongs in its own repository and tracked item.
 
 Run `make check` before handing off code or project changes. Touching the lock,

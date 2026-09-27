@@ -135,9 +135,11 @@ MCP `next_items` and automatic `claim_item` accept the same `view` argument.
 Without a view, behavior is unchanged. Views share the selection with Harrow;
 they are not permissions and do not restrict explicit item assignments.
 
-A claim coordinates writers using **the same item directory**. Separate
-branches, worktrees, and clones have separate state. Agree on assignments
-before splitting work; a claim is not a distributed lock.
+A claim coordinates writers using **the same item directory**, and reads the
+other worktrees of the same repository: `next` leaves out what another worktree
+has claimed, `claim` refuses it, and `cairn worktrees` shows what each one is
+doing. Separate clones have separate state. Agree on assignments before
+splitting work across clones; a claim is not a distributed lock.
 
 The [Git collaboration guide](doc/COLLABORATION.md) covers assignments,
 worktrees, hook locations, reference repair, rebase, cherry-pick, and review.

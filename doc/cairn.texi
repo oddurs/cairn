@@ -301,6 +301,13 @@ The lock file lives beside the items, where the item scan already ignores
 dotfiles, and @command{cairn init} writes a @file{.gitignore} for it so it never
 reaches the repository.
 
+@cindex worktrees, claiming across
+Each worktree has its own item directory, and so its own lock. A claim also
+takes @file{cairn-claim.lock} in Git's common directory, which every worktree
+of a repository shares, while it reads the other worktrees and writes. Two
+agents claiming at the same moment in two worktrees are serialised, and the
+second sees what the first took.
+
 @section Merging branches
 
 @cindex merging
@@ -360,9 +367,11 @@ the merge commit would be doing something nobody asked it to.
 
 @subsection Worktrees, handoff, and operations without a post-merge hook
 
-A claim excludes another writer only in the same item directory. Agree on
-assignments in a shared base or through an explicit coordinator before splitting
-into worktrees or clones. Publish the assignment through your normal review
+A claim excludes another writer in the same item directory, and is seen from
+the other worktrees of the same repository on this machine: work another
+worktree has claimed or finished is not offered, and claiming it is refused.
+Separate clones are not read. Agree on assignments in a shared base or through
+an explicit coordinator before splitting across clones. Publish the assignment through your normal review
 workflow. To hand it back, @command{cairn release --reason} records what the
 next worker needs; they read that note before claiming it.
 
@@ -1647,7 +1656,7 @@ ID    STATUS       MILESTONE  BLOCKED BY  TITLE
 @command{cairn next} lists work that is @dfn{ready}: not finished, and with no
 unfinished dependencies. Work already under way is ranked first, on the grounds
 that the most useful next action is usually finishing something. @option{--blocked}
-includes blocked work, annotated with what blocks it.
+lists only blocked work, each item with the unfinished items in its way.
 
 Readiness is not approval: an untriaged idea or an external wait can have no
 unfinished dependencies. Select your project's approved queue explicitly with
@@ -1670,6 +1679,24 @@ Over MCP, pass @code{"view":"next"} to @code{next_items} and to
 @code{claim_item} without an id. Regenerate instructions with the same
 @option{--view}; omitting it deliberately generates the unscoped workflow.
 
+Every count @command{cairn next} prints is taken over the same selection as
+its list: open work, containers excluded, within the view and filters given.
+When a view holds nothing ready, it says how much ready work lies outside it,
+and its hint for blocked work repeats the view:
+
+@example
+$ cairn next --view next
+nothing is ready in view `next` (status=planned)
+87 ready item(s) outside it — `cairn next` to see them
+12 item(s) in view `next` are blocked — `cairn next --view next --blocked` to see what by
+@end example
+
+@command{cairn agent --view} notes a view that excludes the status
+@command{cairn new} assigns, or that has nothing ready while work waits outside
+it. @command{cairn check} notes the second for every generated block at the top
+of the project. Both are notes rather than warnings: an empty approved queue is
+a state a project passes through, and @option{--strict} must not fail on it.
+
 @example
 $ cairn claim --next
 claimed 0001  Publish to crates.io
@@ -1691,6 +1718,32 @@ without altering anybody's git configuration.
 This is the whole coordination mechanism. There is no lock server and no
 daemon: a claim is a field in a file. Two workers on two branches merge like
 any other change, and @command{cairn check} catches what the merge could not.
+
+@cindex worktrees
+A claim made in another worktree lives in that worktree's copy of the item,
+which this checkout does not have until the branch merges. So @command{next}
+and @command{claim} ask Git what each other worktree of the repository has
+changed in the backlog since it diverged from this one, uncommitted edits
+included, and read those copies. An item one of them has claimed, or moved on
+from an open status, is not offered by @command{next} or by MCP
+@code{next_items}, and @command{claim} refuses it, naming the branch, unless
+@option{--force} is given. A claim there that has gone stale is offered as a
+stale claim here is.
+
+@example
+$ cairn worktrees
+feat/search  /home/me/src/.worktrees/project/feat/search
+  2f1c9a0e  in progress  agent-2  Search item bodies
+  7d3e4b12  backlog  Index the notes too  (new)
+@end example
+
+@command{cairn worktrees} shows what every other worktree has changed or filed,
+@option{--json} for programs, and @command{cairn show} adds an
+@samp{elsewhere} line per branch. Nothing is stored: the record, filters and
+@command{list} stay this checkout's. The survey is local to one machine and
+one repository; separate clones still need the handoff above. It needs format 4,
+whose identities name the same item in every checkout, and a worktree on a
+different format is reported and not read.
 
 @section Serving the backlog over MCP
 
@@ -3246,7 +3299,7 @@ uncoloured). Aliased as @command{cairn ls}.
 Ready work, ranked. @xref{Working the backlog}. @option{--limit} bounds the
 list, @option{--mine} restricts to work assigned to you or to nobody,
 @option{--view} intersects a saved view's filter with @option{--filter},
-@option{--blocked} includes blocked items, and @option{--json} and
+@option{--blocked} lists only blocked items and what blocks them, and @option{--json} and
 @option{--ids} are for programs.
 
 @section cairn search
@@ -3255,6 +3308,11 @@ Full-text over titles, bodies and labels, case-insensitively.
 
 @section cairn claim, cairn release
 Take an item or hand it back. @xref{Working the backlog}.
+
+@section cairn worktrees
+What each other worktree of the repository has changed or filed in the backlog
+since it diverged from this one. @option{--json} for programs.
+@xref{Working the backlog}.
 
 @section cairn mcp
 Serve the backlog over the Model Context Protocol.

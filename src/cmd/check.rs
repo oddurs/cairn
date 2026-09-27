@@ -89,6 +89,34 @@ pub fn run(args: Args) -> Result<i32> {
         );
     }
 
+    // A note for the same reason, and one more: an empty queue is a state the
+    // project passes through, not a defect, so it must not fail `--strict`.
+    // What it costs is agents told there is nothing to do.
+    let ctx = crate::filter::Ctx::new(&cfg, &items);
+    for (file, view) in crate::cmd::misc::selecting_files(&cfg) {
+        if cfg.view(&view).is_none() {
+            continue;
+        }
+        let gaps = crate::cmd::next::gaps(&cfg, &ctx, &items, &view)?;
+        if gaps.ready_outside == 0 {
+            continue;
+        }
+        let cause = if gaps.excludes_new {
+            format!(
+                " — new items start as `{}`, which it excludes",
+                cfg.initial_status()
+            )
+        } else {
+            String::new()
+        };
+        eprintln!(
+            "{} {file} selects view `{view}`, which has nothing ready; {} ready item(s) \
+             outside it{cause}",
+            style::yellow("note:"),
+            gaps.ready_outside
+        );
+    }
+
     let failed = !r.errors.is_empty() || (args.strict && !r.warnings.is_empty());
     if failed {
         eprintln!();
