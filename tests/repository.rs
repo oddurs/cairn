@@ -465,12 +465,6 @@ fn the_lock_is_not_mistaken_for_an_item() {
     );
 }
 
-fn now_secs() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs()
-}
 // --- git integration --------------------------------------------------------
 
 /// Run git in the project, requiring success.

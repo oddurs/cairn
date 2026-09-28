@@ -83,10 +83,13 @@ pub fn claim(args: ClaimArgs) -> Result<i32> {
     let store = Store::new(&cfg);
     // Taken before anything is read, so choosing an item, checking who holds it
     // and writing the claim are one indivisible step. Without it two claimers
-    // can both pass the check before either writes. The first spans every
-    // worktree of the repository, the second this item directory.
-    let across = Lock::acquire_across_worktrees(&cfg)?;
+    // can both pass the check before either writes. The first is this item
+    // directory's, the second spans every worktree of the repository. In that
+    // order, so a claim holds the shared one only while claiming, never while
+    // it queues behind this worktree's writers: other worktrees' claims would
+    // wait on a holder that is itself waiting.
     let lock = Lock::acquire(&cfg)?;
+    let across = Lock::acquire_across_worktrees(&cfg)?;
     let items = store.load_all()?;
     let ctx = Ctx::new(&cfg, &items);
     let survey = Survey::take(&cfg, &items);

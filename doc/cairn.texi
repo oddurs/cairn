@@ -288,8 +288,12 @@ operation that fails if it already exists, which is an atomic test-and-set
 everywhere cairn runs. Commands that only read never take it: a backlog must
 stay listable while somebody else is writing to it.
 
-A writer that cannot get the lock within ten seconds stops and says which file
-it was waiting on. A lock older than five minutes is assumed to belong to a
+A writer waits its turn for as long as the lock keeps changing hands: forty
+agents writing at once each hold it briefly, and on a busy machine the last of
+them waits longer than any one holds it. Turns are not first come, first
+served. A writer stops, and says which file it was waiting on, when one holder
+has kept the lock for ten seconds, or when it has waited two minutes in all. A
+lock older than five minutes is assumed to belong to a
 process that died and is broken with a warning; the window is wide enough that a
 slow import is never mistaken for a corpse.
 

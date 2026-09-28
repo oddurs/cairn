@@ -17,8 +17,18 @@ use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-/// How long to keep trying before giving up and telling the user what holds it.
-const ACQUIRE_TIMEOUT: Duration = Duration::from_secs(10);
+/// How long one holder may keep the lock before a waiter gives up and says
+/// what holds it. It is the holder's time, from the `since` it recorded, and
+/// not the waiter's: forty agents writing at once each hold the lock briefly,
+/// and on a loaded machine the last in line waits longer than any of them
+/// holds it. That queue is moving. A holder ten seconds into a write is not.
+const HELD_TOO_LONG: Duration = Duration::from_secs(10);
+
+/// How long to wait in all, however the lock is changing hands. Taking it is a
+/// race rather than a queue, so a waiter can lose it to later arrivals for as
+/// long as they keep coming; this makes that an error rather than a silent
+/// hang, generously enough that forty writers on a busy machine never meet it.
+const WAIT_AT_MOST: Duration = Duration::from_secs(120);
 const POLL: Duration = Duration::from_millis(25);
 
 /// A lock older than this is assumed to belong to a process that died. Long
@@ -108,12 +118,16 @@ impl Lock {
     }
 
     fn acquire_at(path: PathBuf) -> Result<Lock> {
+        Lock::acquire_within(path, HELD_TOO_LONG, WAIT_AT_MOST)
+    }
+
+    fn acquire_within(path: PathBuf, held_too_long: Duration, at_most: Duration) -> Result<Lock> {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)
                 .with_context(|| format!("creating {}", parent.display()))?;
         }
 
-        let deadline = std::time::Instant::now() + ACQUIRE_TIMEOUT;
+        let started = std::time::Instant::now();
         loop {
             match Self::try_create(&path) {
                 Ok(()) => return Ok(Lock { path }),
@@ -123,7 +137,8 @@ impl Lock {
                 }
             }
 
-            if let Some(age) = Self::age(&path)
+            let age = Self::age(&path);
+            if let Some(age) = age
                 && age > STALE_AFTER
             {
                 eprintln!(
@@ -136,12 +151,25 @@ impl Lock {
                 continue;
             }
 
-            if std::time::Instant::now() >= deadline {
+            // An age that cannot be read is a lock let go of between the
+            // attempt and the look, so there is nobody to give up on.
+            if let Some(age) = age
+                && age > held_too_long
+            {
                 bail!(
                     "another cairn process is writing to this project\n\
-                     waited {}s for {}\n\
+                     {} has been held for {}s\n\
                      if nothing else is running, delete that file",
-                    ACQUIRE_TIMEOUT.as_secs(),
+                    path.display(),
+                    age.as_secs()
+                );
+            }
+            let waited = started.elapsed();
+            if waited > at_most {
+                bail!(
+                    "other cairn processes kept writing to this project\n\
+                     waited {}s for {} while it changed hands; try again when they are done",
+                    waited.as_secs(),
                     path.display()
                 );
             }
@@ -230,4 +258,74 @@ fn now_seconds() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.as_secs())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A lock as a holder that took it `ago` leaves it.
+    fn plant(path: &Path, pid: u32, ago: u64) {
+        let since = now_seconds() - ago;
+        std::fs::write(path, format!("pid {pid}\nsince {since}\n")).expect("planting");
+    }
+
+    /// Hand the lock from holder to holder every `every`, then let it go.
+    fn queue(path: &Path, holders: u32, every: Duration) -> std::thread::JoinHandle<()> {
+        let path = path.to_path_buf();
+        plant(&path, 1, 0);
+        std::thread::spawn(move || {
+            for pid in 2..=holders {
+                std::thread::sleep(every);
+                plant(&path, pid, 0);
+            }
+            std::thread::sleep(every);
+            std::fs::remove_file(&path).expect("the last holder lets go");
+        })
+    }
+
+    /// The whole wait outlasts the limit on any one holder, so a waiter timed
+    /// from its own arrival — as it was — gives up on a queue that is moving.
+    #[test]
+    fn a_waiter_outlasts_a_queue_that_keeps_moving() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join(".lock");
+        let held_too_long = Duration::from_secs(3);
+        let holders = queue(&path, 6, Duration::from_secs(1));
+        let started = std::time::Instant::now();
+        let lock = Lock::acquire_within(path, held_too_long, Duration::from_secs(60));
+        holders.join().expect("queue");
+        assert!(lock.is_ok(), "gave up on a moving queue: {:?}", lock.err());
+        assert!(
+            started.elapsed() > held_too_long,
+            "the queue outlasted the limit, so this tested something"
+        );
+    }
+
+    /// Measured from when the holder took it, not from when the waiter came:
+    /// arriving late to a long write does not buy it another ten seconds.
+    #[test]
+    fn a_holder_that_keeps_the_lock_too_long_is_given_up_on() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join(".lock");
+        plant(&path, 1, 20);
+        let started = std::time::Instant::now();
+        let err = Lock::acquire_within(path, Duration::from_secs(10), Duration::from_secs(60))
+            .err()
+            .expect("it gave up");
+        assert!(err.to_string().contains("has been held for 20s"), "{err}");
+        assert!(started.elapsed() < Duration::from_secs(5), "at once");
+    }
+
+    #[test]
+    fn a_waiter_gives_up_on_a_queue_that_never_ends() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join(".lock");
+        let holders = queue(&path, 4, Duration::from_millis(500));
+        let err = Lock::acquire_within(path, Duration::from_secs(10), Duration::from_secs(1))
+            .err()
+            .expect("it gave up");
+        holders.join().expect("queue");
+        assert!(err.to_string().contains("kept writing"), "{err}");
+    }
 }

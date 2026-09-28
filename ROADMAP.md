@@ -34,6 +34,7 @@ Safe to keep: an explicit compatibility contract, tested recovery, useful retrie
 - [ ] [`0139`](https://github.com/oddurs/cairn/blob/main/cairn/items/0139-recover-the-reason-for-a-change-after-a-long-absence.md) Recover the reason for a change after a long absence <sup>feature · p1</sup>
 - [ ] [`0140`](https://github.com/oddurs/cairn/blob/main/cairn/items/0140-exercise-years-of-history-and-interrupted-work.md) Exercise years of history and interrupted work <sup>chore · p1</sup>
 - [ ] [`0147`](https://github.com/oddurs/cairn/blob/main/cairn/items/0147-migrate-harrow-rim-and-nun-to-format-5.md) Migrate harrow, rim and nun to format 5 <sup>chore · p0</sup>
+- [ ] [`0163`](https://github.com/oddurs/cairn/blob/main/cairn/items/0163-two-writers-breaking-the-same-stale-lock-must-not-both-hold-it.md) Two writers breaking the same stale lock must not both hold it <sup>bug · p2</sup>
 
 ### waiting
 
@@ -51,10 +52,4 @@ Options without a commitment to build them. Reconsider when an actual user task 
 ### waiting
 
 - [ ] [`0001`](https://github.com/oddurs/cairn/blob/main/cairn/items/0001-publish-to-crates-io-and-homebrew.md) Publish to crates.io and Homebrew <sup>chore · p2</sup>
-
-## Unscheduled
-
-### not committed
-
-- [ ] [`0161`](https://github.com/oddurs/cairn/blob/main/cairn/items/0161-forty-concurrent-writers-can-outwait-the-project-lock-on-a-loaded-machine.md) Forty concurrent writers can outwait the project lock on a loaded machine <sup>bug · p3</sup>
 

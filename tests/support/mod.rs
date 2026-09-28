@@ -1756,6 +1756,14 @@ pub fn with_stale_after(days: u32) -> Project {
     p
 }
 
+/// Now, as a lock file records it.
+pub fn now_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+}
+
 pub fn today() -> String {
     let out = std::process::Command::new("date")
         .args(["+%Y-%m-%d"])
