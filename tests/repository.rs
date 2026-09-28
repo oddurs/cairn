@@ -499,6 +499,28 @@ fn repository() -> Project {
     p
 }
 
+/// Breaking a stale lock in a repository takes its turn in Git's common
+/// directory, so it leaves nothing for `git status` to show or `git add -A`
+/// to take, even where the item directory has no `.gitignore` of its own.
+#[test]
+fn breaking_a_stale_lock_leaves_the_working_tree_alone() {
+    let p = repository();
+    git(&p, &["rm", "-q", "cairn/items/.gitignore"]);
+    git(&p, &["commit", "-qm", "no ignore file"]);
+    p.write("cairn/items/.lock", "pid 999999\nsince 1000000000\n");
+    let out = p.expect(&["new", "Proceeds anyway", "-q"]);
+    assert_contains(&out.all(), "breaking a lock", "it broke the stale lock");
+    let status = git(&p, &["status", "--porcelain", "--untracked-files=all"]);
+    assert!(
+        !status.contains(".cairn") && !status.contains(".lock") && !status.contains("break"),
+        "{status}"
+    );
+    assert!(
+        p.exists(".git/cairn-break.lock"),
+        "the turn was taken there"
+    );
+}
+
 #[test]
 fn branches_that_both_add_an_item_merge_without_a_conflict() {
     // Before this, the first parallel merge produced a conflict in ROADMAP.md

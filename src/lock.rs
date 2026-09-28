@@ -8,8 +8,10 @@
 // when two agents working the same backlog became the advertised use case.
 //
 // The mechanism is a lock file created with `create_new`, which is an atomic
-// test-and-set on every supported platform and needs no dependency. Readers
-// never take it: listing a backlog must not queue behind somebody's write.
+// test-and-set on every supported platform and needs no dependency, and it
+// excludes across containers, mounts and filesystems where an operating-system
+// lock might not. Readers never take it: listing a backlog must not queue
+// behind somebody's write.
 use crate::config::Config;
 use crate::style;
 use anyhow::{Context, Result, bail};
@@ -34,6 +36,11 @@ const POLL: Duration = Duration::from_millis(25);
 /// A lock older than this is assumed to belong to a process that died. Long
 /// enough that a slow import is never mistaken for a corpse.
 const STALE_AFTER: Duration = Duration::from_secs(300);
+
+/// How long a stale lock may refuse to be removed, in the way that on Windows
+/// usually means somebody has it open for a moment, before that is reported
+/// as the failure it then more likely is.
+const UNREMOVABLE_AFTER: Duration = Duration::from_secs(10);
 
 /// Held for the duration of a write, released by dropping it.
 pub struct Lock {
@@ -108,26 +115,43 @@ impl Lock {
     /// returned.
     pub fn acquire_across_worktrees(cfg: &Config) -> Result<Option<Lock>> {
         match crate::worktree::common_dir(&cfg.root) {
-            Some(common) => Lock::acquire_at(common.join("cairn-claim.lock")).map(Some),
+            Some(common) => Lock::acquire_within(
+                common.join("cairn-claim.lock"),
+                &|| common.join(BREAKER),
+                HELD_TOO_LONG,
+                WAIT_AT_MOST,
+            )
+            .map(Some),
             None => Ok(None),
         }
     }
 
     fn acquire_unchecked(cfg: &Config) -> Result<Lock> {
-        Lock::acquire_at(Self::path(cfg))
+        Lock::acquire_within(
+            Self::path(cfg),
+            &|| Self::breaker(cfg),
+            HELD_TOO_LONG,
+            WAIT_AT_MOST,
+        )
     }
 
-    fn acquire_at(path: PathBuf) -> Result<Lock> {
-        Lock::acquire_within(path, HELD_TOO_LONG, WAIT_AT_MOST)
-    }
-
-    fn acquire_within(path: PathBuf, held_too_long: Duration, at_most: Duration) -> Result<Lock> {
+    /// `breaker` says where the turn at breaking a stale lock is taken, and is
+    /// only asked when there is a stale lock, because asking git is not free.
+    fn acquire_within(
+        path: PathBuf,
+        breaker: &dyn Fn() -> PathBuf,
+        held_too_long: Duration,
+        at_most: Duration,
+    ) -> Result<Lock> {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)
                 .with_context(|| format!("creating {}", parent.display()))?;
         }
 
         let started = std::time::Instant::now();
+        // When the stale lock was first found impossible to remove for the
+        // moment. See where it is set.
+        let mut stuck: Option<std::time::Instant> = None;
         loop {
             match Self::try_create(&path) {
                 Ok(()) => return Ok(Lock { path }),
@@ -141,21 +165,35 @@ impl Lock {
             if let Some(age) = age
                 && age > STALE_AFTER
             {
-                eprintln!(
-                    "{} breaking a lock left behind {} seconds ago ({})",
-                    style::yellow("warning:"),
-                    age.as_secs(),
-                    path.display()
-                );
-                let _ = std::fs::remove_file(&path);
-                continue;
-            }
-
-            // An age that cannot be read is a lock let go of between the
-            // attempt and the look, so there is nobody to give up on.
-            if let Some(age) = age
+                match Self::break_stale(&path, &breaker())? {
+                    Breaking::Broke(broken) => {
+                        stuck = None;
+                        eprintln!(
+                            "{} breaking a lock left behind {} seconds ago ({})",
+                            style::yellow("warning:"),
+                            broken.as_secs(),
+                            path.display()
+                        );
+                        continue;
+                    }
+                    Breaking::Left => stuck = None,
+                    // A file somebody has open for a moment on Windows looks
+                    // exactly like one that can never be removed, so it is
+                    // given a while before being called the second.
+                    Breaking::InUse(e) => {
+                        let since = *stuck.get_or_insert_with(std::time::Instant::now);
+                        if since.elapsed() > UNREMOVABLE_AFTER {
+                            return Err(e).with_context(|| {
+                                format!("removing the stale lock {}", path.display())
+                            });
+                        }
+                    }
+                }
+            } else if let Some(age) = age
                 && age > held_too_long
             {
+                // An age that cannot be read is a lock let go of between the
+                // attempt and the look, so there is nobody to give up on.
                 bail!(
                     "another cairn process is writing to this project\n\
                      {} has been held for {}s\n\
@@ -182,6 +220,101 @@ impl Lock {
     ///
     pub fn path(cfg: &Config) -> PathBuf {
         cfg.items_dir().join(".lock")
+    }
+
+    /// Where the turn at breaking the item directory's stale lock is taken.
+    ///
+    /// In a repository, in Git's common directory, where nothing shows in
+    /// `git status` or is caught by `git add -A`, and which every worktree
+    /// shares: breaking is rare enough that one turn for all of them costs
+    /// nothing. Outside one, in a hidden directory beside the items, which the
+    /// item scan does not enter and which no repository is there to see.
+    fn breaker(cfg: &Config) -> PathBuf {
+        match crate::worktree::common_dir(&cfg.root) {
+            Some(common) => common.join(BREAKER),
+            None => cfg.items_dir().join(".cairn").join(".lock"),
+        }
+    }
+
+    /// Remove the stale lock at `path` if it is still stale once this waiter
+    /// has its turn at breaking it.
+    ///
+    /// Breaking used to be `remove_file` and try again. Two waiters that both
+    /// saw the lock stale could both remove it: the first then made its own
+    /// lock and the second removed that one, so both held the lock and could
+    /// allocate the same id. The look and the removal cannot be made one
+    /// filesystem call, so breakers take turns instead: whoever holds the
+    /// operating-system lock on `breaker` looks again and removes the lock
+    /// only if it is still stale. Nothing else removes it meanwhile — a
+    /// holder removes only its own, and the stale one's is gone — so what the
+    /// breaker looks at is what it removes. The next breaker finds the first
+    /// one's fresh lock, or none, and leaves it.
+    ///
+    /// Only breaking takes this lock. Holding the lock itself is still the
+    /// `create_new` of `path`, which excludes a container from its host and
+    /// one machine from another on a shared filesystem, where operating-system
+    /// locks may be separate or missing. Those can then break a stale lock
+    /// together as before, and so can an older cairn, which knows nothing of
+    /// `breaker`. Where the turn cannot be taken at all — a read-only `.git`,
+    /// or a network share without lock support — this breaks as before rather
+    /// than never, and says so once.
+    fn break_stale(path: &Path, breaker: &Path) -> Result<Breaking> {
+        let turn = match Self::open_breaker(breaker) {
+            Ok(file) => match file.try_lock() {
+                Ok(()) => Some(file),
+                Err(std::fs::TryLockError::WouldBlock) => return Ok(Breaking::Left),
+                Err(std::fs::TryLockError::Error(e)) => {
+                    without_a_turn(breaker, &e);
+                    None
+                }
+            },
+            Err(e) => {
+                without_a_turn(breaker, &e);
+                None
+            }
+        };
+
+        let result = match Self::age(path) {
+            Some(age) if age > STALE_AFTER => match std::fs::remove_file(path) {
+                Ok(()) => Ok(Breaking::Broke(age)),
+                // Gone already, which only a breaker without the turn does.
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Breaking::Left),
+                Err(e) if in_use(&e) => Ok(Breaking::InUse(e)),
+                Err(e) => {
+                    Err(e).with_context(|| format!("removing the stale lock {}", path.display()))
+                }
+            },
+            _ => Ok(Breaking::Left),
+        };
+        if let Some(file) = turn {
+            // Letting go at once rather than when the handle closes, which
+            // Windows may take its time over. A failure here is ignored
+            // because closing the handle, just after, lets go regardless.
+            let _ = file.unlock();
+        }
+        result
+    }
+
+    /// Open the breaker's file to lock it: for writing, because Linux emulates
+    /// an exclusive lock over NFS with one that needs a writable handle, but
+    /// read-only where another user of a shared repository made the file and
+    /// this one may not write it, since everywhere else a lock needs no more.
+    fn open_breaker(breaker: &Path) -> std::io::Result<std::fs::File> {
+        if let Some(dir) = breaker.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
+        match std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(breaker)
+        {
+            Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
+                std::fs::File::open(breaker)
+            }
+            opened => opened,
+        }
     }
 
     /// `create_new` fails if the file exists, and does so atomically — which is
@@ -211,6 +344,9 @@ impl Lock {
         Self::recorded_age(path).or_else(|| Self::mtime_age(path))
     }
 
+    /// A time in the future is treated as no time at all. Read as an age of
+    /// nothing, it made a lock from a clock set ahead unbreakable for as long
+    /// as the clock was out, where its mtime still says how old it is.
     fn recorded_age(path: &Path) -> Option<Duration> {
         let text = std::fs::read_to_string(path).ok()?;
         let since: u64 = text
@@ -219,7 +355,7 @@ impl Lock {
             .trim()
             .parse()
             .ok()?;
-        Some(Duration::from_secs(now_seconds().saturating_sub(since)))
+        now_seconds().checked_sub(since).map(Duration::from_secs)
     }
 
     fn mtime_age(path: &Path) -> Option<Duration> {
@@ -254,6 +390,46 @@ fn contended(e: &std::io::Error) -> bool {
     )
 }
 
+/// The turn at breaking stale locks, in Git's common directory.
+const BREAKER: &str = "cairn-break.lock";
+
+/// What came of a turn at breaking a stale lock.
+enum Breaking {
+    /// It was removed, and was this old.
+    Broke(Duration),
+    /// It was not, because it had been broken already, or is not stale after
+    /// all, or another waiter has the turn.
+    Left,
+    /// It could not be removed, perhaps only for the moment.
+    InUse(std::io::Error),
+}
+
+/// Say, once in a process, that stale locks are being broken without taking
+/// turns, and why. Not an error, because breaking without a turn is what
+/// cairn always did, and refusing to would wedge the project instead.
+fn without_a_turn(breaker: &Path, e: &std::io::Error) {
+    static SAID: std::sync::Once = std::sync::Once::new();
+    SAID.call_once(|| {
+        eprintln!(
+            "{} breaking a stale lock without taking turns: cannot lock {} ({e})",
+            style::yellow("warning:"),
+            breaker.display()
+        );
+    });
+}
+
+/// Whether removing a file failed only because another process has it open.
+/// On Windows a file somebody has open without delete sharing — a virus
+/// scanner or an indexer looking at it is enough — cannot be removed for a
+/// moment, and one pending deletion refuses with access denied. Elsewhere
+/// neither happens, and permission denied means what it says.
+fn in_use(e: &std::io::Error) -> bool {
+    const ERROR_SHARING_VIOLATION: i32 = 32;
+    cfg!(windows)
+        && (e.kind() == std::io::ErrorKind::PermissionDenied
+            || e.raw_os_error() == Some(ERROR_SHARING_VIOLATION))
+}
+
 fn now_seconds() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -263,6 +439,22 @@ fn now_seconds() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The breaker's file for a lock at `path`, placed as `Lock::breaker`
+    /// places it beside the items.
+    fn breaker(path: &Path) -> PathBuf {
+        path.with_file_name(".cairn").join(".lock")
+    }
+
+    /// Take the lock at `path` as a writer does, waiting at most `at_most`.
+    fn take(path: &Path, at_most: Duration) -> Result<Lock> {
+        Lock::acquire_within(
+            path.to_path_buf(),
+            &|| breaker(path),
+            Duration::from_secs(10),
+            at_most,
+        )
+    }
 
     /// A lock as a holder that took it `ago` leaves it.
     fn plant(path: &Path, pid: u32, ago: u64) {
@@ -293,7 +485,12 @@ mod tests {
         let held_too_long = Duration::from_secs(3);
         let holders = queue(&path, 6, Duration::from_secs(1));
         let started = std::time::Instant::now();
-        let lock = Lock::acquire_within(path, held_too_long, Duration::from_secs(60));
+        let lock = Lock::acquire_within(
+            path.clone(),
+            &|| breaker(&path),
+            held_too_long,
+            Duration::from_secs(60),
+        );
         holders.join().expect("queue");
         assert!(lock.is_ok(), "gave up on a moving queue: {:?}", lock.err());
         assert!(
@@ -310,7 +507,7 @@ mod tests {
         let path = dir.path().join(".lock");
         plant(&path, 1, 20);
         let started = std::time::Instant::now();
-        let err = Lock::acquire_within(path, Duration::from_secs(10), Duration::from_secs(60))
+        let err = take(&path, Duration::from_secs(60))
             .err()
             .expect("it gave up");
         assert!(err.to_string().contains("has been held for 20s"), "{err}");
@@ -322,10 +519,181 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let path = dir.path().join(".lock");
         let holders = queue(&path, 4, Duration::from_millis(500));
-        let err = Lock::acquire_within(path, Duration::from_secs(10), Duration::from_secs(1))
+        let err = take(&path, Duration::from_secs(1))
             .err()
             .expect("it gave up");
         holders.join().expect("queue");
         assert!(err.to_string().contains("kept writing"), "{err}");
+    }
+
+    /// What a process that died holding the lock long ago leaves behind.
+    const STALE: &str = "pid 999999\nsince 1000000000\n";
+
+    /// However many waiters find the same stale lock at once, they hold the
+    /// lock one at a time. Each counts itself in while it holds it, and two
+    /// in at once is the bug: a late breaker deleting the lock an early one
+    /// had just made.
+    #[test]
+    fn waiters_racing_to_break_one_stale_lock_hold_it_one_at_a_time() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        const WAITERS: usize = 16;
+        for _ in 0..5 {
+            let dir = tempfile::tempdir().expect("tempdir");
+            let path = dir.path().join(".lock");
+            std::fs::write(&path, STALE).expect("planting");
+            let start = std::sync::Barrier::new(WAITERS);
+            let holding = AtomicUsize::new(0);
+            let most = AtomicUsize::new(0);
+            std::thread::scope(|s| {
+                for _ in 0..WAITERS {
+                    s.spawn(|| {
+                        start.wait();
+                        let lock = take(&path, Duration::from_secs(60)).expect("every waiter");
+                        most.fetch_max(
+                            holding.fetch_add(1, Ordering::SeqCst) + 1,
+                            Ordering::SeqCst,
+                        );
+                        std::thread::sleep(Duration::from_millis(10));
+                        holding.fetch_sub(1, Ordering::SeqCst);
+                        drop(lock);
+                    });
+                }
+            });
+            assert_eq!(
+                most.load(Ordering::SeqCst),
+                1,
+                "two waiters held the lock at once"
+            );
+            assert!(!path.exists(), "the last holder let go");
+        }
+    }
+
+    /// A lock taken a moment ago is waited on, never broken, and nobody even
+    /// reaches for the turn at breaking one.
+    #[test]
+    fn a_fresh_lock_is_never_broken() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join(".lock");
+        plant(&path, 1, 0);
+        let fresh = std::fs::read(&path).expect("reading");
+        let err = take(&path, Duration::from_secs(1))
+            .err()
+            .expect("it waited");
+        assert!(err.to_string().contains("kept writing"), "{err}");
+        assert_eq!(std::fs::read(&path).expect("still there"), fresh);
+        assert!(!breaker(&path).exists(), "breaking was never tried");
+    }
+
+    /// Two breakers that saw the same stale lock break it once: the second,
+    /// taking its turn after the first has broken it and taken the lock,
+    /// finds that fresh lock and leaves it.
+    #[test]
+    fn a_stale_lock_is_broken_once() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join(".lock");
+        std::fs::write(&path, STALE).expect("planting");
+
+        let first = Lock::break_stale(&path, &breaker(&path)).expect("first breaker");
+        assert!(
+            matches!(first, Breaking::Broke(_)),
+            "the first breaker broke it"
+        );
+        Lock::try_create(&path).expect("and took the lock");
+        let taken = std::fs::read(&path).expect("reading");
+
+        let second = Lock::break_stale(&path, &breaker(&path)).expect("second breaker");
+        assert!(
+            matches!(second, Breaking::Left),
+            "the second broke the first one's lock"
+        );
+        assert_eq!(std::fs::read(&path).expect("still there"), taken);
+    }
+
+    /// While another waiter has its turn at breaking, a waiter that also saw
+    /// the lock stale removes nothing, and waits rather than giving up on it.
+    #[test]
+    fn a_waiter_without_the_turn_removes_nothing() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join(".lock");
+        std::fs::write(&path, STALE).expect("planting");
+        let turn = Lock::open_breaker(&breaker(&path)).expect("opening the breaker");
+        turn.try_lock().expect("another waiter's turn");
+
+        let broke = Lock::break_stale(&path, &breaker(&path)).expect("no error");
+        assert!(matches!(broke, Breaking::Left));
+        let err = take(&path, Duration::from_secs(1))
+            .err()
+            .expect("it waited");
+        assert!(err.to_string().contains("kept writing"), "{err}");
+        assert_eq!(std::fs::read_to_string(&path).expect("still there"), STALE);
+
+        drop(turn);
+        take(&path, Duration::from_secs(5)).expect("broken once the turn is free");
+    }
+
+    /// A stale lock that cannot be removed says so. It used to be removed with
+    /// the error discarded and tried again at once, for ever. A directory in
+    /// the lock's place is one that cannot be removed as a file, and ageing a
+    /// directory is only portable on Unix.
+    #[cfg(unix)]
+    #[test]
+    fn a_stale_lock_that_cannot_be_removed_is_reported() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join(".lock");
+        std::fs::create_dir(&path).expect("planting");
+        let long_ago = SystemTime::now() - Duration::from_secs(3600);
+        std::fs::File::open(&path)
+            .and_then(|f| f.set_times(std::fs::FileTimes::new().set_modified(long_ago)))
+            .expect("ageing the planted lock");
+        let err = take(&path, Duration::from_secs(5))
+            .err()
+            .expect("it could not");
+        assert!(
+            format!("{err:#}").contains("removing the stale lock"),
+            "{err:#}"
+        );
+    }
+
+    /// Where no turn can be taken — here because the breaker's directory
+    /// cannot be made, as under a read-only `.git` — a stale lock is still
+    /// broken, without one, rather than wedging the project.
+    #[test]
+    fn a_stale_lock_is_broken_without_a_turn_where_none_can_be_taken() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join(".lock");
+        std::fs::write(&path, STALE).expect("planting");
+        let in_the_way = dir.path().join("not-a-directory");
+        std::fs::write(&in_the_way, "").expect("planting a file where a directory would go");
+        let lock = Lock::acquire_within(
+            path.clone(),
+            &|| in_the_way.join(".lock"),
+            Duration::from_secs(10),
+            Duration::from_secs(5),
+        )
+        .expect("broken without a turn");
+        assert!(
+            std::fs::read_to_string(&path)
+                .expect("taken")
+                .contains(&format!("pid {}", std::process::id()))
+        );
+        drop(lock);
+    }
+
+    /// A lock whose recorded time is in the future, from a clock set ahead,
+    /// is aged by its mtime instead of counting as brand new for ever.
+    #[test]
+    fn a_lock_from_the_future_is_aged_by_its_mtime() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join(".lock");
+        std::fs::write(&path, format!("pid 1\nsince {}\n", now_seconds() + 3600))
+            .expect("planting");
+        let long_ago = SystemTime::now() - Duration::from_secs(3600);
+        std::fs::OpenOptions::new()
+            .write(true)
+            .open(&path)
+            .and_then(|f| f.set_times(std::fs::FileTimes::new().set_modified(long_ago)))
+            .expect("ageing the planted lock");
+        assert!(Lock::age(&path).is_some_and(|age| age > STALE_AFTER));
+        take(&path, Duration::from_secs(5)).expect("broken by its mtime");
     }
 }
