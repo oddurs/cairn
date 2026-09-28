@@ -297,6 +297,18 @@ lock older than five minutes is assumed to belong to a
 process that died and is broken with a warning; the window is wide enough that a
 slow import is never mistaken for a corpse.
 
+Writers that find the same stale lock take turns at breaking it, under an
+operating-system lock on @file{cairn-break.lock} in Git's common directory, or
+outside a repository on @file{.cairn/.lock} in the item directory. Each looks
+again when its turn comes and removes the lock only if it is still stale, so it
+is broken once and the lock taken in its place is left alone. Some breakers do
+not share the turn: machines sharing a filesystem, a container and its host,
+and earlier versions of cairn. Where the turn cannot be taken at all, as under
+a read-only @file{.git} or on NFS without its lock service, cairn says so once
+and breaks without it. Two breakers in any of those cases can still break one
+stale lock together, and both then write, as before. A breaker stopped while it
+holds its turn keeps the others waiting until it resumes.
+
 @cindex hooks, and the lock
 The lock is released before hooks run. A hook may call @command{cairn} itself,
 and by the time it fires the write is already durable, so there is nothing left
@@ -304,7 +316,8 @@ to protect and holding the lock would only let a hook block on its own parent.
 
 The lock file lives beside the items, where the item scan already ignores
 dotfiles, and @command{cairn init} writes a @file{.gitignore} for it so it never
-reaches the repository.
+reaches the repository. Outside a repository, @file{.cairn/.lock} is made the
+first time a stale lock is broken, and kept.
 
 @cindex worktrees, claiming across
 Each worktree has its own item directory, and so its own lock. A claim also

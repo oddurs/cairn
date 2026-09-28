@@ -4,9 +4,10 @@
 name = "cairn-md"
 version = "1.0.0-alpha.1"
 edition = "2024"
-# let-chains (`if let ... && let ...`) stabilised in 1.88; edition 2024 alone
-# would only need 1.85.
-rust-version = "1.88"
+# `File::try_lock`, which serialises breaking a stale lock, stabilised in 1.89
+# (the write lock itself is still `create_new`); let-chains needed 1.88, and
+# edition 2024 alone would only need 1.85.
+rust-version = "1.89"
 license = "MIT"
 description = "Markdown-native roadmap and issue manager that lives in your repository"
 readme = "README.md"
