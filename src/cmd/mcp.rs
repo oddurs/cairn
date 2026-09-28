@@ -1084,8 +1084,17 @@ fn int_prop(desc: &str) -> Value {
 /// the rendered form in output will send the rendered form. The schema said
 /// integer, which advertised less than the server does. A schema that
 /// under-promises is a schema a caller obeys unnecessarily.
+///
+/// Every id is described the same way, so no tool can drift back to saying
+/// something the project no longer accepts — as `show_item` did, describing
+/// format 4's UUIDs long after items were numbered again.
 fn id_prop(desc: &str) -> Value {
-    json!({ "type": ["integer", "string"], "description": desc })
+    json!({
+        "type": ["integer", "string"],
+        "description": format!(
+            "{desc}. Send its number (12) or the number as the project writes it (0012, BUG-12)."
+        ),
+    })
 }
 
 fn bool_prop(desc: &str) -> Value {
@@ -1182,7 +1191,7 @@ fn tools() -> Vec<Value> {
             "description": "One item in full, including its Markdown body, its dependencies \
         and whether it is blocked.",
             "inputSchema": obj(json!({
-                "id": id_prop("Full UUIDv4, unambiguous prefix (at least 8 hex digits), or migrated legacy number"),
+                "id": id_prop("Item id"),
                 "fields": json!({
                     "type": "array", "items": {"type": "string"},
                     "description": "Return only these keys, to spend less of your context. \

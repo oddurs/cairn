@@ -2697,3 +2697,24 @@ fn an_agent_must_say_why() {
     assert!(refused(&r));
     assert_contains(&tool_text(&r), "why", "");
 }
+
+/// Agents read tool descriptions. One still written for format 4 tells them to
+/// send UUIDs to a project that numbers its items.
+#[test]
+fn no_tool_describes_format_four_ids() {
+    let p = seeded();
+    let replies = p.mcp(&[r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#]);
+    for t in replies[0]["result"]["tools"].as_array().expect("tools") {
+        let text = t.to_string();
+        for stale in ["UUID", "legacy number", "8 hex digits"] {
+            assert_missing(&text, stale, &format!("{}", t["name"]));
+        }
+        if let Some(id) = t["inputSchema"]["properties"].get("id") {
+            assert_contains(
+                id["description"].as_str().unwrap_or_default(),
+                "0012",
+                &format!("{} says how an id may be written", t["name"]),
+            );
+        }
+    }
+}
