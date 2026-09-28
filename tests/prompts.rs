@@ -204,3 +204,240 @@ fn dropping_work_that_others_wait_on_is_not_told_to_record_a_result() {
     let out = p.expect(&["close", "1", "--status", "dropped"]);
     assert_missing(&out.stderr, "hint:", "");
 }
+
+// --- cairn prompt --------------------------------------------------------------
+
+/// A milestone, a finished dependency with a result, one without, one still
+/// open, and an item that rests on all of them.
+fn stack() -> Project {
+    let p = Project::new();
+    p.add(
+        "Items as prompts",
+        &[
+            "-t",
+            "milestone",
+            "--set",
+            "key=prompts",
+            "--body",
+            "Cairn treats an item as a prompt.\n\nSecond paragraph.",
+        ],
+    );
+    p.add("Decided", &["-m", "prompts"]);
+    p.expect(&[
+        "close",
+        "2",
+        "--result",
+        "Views and conventions, never a runner.",
+    ]);
+    p.add("Quietly finished", &["-m", "prompts"]);
+    p.expect(&["note", "3", "Done without saying much."]);
+    p.expect(&["close", "3"]);
+    p.add("Still going", &["-m", "prompts"]);
+    p.add(
+        "Compile the stack",
+        &[
+            "-m", "prompts", "-d", "2", "-d", "3", "-d", "4",
+            "--body",
+            "## Problem\n\nAgents assemble context by hand.\n\n## Approach\n\nAssemble it for them.\n\n## Acceptance criteria\n\n- [x] It prints\n- [ ] It is ordered\n- [ ] It is checked\n",
+        ],
+    );
+    p.expect(&["note", "5", "Tried a template engine; too much."]);
+    p
+}
+
+fn at(out: &str, needle: &str) -> usize {
+    out.find(needle)
+        .unwrap_or_else(|| panic!("`{needle}` not in:\n{out}"))
+}
+
+#[test]
+fn a_prompt_reads_in_order_and_names_where_each_part_came_from() {
+    let p = stack();
+    let out = p.expect(&["prompt", "5"]).stdout;
+    let order = [
+        "# 0005 Compile the stack",
+        "## How this project works",
+        "## The outcome",
+        "## What this builds on",
+        "## The task",
+        "## Done when",
+        "## What earlier runs learned",
+        "## When you stop",
+    ];
+    for pair in order.windows(2) {
+        assert!(
+            at(&out, pair[0]) < at(&out, pair[1]),
+            "{} before {}",
+            pair[0],
+            pair[1]
+        );
+    }
+    assert_contains(
+        &out,
+        "_From milestone prompts._",
+        "the outcome names its source",
+    );
+    assert_contains(
+        &out,
+        "Cairn treats an item as a prompt.",
+        "the milestone's first paragraph",
+    );
+    assert_missing(&out, "Second paragraph.", "and only that");
+    assert_contains(&out, "_From depends_on: 0002, 0003, 0004._", "");
+}
+
+#[test]
+fn a_dependency_contributes_its_result_else_its_last_note_else_its_blocking() {
+    let p = stack();
+    let out = p.expect(&["prompt", "5"]).stdout;
+    assert_contains(
+        &out,
+        "Result: Views and conventions, never a runner.",
+        "a result",
+    );
+    assert_contains(&out, "Its last note, ", "no result: the last note");
+    assert_contains(&out, "Done without saying much.", "");
+    assert_contains(
+        &out,
+        "0004 — Still going (backlog)\nNot finished",
+        "an open one blocks",
+    );
+}
+
+#[test]
+fn done_when_numbers_criteria_as_tick_does() {
+    let p = stack();
+    let out = p.expect(&["prompt", "5"]).stdout;
+    assert_contains(
+        &out,
+        "2. It is ordered\n3. It is checked",
+        "open ones, numbered",
+    );
+    assert_contains(&out, "Already true:\n- It prints", "");
+    p.expect(&["tick", "5", "3"]);
+    let out = p.expect(&["prompt", "5"]).stdout;
+    assert_contains(&out, "2. It is ordered", "");
+    assert_missing(&out, "3. It is checked", "ticked by that number");
+}
+
+#[test]
+fn the_task_leaves_out_what_other_layers_carry() {
+    let p = stack();
+    let out = p.expect(&["prompt", "5"]).stdout;
+    let task = &out[at(&out, "## The task")..at(&out, "## Done when")];
+    assert_contains(
+        task,
+        "### Problem",
+        "the item's headings sit under the layer's",
+    );
+    assert_contains(task, "Assemble it for them.", "");
+    assert_missing(task, "- [ ]", "criteria have their own layer");
+    assert_missing(task, "template engine", "notes have their own layer");
+    let learned = &out[at(&out, "## What earlier runs learned")..at(&out, "## When you stop")];
+    assert_contains(learned, "### 20", "a note keeps its date, a level down");
+}
+
+#[test]
+fn json_and_mcp_carry_the_same_prompt() {
+    let p = stack();
+    let doc = p.json(&["prompt", "5", "--json"]);
+    let names: Vec<&str> = doc["layers"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|l| l["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        names,
+        [
+            "How this project works",
+            "The outcome",
+            "What this builds on",
+            "The task",
+            "Done when",
+            "What earlier runs learned",
+            "When you stop"
+        ]
+    );
+    let reply = p.mcp_call("prompt_item", json!({"id": 5}), Some("agent"));
+    assert_eq!(reply["isError"], false, "{reply}");
+    assert_eq!(
+        reply["content"][0]["text"].as_str().unwrap(),
+        p.expect(&["prompt", "5"]).stdout
+    );
+}
+
+#[test]
+fn a_bare_item_still_compiles() {
+    let p = Project::new();
+    p.add("Alone", &[]);
+    let out = p.expect(&["prompt", "1"]).stdout;
+    assert_contains(&out, "## The task", "");
+    assert_missing(&out, "## The outcome", "nothing it is filed under");
+    assert_missing(&out, "## What this builds on", "nothing it depends on");
+    p.fails(&["prompt", "99"]);
+}
+
+#[test]
+fn the_agent_instructions_start_from_the_prompt() {
+    let p = Project::new();
+    assert_contains(&p.expect(&["agent"]).stdout, "`cairn prompt <ID>`", "");
+}
+
+/// With a criteria section named, a checklist elsewhere is part of the task,
+/// not a criterion, and must appear somewhere.
+#[test]
+fn a_checklist_outside_the_criteria_section_stays_in_the_task() {
+    let p = Project::with(Schema::standard().criteria_section("Done when"));
+    p.add(
+        "Steps and criteria",
+        &[
+            "--body",
+            "## Approach\n\n- [ ] migrate the table\n\n## Done when\n\n- [ ] it is migrated\n",
+        ],
+    );
+    let out = p.expect(&["prompt", "1"]).stdout;
+    let task = &out[at(&out, "## The task")..at(&out, "## Done when")];
+    assert_contains(task, "- [ ] migrate the table", "a step, not a criterion");
+    assert_contains(&out, "1. it is migrated", "");
+}
+
+#[test]
+fn a_prompt_takes_a_key_as_show_does() {
+    let p = stack();
+    let out = p.expect(&["prompt", "prompts"]).stdout;
+    assert_contains(&out, "# 0001 Items as prompts", "");
+}
+
+/// A body under one `# Context` still has notes after it.
+#[test]
+fn notes_under_a_top_level_heading_are_still_notes() {
+    let p = Project::new();
+    p.add(
+        "Deep",
+        &["--body", "# Context\n\n## Problem\n\nSomething.\n"],
+    );
+    p.expect(&["note", "1", "What the first run found."]);
+    let out = p.expect(&["prompt", "1"]).stdout;
+    let task = &out[at(&out, "## The task")..at(&out, "## What earlier runs learned")];
+    assert_missing(task, "What the first run found.", "not part of the task");
+    assert_contains(&out, "What the first run found.", "but in the prompt");
+}
+
+/// Prose beside the boxes in the criteria section is kept; boxes alone are not
+/// repeated.
+#[test]
+fn prose_in_the_criteria_section_is_kept() {
+    let p = Project::new();
+    p.add(
+        "Verified how",
+        &[
+            "--body",
+            "## Acceptance criteria\n\n- [ ] it works\n\nVerified by running `make durability`.\n",
+        ],
+    );
+    let out = p.expect(&["prompt", "1"]).stdout;
+    let task = &out[at(&out, "## The task")..at(&out, "## Done when")];
+    assert_contains(task, "Verified by running `make durability`.", "");
+    assert_missing(task, "- [ ] it works", "the box is under Done when");
+}

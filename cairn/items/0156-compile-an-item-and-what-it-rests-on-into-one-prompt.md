@@ -3,12 +3,14 @@ id: 156
 uid: 5c837fc8-6894-400f-96a6-5fede12211ec
 title: Compile an item and what it rests on into one prompt
 type: feature
-status: planned
+status: done
 milestone: prompts
+assignee: oddurs
 depends_on:
 - 155
 created: 2026-09-27
 updated: 2026-09-27
+closed_at: 2026-09-27
 priority: p1
 area: cli
 effort: l
@@ -44,10 +46,22 @@ to start from `cairn prompt <ID>`.
 
 ## Acceptance criteria
 
-- [ ] `cairn prompt <ID>` prints the seven layers in order, each naming its source
-- [ ] A finished dependency contributes its Result, or its last note when it has none; an unfinished one is named as a blocker
-- [ ] Open criteria carry the numbers `cairn tick` accepts
-- [ ] `--json` and MCP `prompt_item` return the same layers
-- [ ] The generated agent instructions start the loop from `cairn prompt`, and AGENTS.md is regenerated
-- [ ] Run against this repository's own items, the output is what an agent needs and nothing it does not
-- [ ] `make check` passes
+- [x] `cairn prompt <ID>` prints the seven layers in order, each naming its source
+- [x] A finished dependency contributes its Result, or its last note when it has none; an unfinished one is named as a blocker
+- [x] Open criteria carry the numbers `cairn tick` accepts
+- [x] `--json` and MCP `prompt_item` return the same layers
+- [x] The generated agent instructions start the loop from `cairn prompt`, and AGENTS.md is regenerated
+- [x] Run against this repository's own items, the output is what an agent needs and nothing it does not
+- [x] `make check` passes
+
+## 2026-09-27
+
+Checked against this repository's own items: prompt 0148 and prompt 0156. 0156's dependency layer is 0155's recorded Result, which is all 0156 needs of it; 0148's shows the fallback, 0145's last note, because 0145 finished before Results existed. Refinements from reading the output: the item's own headings and note dates sit a level below the layer headings; a dependency's last note is introduced with its date rather than its raw heading; the task starts at the body because the title heads the whole prompt (a small departure from the Approach, which said title and body).
+
+## 2026-09-27
+
+Review (/code-review medium) found four real defects, each fixed with a test that fails without it: with a criteria_section configured, checkboxes outside it vanished from every layer (now exactly the lines Done when shows are removed from the task, by line number); prompt refused keys that show accepts (now resolves keys first); a body under a top-level # heading swallowed its notes into the task (note headings split at any level); prose in the criteria section was dropped (kept when anything besides boxes remains).
+
+## Result
+
+cairn prompt <ID> (and MCP prompt_item) compiles an item into seven layers, each naming its source: how the project works, the outcome (milestone and rollup parents, outermost first, first paragraph), what each dependency concluded (Result, else last note, else a blocker), the task (body less criteria lines, Result and notes), done-when (open criteria numbered for tick), notes oldest first, and what to leave behind. --json returns the layers. Read-only; the generated instructions start the loop from it.

@@ -8,7 +8,7 @@ This project tracks its roadmap and issues with `cairn`. Every item is a Markdow
 ### The loop
 
 1. `cairn next --view next` — what is ready to start. It excludes anything blocked by unfinished dependencies and puts work already in progress first.
-2. `cairn claim <ID>` — take it before you start, so no one duplicates the work. `cairn claim --next --view next` picks and claims the top-ranked unclaimed item in one step, and prints its body so you can begin immediately.
+2. `cairn claim <ID>` — take it before you start, so no one duplicates the work. `cairn claim --next --view next` picks and claims the top-ranked unclaimed item in one step. Then read `cairn prompt <ID>`: the item with everything it rests on — the outcome it serves, what its dependencies concluded, what done means and what earlier runs learned.
 3. Do the work. Record what you learn: `cairn set <ID> <field>=<value>` for fields, `cairn note <ID> "<TEXT>"` for anything that needs a sentence — why you chose something, what you tried, what to watch for.
 4. `cairn tick <ID> <N>` as each acceptance criterion becomes true — `cairn show <ID> --criteria` lists them numbered. Tick what is true, not what would let you close.
 5. `cairn close <ID>` when it is done, or `cairn release <ID>` to hand it back.
@@ -22,6 +22,7 @@ cairn claim --next --view next                # take the next ready item
 cairn search <TEXT> --json        # titles, bodies and labels
 cairn list --json                 # all open items
 cairn list --filter 'blocked=false,priority=p0'
+cairn prompt <ID>                 # the item as a prompt, with what it rests on
 cairn show <ID> --json            # one item, including its body
 cairn new "<TITLE>" --type <TYPE> --milestone <MILESTONE>
 cairn set <ID> status=<STATUS>    # also labels+=x, or any field below

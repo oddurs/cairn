@@ -802,7 +802,7 @@ pub fn is_note_heading(heading: &str) -> bool {
 
 /// Text to go under a heading of `level`, its own headings pushed deeper so
 /// none of them ends the section it belongs to.
-fn beneath(text: &str, level: usize) -> String {
+pub fn beneath(text: &str, level: usize) -> String {
     let marks = headings(text);
     let Some(shallowest) = marks.iter().map(|(_, l, _)| *l).min() else {
         return text.to_string();

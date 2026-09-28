@@ -201,6 +201,7 @@ fn dispatch(name: &str, a: &Value) -> Result<String> {
         "next_items" => next_items(a),
         "search_items" => search_items(a),
         "show_item" => show_item(a),
+        "prompt_item" => prompt_item(a),
         "create_item" => create_item(a),
         "update_item" => update_item(a),
         "claim_item" => claim_item(a),
@@ -398,6 +399,17 @@ fn search_items(a: &Value) -> Result<String> {
         .map(|v| narrow(v, keys.as_deref()))
         .collect();
     pretty(&json!({ "count": hits.len(), "items": hits }))
+}
+
+/// The compiled prompt, as text: what an agent should read before starting,
+/// in one call instead of one per dependency.
+fn prompt_item(a: &Value) -> Result<String> {
+    let cfg = Config::discover()?;
+    let items = Store::new(&cfg).load_all()?;
+    let id = require_id(&cfg, a)?;
+    let item = crate::cmd::prompt::find(&cfg, &items, &id.to_string())?;
+    let layers = crate::cmd::prompt::compile(&cfg, &items, item);
+    Ok(crate::cmd::prompt::text(&cfg, item, &layers))
 }
 
 fn show_item(a: &Value) -> Result<String> {
@@ -1155,6 +1167,16 @@ fn tools() -> Vec<Value> {
         default returns everything about every item. `id` is always included."
                 }),
             }), vec!["query"]),
+        }),
+        json!({
+            "name": "prompt_item",
+            "description": "An item as the prompt to work from: how the project works, the outcome \
+        it serves, what each dependency concluded, the task, what done means (criteria numbered for \
+        tick_criteria), what earlier runs learned, and what to leave behind. Call this before starting \
+        an item, instead of show_item plus one call per dependency.",
+            "inputSchema": obj(json!({
+                "id": id_prop("Item id"),
+            }), vec!["id"]),
         }),
         json!({
             "name": "show_item",
