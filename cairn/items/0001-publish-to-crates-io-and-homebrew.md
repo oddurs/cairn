@@ -13,6 +13,19 @@ effort: s
 area: distribution
 ---
 
+## Problem
+
+cairn installs with `install.sh` and Homebrew, but not with `cargo install
+cairn-md`, the one command every Rust user already knows. The crate has never
+been published: the release workflow's `crate` job skips itself without a
+`CARGO_REGISTRY_TOKEN`, and the repository has none. Only the maintainer can add
+one.
+
+## Acceptance criteria
+
+- [ ] `cargo install cairn-md` installs the latest release
+- [x] Homebrew installs the binary, manual page and completions from the tap oddurs/homebrew-cairn
+
 ## 2026-09-05
 
 Blocked on a credential, not on work.

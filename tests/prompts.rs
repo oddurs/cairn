@@ -441,3 +441,128 @@ fn prose_in_the_criteria_section_is_kept() {
     assert_contains(task, "Verified by running `make durability`.", "");
     assert_missing(task, "- [ ] it works", "the box is under Done when");
 }
+
+// --- prompt checks -------------------------------------------------------------
+
+fn advice(p: &Project, id: &str) -> Vec<String> {
+    p.json(&["prompt", id, "--json"])["checks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|a| a.as_str().unwrap().to_string())
+        .collect()
+}
+
+#[test]
+fn each_check_fires_on_a_prompt_that_needs_it_and_not_on_one_that_does_not() {
+    let p = Project::new();
+    // Well formed: context, criteria, a dependency that said what it found.
+    p.add("Upstream", &[]);
+    p.expect(&["close", "1", "--result", "The answer."]);
+    p.add(
+        "Good",
+        &[
+            "-d",
+            "1",
+            "--body",
+            "## Problem\n\nReal context.\n\n## Acceptance criteria\n\n- [ ] it holds\n",
+        ],
+    );
+    assert_eq!(advice(&p, "2"), Vec::<String>::new());
+
+    // No criteria, and nothing but headings.
+    p.add("Bare", &["--body", "## Problem\n\n## Approach\n"]);
+    let a = advice(&p, "3").join("\n");
+    assert_contains(&a, "no acceptance criteria", "");
+    assert_contains(&a, "no context", "");
+
+    // A dependency that finished without saying what it concluded.
+    p.add("Silent upstream", &[]);
+    p.expect(&["close", "4"]);
+    p.add(
+        "Downstream",
+        &["-d", "4", "--body", "## Problem\n\nContext.\n\n- [ ] one\n"],
+    );
+    assert_contains(
+        &advice(&p, "5").join("\n"),
+        "0004 finished without a result",
+        "",
+    );
+
+    // Ticked, and nothing says how.
+    p.add(
+        "Ticked",
+        &["--body", "## Problem\n\nContext.\n\n- [x] proven somehow\n"],
+    );
+    assert_contains(
+        &advice(&p, "6").join("\n"),
+        "1 criteria ticked, and no note",
+        "",
+    );
+    p.expect(&["note", "6", "Proven by the test in tests/x.rs."]);
+    assert_eq!(advice(&p, "6"), Vec::<String>::new(), "a note answers it");
+
+    // Finished work and containers are not advised.
+    p.expect(&["close", "3"]);
+    assert_eq!(advice(&p, "3"), Vec::<String>::new());
+}
+
+#[test]
+fn a_prompt_says_what_may_make_it_misread() {
+    let p = Project::new();
+    p.add("Bare", &["--body", "## Problem\n"]);
+    let out = p.expect(&["prompt", "1"]).stdout;
+    assert_contains(&out, "## This prompt may be misread", "");
+    assert_contains(&out, "- no acceptance criteria", "");
+}
+
+#[test]
+fn check_reports_prompts_only_when_asked() {
+    let p = Project::new();
+    p.add("Bare", &["--body", "## Problem\n"]);
+    let plain = p.expect(&["check", "--strict"]);
+    assert_missing(&plain.all(), "prompt:", "unchanged unless asked");
+    let asked = p.expect(&["check", "--prompts"]);
+    assert_contains(&asked.all(), "prompt: no acceptance criteria", "");
+    assert_contains(
+        &p.fails(&["check", "--prompts", "--strict"]).all(),
+        "prompt:",
+        "strict when asked",
+    );
+}
+
+/// A bug filed from its template has scaffolding and nothing else.
+#[test]
+fn a_template_left_as_it_was_is_no_context() {
+    let p = Project::with_init(&["init", "--name", "T"]);
+    let bug = p.add("Filed from the template", &["-t", "bug"]);
+    assert_contains(&advice(&p, &bug).join("\n"), "no context", "");
+}
+
+/// A handoff is a note, and proves nothing about a tick.
+#[test]
+fn a_handoff_does_not_explain_a_tick() {
+    let p = Project::new();
+    p.add(
+        "Ticked",
+        &["--body", "## Problem\n\nContext.\n\n- [x] done somehow\n"],
+    );
+    p.expect(&["claim", "1"]);
+    p.expect(&["release", "1", "--reason", "ran out of time"]);
+    assert_contains(&advice(&p, "1").join("\n"), "no note says how", "");
+}
+
+/// A dropped dependency did not finish, and closing it would say it had.
+#[test]
+fn a_dropped_dependency_is_named_for_what_it_is() {
+    let p = Project::new();
+    p.add("Abandoned", &[]);
+    p.expect(&["close", "1", "--status", "dropped"]);
+    p.add(
+        "Rests on it",
+        &["-d", "1", "--body", "## Problem\n\nContext.\n\n- [ ] one\n"],
+    );
+    let a = advice(&p, "2").join("\n");
+    assert_contains(&a, "0001 was dropped", "");
+    assert_missing(&a, "finished without a result", "");
+}
