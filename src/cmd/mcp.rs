@@ -582,8 +582,8 @@ fn claim_item(a: &Value) -> Result<String> {
     }
     let cfg = Config::discover()?;
     let store = Store::new(&cfg);
-    let across = Lock::acquire_across_worktrees(&cfg)?;
     let lock = Lock::acquire(&cfg)?;
+    let across = Lock::acquire_across_worktrees(&cfg)?;
     let items = store.load_all()?;
     let ctx = Ctx::new(&cfg, &items);
     let survey = crate::worktree::Survey::take(&cfg, &items);

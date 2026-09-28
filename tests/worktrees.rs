@@ -351,3 +351,36 @@ fn the_same_number_on_a_different_tag_is_a_different_item() {
         "reported as filed there, not as this item"
     );
 }
+
+/// A claim queued behind its own worktree's writers does not hold up claims in
+/// the others. It used to take the lock every worktree shares first, and hold
+/// it for as long as it waited on its own directory's.
+#[test]
+fn a_claim_queued_in_one_worktree_does_not_hold_up_another() {
+    let p = repository_of(2);
+    let linked = worktree(&p, "elsewhere");
+    // A write in main's item directory that has just begun.
+    p.write(
+        "cairn/items/.lock",
+        &format!("pid 999999\nsince {}\n", now_secs()),
+    );
+    std::thread::scope(|scope| {
+        let queued = scope.spawn(|| p.run(&["claim", &p.id(1), "--as", "queued"]));
+        // Long enough for it to take whatever it takes before it waits.
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        let started = std::time::Instant::now();
+        linked.expect(&["claim", &p.id(2), "--as", "elsewhere"]);
+        let took = started.elapsed();
+        p.remove("cairn/items/.lock");
+        let queued = queued.join().unwrap();
+        assert!(
+            took < std::time::Duration::from_secs(6),
+            "a claim elsewhere waited {took:?} on one that was queued"
+        );
+        assert!(
+            queued.ok(),
+            "and the queued claim got its turn: {}",
+            queued.all()
+        );
+    });
+}
