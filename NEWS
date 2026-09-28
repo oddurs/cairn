@@ -8,6 +8,15 @@ Please send bug reports and suggestions through the project's issue tracker.
 
 * Noteworthy changes in release 1.0.0-alpha.1 (unreleased)
 
+** cairn prompt: an item and everything it rests on
+
+cairn prompt <ID> prints an item as the prompt an agent should read: how the
+project works, the milestone and parents it serves, what each dependency
+concluded (its Result, or its last note), the task, the criteria still open,
+numbered for tick, what earlier runs learned, and what to leave behind. Each
+part names its source. --json returns the layers; MCP gains prompt_item, and
+the generated agent instructions start from it. Read-only.
+
 ** A finished item says what it concluded
 
 cairn close --result "..." writes a ## Result section, replacing an earlier

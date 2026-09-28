@@ -479,8 +479,9 @@ dependencies and puts work already in progress first.\n",
     ));
     s.push_str(&format!(
         "2. `cairn claim <ID>` — take it before you start, so no one duplicates the work. \
-`cairn claim --next{scope}` picks and claims the top-ranked unclaimed item in one step, and prints its \
-body so you can begin immediately.\n",
+`cairn claim --next{scope}` picks and claims the top-ranked unclaimed item in one step. Then read \
+`cairn prompt <ID>`: the item with everything it rests on — the outcome it serves, what its \
+dependencies concluded, what done means and what earlier runs learned.\n",
     ));
     s.push_str(
         "3. Do the work. Record what you learn: `cairn set <ID> <field>=<value>` for fields, \
@@ -504,6 +505,7 @@ you tried, what to watch for.\n",
     s.push_str("cairn search <TEXT> --json        # titles, bodies and labels\n");
     s.push_str("cairn list --json                 # all open items\n");
     s.push_str("cairn list --filter 'blocked=false,priority=p0'\n");
+    s.push_str("cairn prompt <ID>                 # the item as a prompt, with what it rests on\n");
     s.push_str("cairn show <ID> --json            # one item, including its body\n");
     s.push_str("cairn new \"<TITLE>\" --type <TYPE> --milestone <MILESTONE>\n");
     s.push_str("cairn set <ID> status=<STATUS>    # also labels+=x, or any field below\n");

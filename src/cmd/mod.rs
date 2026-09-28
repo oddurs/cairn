@@ -16,6 +16,7 @@ pub mod misc;
 pub mod new;
 pub mod next;
 pub mod note;
+pub mod prompt;
 pub mod propose;
 pub mod render_cmd;
 pub mod renumber;

@@ -2918,6 +2918,38 @@ Protocol's @code{close_item} takes one too. Closing an item that open work
 depends on, with no result, names that work: it will have nothing to quote.
 Never a refusal; some work concludes nothing worth a sentence.
 
+@section Compiling a prompt
+
+@cindex cairn prompt
+@cindex prompt_item
+What an agent needs before starting an item is more than the item: what it
+rests on, and what that concluded. @command{cairn prompt} assembles it, in the
+order a model should read it, each part naming where it came from:
+
+@enumerate
+@item How this project works: the project, the rules of the loop, and whether
+the item is claimed.
+@item The outcome: the milestone and any parents it is filed under, outermost
+first, each by its first paragraph.
+@item What this builds on: each dependency, with its Result if it is finished,
+its last note if it finished without one, or a warning that it is not finished.
+@item The task: the item's body, less the parts the other layers carry.
+@item Done when: the criteria still open, numbered as @command{cairn tick}
+numbers them.
+@item What earlier runs learned: the item's notes, oldest first.
+@item When you stop: note, tick, close with a result, or release with a reason.
+@end enumerate
+
+@example
+$ cairn prompt 156            # Markdown, ready to hand to a model
+$ cairn prompt 156 --json     # the same layers as data
+@end example
+
+@noindent
+A view, like @command{render}: nothing is written, and it works at any format
+cairn reads. The Model Context Protocol's @code{prompt_item} returns the same
+text, and the generated agent instructions tell an agent to start from it.
+
 @node Verifying a release
 @chapter Verifying a release
 
@@ -3358,6 +3390,11 @@ Serve the backlog over the Model Context Protocol.
 @section cairn show
 Prints one item in full. @option{--json} includes the body; @option{--raw}
 prints the file unchanged; @option{--path} prints only its location.
+
+@section cairn prompt
+Prints an item as the prompt to work from: the item and everything it rests
+on, each part naming its source. @option{--json} returns the parts as data.
+@xref{Items as prompts}.
 
 @section cairn set
 @cindex set
