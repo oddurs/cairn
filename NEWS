@@ -17,6 +17,13 @@ numbered for tick, what earlier runs learned, and what to leave behind. Each
 part names its source. --json returns the layers; MCP gains prompt_item, and
 the generated agent instructions start from it. Read-only.
 
+** cairn split: a prompt's numbered steps become sub-prompts
+
+cairn split <ID> makes each top-level numbered step of an item's Approach an
+item of its own, each depending on the one before (--parallel for none), with
+the parent depending on all of them and, where the schema has one, a part_of
+reference back. --dry-run shows the plan; an item is split only once.
+
 ** A finished item says what it concluded
 
 cairn close --result "..." writes a ## Result section, replacing an earlier
