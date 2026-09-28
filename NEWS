@@ -6,7 +6,43 @@ See the end of the file for copying conditions.
 Please send bug reports and suggestions through the project's issue tracker.
 
 
-* Noteworthy changes in release 1.0.0-alpha.1 (unreleased)
+* Noteworthy changes in release 1.0.0-alpha.1 (2026-09-28)
+
+An alpha: the first release to write format 5, and the one Harrow
+0.2.0-alpha.1 is paired with. v0.3.0 remains the stable release. Upgrade
+cairn and Harrow together, and migrate a project once, on one branch, with
+cairn migrate. Building from source now needs Rust 1.89.
+
+** Writers wait their turn under load
+
+A writer used to give up ten seconds after it began waiting, however many
+writers were ahead of it, so forty agents writing at once on a busy machine
+failed with every holder behaving. A writer now waits as long as the lock
+keeps changing hands, and gives up when one holder has kept it for ten
+seconds, by that holder's own recorded time, or after two minutes in all. A
+claim queued behind its own worktree's writers no longer holds up claims in
+the others.
+
+** Breaking an abandoned lock takes turns
+
+A lock left behind by a process that died is broken after five minutes, as
+before. Two writers breaking the same one at once could each delete the
+other's new lock and both write; they now take turns, through a lock the
+system holds on a file in Git's directory, or in the item directory outside a
+repository. Where the system cannot lock files, cairn says so once and breaks
+as it used to.
+
+** A reader that stops reading is not a crash
+
+cairn list | head -1 printed a panic about a broken pipe. It now ends quietly,
+with the status a process stopped by SIGPIPE reports, 141, so a script can
+still tell the output was cut short.
+
+** MCP tools describe ids as the project writes them
+
+Every tool that takes an item's id says it is the item's number, or the
+number as the project writes it (0012, BUG-12). show_item still described
+format 4's UUIDs.
 
 ** Say when a prompt will be misread
 
