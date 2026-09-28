@@ -11,7 +11,7 @@
 //
 // This assembles it. A view, like `render`: nothing is written, and the file
 // stays the source.
-use crate::config::Config;
+use crate::config::{Category, Config};
 use crate::item::Item;
 use crate::store::Store;
 use anyhow::{Result, anyhow};
@@ -42,7 +42,6 @@ pub fn run(args: Args) -> Result<i32> {
     let cfg = Config::discover()?;
     let items = Store::new(&cfg).load_for_reading()?;
     let item = find(&cfg, &items, &args.id)?;
-    let layers = compile(&cfg, &items, item);
     if args.json {
         println!(
             "{}",
@@ -50,13 +49,109 @@ pub fn run(args: Args) -> Result<i32> {
                 "id": item.id,
                 "ref": cfg.format_id(item.id),
                 "title": item.title(),
-                "layers": layers,
+                "layers": compile(&cfg, &items, item),
+                "checks": checks(&cfg, &items, item),
             }))?
         );
     } else {
-        print!("{}", text(&cfg, item, &layers));
+        print!("{}", render(&cfg, &items, item));
     }
     Ok(0)
+}
+
+/// The prompt as text, with what may make it misread said after it: the one
+/// rendering the command line and the Model Context Protocol both hand out.
+pub fn render(cfg: &Config, items: &[Item], item: &Item) -> String {
+    let mut out = text(cfg, item, &compile(cfg, items, item));
+    let advice = checks(cfg, items, item);
+    if !advice.is_empty() {
+        out += &format!(
+            "\n## This prompt may be misread\n\n_From `cairn check --prompts`._\n\n{}\n",
+            advice
+                .iter()
+                .map(|a| format!("- {a}"))
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
+    }
+    out
+}
+
+/// What will make this prompt misread by whatever runs it. Advice, not
+/// validation: an item can be right to lack any of these. Open work only —
+/// a finished prompt has been run — and never a container, which is what work
+/// is filed under rather than work.
+pub fn checks(cfg: &Config, items: &[Item], item: &Item) -> Vec<String> {
+    if cfg.category(item.status()).is_closed() || cfg.is_container(item.kind()) {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    let criteria = item.criteria_list(cfg.project.criteria_section.as_deref());
+    if criteria.is_empty() {
+        out.push("no acceptance criteria: nothing says when it is done".to_string());
+    }
+    let parts = Parts::of(cfg, item);
+    // What the type's template put there is scaffolding, not context: a bug
+    // filed from its template has a `1.` waiting to be written, and that says
+    // nothing.
+    let template: HashSet<&str> = item
+        .kind()
+        .and_then(|k| cfg.item_type(k))
+        .and_then(|t| t.template.as_deref())
+        .map(|t| t.lines().map(str::trim).collect())
+        .unwrap_or_default();
+    let context = parts.task.lines().any(|l| {
+        let t = l.trim();
+        !t.is_empty()
+            && !t.starts_with('#')
+            && !template.contains(t)
+            && !matches!(t, "- [ ]" | "* [ ]" | "+ [ ]")
+    });
+    if !context {
+        out.push("no context: the body says nothing beyond headings and criteria".to_string());
+    }
+    let dependencies = item
+        .meta
+        .depends_on
+        .iter()
+        .filter_map(|d| items.iter().find(|i| i.id == *d));
+    for dep in dependencies
+        .clone()
+        .filter(|d| cfg.category(d.status()) == Category::Dropped)
+    {
+        out.push(format!(
+            "{} was dropped, so this rests on work that will not be done",
+            cfg.format_id(dep.id)
+        ));
+    }
+    for dep in
+        dependencies.filter(|d| cfg.category(d.status()) == Category::Done && d.result().is_none())
+    {
+        let instead = if Parts::of(cfg, dep).notes.is_empty() {
+            "nothing"
+        } else {
+            "its last note"
+        };
+        out.push(format!(
+            "{} finished without a result, so this prompt is handed {instead} instead — \
+             `cairn close {} --result \"…\"` records one",
+            cfg.format_id(dep.id),
+            cfg.format_id(dep.id)
+        ));
+    }
+    // Evidence is what somebody wrote down: a dated note. A handoff or a
+    // proposal is a note too, and proves nothing about a tick.
+    let ticked = criteria.iter().filter(|c| c.ticked).count();
+    let evidence = parts
+        .notes
+        .iter()
+        .any(|(heading, _)| heading.as_bytes().first().is_some_and(u8::is_ascii_digit));
+    if ticked > 0 && !evidence {
+        out.push(format!(
+            "{ticked} criteria ticked, and no note says how they were proven"
+        ));
+    }
+    out
 }
 
 /// An item by id, or by key as `show` accepts it: an agent names a milestone

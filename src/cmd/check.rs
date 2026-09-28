@@ -30,6 +30,11 @@ pub struct Args {
     /// Print nothing when everything passes
     #[arg(short, long, action = ArgAction::SetTrue)]
     pub quiet: bool,
+
+    /// Also say which open items will be misread as prompts: no criteria, no
+    /// context, a dependency that concluded nothing, a tick nobody explained
+    #[arg(long, action = ArgAction::SetTrue)]
+    pub prompts: bool,
 }
 
 pub struct Report {
@@ -64,7 +69,17 @@ pub fn run(args: Args) -> Result<i32> {
     let cfg = Config::discover()?;
     let store = Store::new(&cfg);
     let items = store.load_all()?;
-    let r = collect_inner(&cfg, &store, &items, args.render)?;
+    let mut r = collect_inner(&cfg, &store, &items, args.render)?;
+    // Asked for, never assumed: advice about how an item reads is not a defect
+    // in the project, and existing continuous integration must not start
+    // failing on it. With --strict it fails, because then it was asked for.
+    if args.prompts {
+        for item in &items {
+            for advice in crate::cmd::prompt::checks(&cfg, &items, item) {
+                r.warn(&store.rel(&item.path), format!("prompt: {advice}"));
+            }
+        }
+    }
 
     // `cairn: file:line: message`, the GNU diagnostic shape.
     for w in &r.warnings {

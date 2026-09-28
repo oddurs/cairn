@@ -408,8 +408,7 @@ fn prompt_item(a: &Value) -> Result<String> {
     let items = Store::new(&cfg).load_all()?;
     let id = require_id(&cfg, a)?;
     let item = crate::cmd::prompt::find(&cfg, &items, &id.to_string())?;
-    let layers = crate::cmd::prompt::compile(&cfg, &items, item);
-    Ok(crate::cmd::prompt::text(&cfg, item, &layers))
+    Ok(crate::cmd::prompt::render(&cfg, &items, item))
 }
 
 fn show_item(a: &Value) -> Result<String> {

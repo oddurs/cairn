@@ -9,7 +9,7 @@ assignee: oddurs
 depends_on:
 - 146
 created: 2026-09-26
-updated: 2026-09-26
+updated: 2026-09-27
 closed_at: 2026-09-26
 priority: p1
 area: format
@@ -65,3 +65,7 @@ renumber does not tag hand-written untagged items: doing so at every post-merge 
 ## 2026-09-26
 
 Migrated this backlog in d24f7f5. Independent check against the removed _legacy-ids.toml: 144 aliases restored exactly, 147 bodies byte-identical, every other frontmatter value unchanged, depends_on mapped through the same table; new items are 0145-0147. log --range over the migration reports nothing changed; item 67's history runs unbroken from format 3 through 4 into 5, and old UUID prefixes (49543fc8) still resolve. make check green after migration.
+
+## Result
+
+Format 5: id is a readable number rendered by the project's id_format, or a type's own (BUG-{n}) on one shared counter; each item carries its format-4 UUID as a hidden uid tag. New numbers look past this checkout to every worktree and branch; a collision between machines is renumbered at merge, references following by uid. Migration 4->5 restores every legacy number, is verified and resumable.

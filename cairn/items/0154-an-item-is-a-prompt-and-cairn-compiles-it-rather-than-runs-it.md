@@ -45,3 +45,7 @@ generated instructions.
 
 - [x] Owner-approved: "implement it as a cairn milestone"
 - [x] Each proposal is a view, a convention or an ordinary write over existing data
+
+## Result
+
+An item is a prompt, and cairn compiles it rather than runs it: cairn prompt is a read-only view, a ## Result section is what dependents quote, cairn split writes ordinary child items, and prompt checks are advice (cairn prompt, check --prompts), never a new key or a failing default. All within 0142.

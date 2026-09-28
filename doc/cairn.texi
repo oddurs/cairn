@@ -2975,6 +2975,31 @@ by id, such as the standard preset's @code{part_of}, each child names the parent
 through it. A note on the parent records the split, and splitting it again is
 refused. @option{--from} reads another section's steps.
 
+@section A prompt that will be misread
+
+@cindex check --prompts
+@cindex prompt checks
+Some items will be misread by whatever runs them. @command{cairn prompt} says
+so after the prompt, and @command{cairn check --prompts} says it of every open
+item:
+
+@table @asis
+@item No acceptance criteria
+Nothing says when it is done.
+@item No context
+The body says nothing beyond headings and criteria.
+@item A dependency that concluded nothing
+It finished without a Result, so this prompt is handed its last note, or
+nothing, instead.
+@item A tick nobody explained
+Criteria are ticked, and no note says how they were proven.
+@end table
+
+@noindent
+Advice, not validation: an item can be right to lack any of these, finished work
+and containers are never advised, and plain @command{cairn check} is unchanged.
+With @option{--strict} the advice fails the run, because then it was asked for.
+
 @node Verifying a release
 @chapter Verifying a release
 
@@ -3675,7 +3700,8 @@ the file on disk differs from what would be generated.
 Move a backlog in or out. @xref{Interchange}.
 
 @section cairn check
-Validates the schema, then every item against it.
+Validates the schema, then every item against it. @option{--prompts} also
+reports open items that will be misread as prompts; @pxref{Items as prompts}.
 
 The schema first, because a configuration that misdescribes itself makes every
 finding after it suspect: a status that does not declare a @code{category}, a

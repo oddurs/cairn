@@ -8,6 +8,14 @@ Please send bug reports and suggestions through the project's issue tracker.
 
 * Noteworthy changes in release 1.0.0-alpha.1 (unreleased)
 
+** Say when a prompt will be misread
+
+cairn prompt ends with what may make an item misread, and cairn check
+--prompts reports it for every open item: no acceptance criteria, no context,
+a finished dependency with no Result, or ticked criteria with no note saying
+how. Advice only; plain check is unchanged, and --strict fails on it only
+when asked.
+
 ** cairn prompt: an item and everything it rests on
 
 cairn prompt <ID> prints an item as the prompt an agent should read: how the
