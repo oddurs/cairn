@@ -25,7 +25,7 @@
 <text y="348.0"><tspan x="22.0" fill="#98c379">claimed</tspan><tspan x="80.8" fill="#dcdfe4"> </tspan><tspan x="89.2" fill="#dcdfe4" font-weight="600">0003</tspan><tspan x="122.8" fill="#dcdfe4">  Support OAuth login</tspan></text>
 <text y="368.0"><tspan x="22.0" fill="#7f8797">  claude · doing · cairn/items/0003-support-oauth-login.md</tspan></text>
 <text x="22.0" y="408.0" fill="#98c379" font-weight="600">$</text>
-<text x="38.8" y="408.0" fill="#dcdfe4">cairn close 3</text>
+<text x="38.8" y="408.0" fill="#dcdfe4">cairn close 3 --result 'Authorization code flow, with PKCE.'</text>
 <text y="428.0"><tspan x="22.0" fill="#98c379">closed</tspan><tspan x="72.4" fill="#dcdfe4"> </tspan><tspan x="80.8" fill="#dcdfe4" font-weight="600">0003</tspan><tspan x="114.4" fill="#dcdfe4">  Support OAuth login</tspan></text>
 <text y="448.0"><tspan x="22.0" fill="#dcdfe4">  </tspan><tspan x="38.8" fill="#e5c07b">note:</tspan><tspan x="80.8" fill="#dcdfe4"> all 1 item(s) under </tspan><tspan x="257.2" fill="#dcdfe4" font-weight="600">v0.1</tspan><tspan x="290.8" fill="#dcdfe4"> are done, and it is still open — </tspan><tspan x="576.4" fill="#7f8797">`cairn close 0001`</tspan><tspan x="727.6" fill="#dcdfe4"> when it has shipped</tspan></text>
 <text x="22.0" y="488.0" fill="#98c379" font-weight="600">$</text>
