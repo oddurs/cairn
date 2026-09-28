@@ -8,6 +8,15 @@ Please send bug reports and suggestions through the project's issue tracker.
 
 * Noteworthy changes in release 1.0.0-alpha.1 (unreleased)
 
+** A finished item says what it concluded
+
+cairn close --result "..." writes a ## Result section, replacing an earlier
+one; JSON carries it as `result` when there is one, and MCP close_item takes
+it too. It is what
+the work that depends on an item is handed instead of its whole history.
+Closing an item that open work depends on, without a result, names that work.
+The specification describes the convention in §10.2.
+
 ** Migrating is one safe step
 
 cairn migrate refuses uncommitted changes to the files it rewrites

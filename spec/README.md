@@ -365,9 +365,29 @@ counting it would leave every new item permanently short of its own criteria.
 A project may confine the count to one section, named in its configuration; the
 count then covers the lines under a heading with that name, at any level and
 matched without regard to case. With no section named, the whole body counts.
+Either way, a Result section (§10.2) contributes none: a box there is part of
+what the item concluded, not something it still asks for.
 
 This is a reading of arbitrary text, and §3 means what it says: a reader that
 ignores it entirely conforms.
+
+### 10.2 Results
+
+cairn reads the section under a heading named `Result` (at any level, matched
+without regard to case) as what the item **concluded**. It runs to the next
+heading at the same level or above, or to a heading that records a note,
+whatever its level: one beginning with a date (`YYYY-MM-DD`), `Released by` or
+`Proposed `. Headings inside fenced code blocks are code, not headings; a fence
+that is never closed is not a fence, so the headings after it still count.
+Text is trimmed, and an empty section is no result.
+
+A writer recording a result replaces an existing Result section rather than
+adding a second, and writes any heading within it below the Result heading's
+level, so that no part of it ends the section early. The section is conventionally written when an item is
+finished, and it is what tools hand to the items that depend on it.
+
+Like §10.1, this is a reading of arbitrary text, and a reader that ignores it
+conforms.
 
 ---
 

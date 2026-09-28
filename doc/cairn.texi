@@ -61,6 +61,7 @@ terms of the MIT licence, the same terms cairn itself is offered under. See the
 * Agents and ownership::    What an agent may touch, and who owns what.
 * Fields that name items::  References, keys and containers.
 * Acceptance criteria::     How an item says it is finished.
+* Items as prompts::        What an agent reads, and what it leaves behind.
 * Verifying a release::     Checksums, provenance and signatures.
 * Cookbook::                Recipes for what people arrive wanting.
 * Commands::                Every subcommand.
@@ -2881,6 +2882,42 @@ This project has not turned it on. Its own backlog holds two hundred unticked
 criteria on closed items, written before anything read them, and mass-ticking
 them retrospectively would be exactly the ritual this feature exists to avoid.
 
+@node Items as prompts
+@chapter Items as prompts
+
+@cindex prompts
+@cindex agents, and items
+An item reads as a prompt that outlives the session: its Problem is context,
+its Approach is an instruction, its acceptance criteria say what done means, and
+its dated notes are what earlier runs learned, written for the next one. cairn
+treats it as one without running anything itself: what follows are views and
+conventions over the record that already exists.
+
+@section Results
+
+@cindex result
+@cindex close --result
+A finished item says what it concluded under a @code{## Result} heading. It is
+ordinary body text, found at any heading level and without regard to case, and
+it is what the work that depends on the item is handed instead of its whole
+history.
+
+@example
+$ cairn close 145 --result "Migration 4->5 restores every number; journaled, resumable."
+@end example
+
+@noindent
+The section ends at the next heading at its level or above, or at a note's
+heading, so a note written afterwards is never swallowed by it; a heading inside
+the result itself is written a level deeper for the same reason. A checkbox in a
+result is part of the answer, not an acceptance criterion.
+
+A second @option{--result} replaces the first rather than adding another. JSON
+carries it as @code{result} when there is one, and the Model Context
+Protocol's @code{close_item} takes one too. Closing an item that open work
+depends on, with no result, names that work: it will have nothing to quote.
+Never a refusal; some work concludes nothing worth a sentence.
+
 @node Verifying a release
 @chapter Verifying a release
 
@@ -3460,7 +3497,8 @@ write, which is why the refusal names this command.
 
 @section cairn close, cairn reopen
 Move items to the first @code{done} status, or back to the default open
-status. @option{--status} overrides the target. Where a project sets
+status. @option{--status} overrides the target, and @option{--result} records
+what the item concluded (@pxref{Items as prompts}). Where a project sets
 @code{require_criteria}, closing an item with unticked criteria is refused;
 @pxref{Acceptance criteria}.
 

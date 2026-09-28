@@ -340,8 +340,14 @@ impl Item {
         // `None` before the first heading means "counting", so a body with no
         // headings at all still works.
         let mut counting = section.is_none();
+        // A result says what finishing concluded; a box in it is part of the
+        // answer, not something the item still asks for.
+        let result = self.section_span("Result");
 
         for (n, line) in self.body.lines().enumerate() {
+            if result.is_some_and(|(start, end)| n > start && n < end) {
+                continue;
+            }
             let trimmed = line.trim();
             if let Some(heading) = trimmed.strip_prefix('#') {
                 if let Some(want) = section {
@@ -660,6 +666,75 @@ impl Item {
         found.filter(|f| !f.is_empty())
     }
 
+    /// The lines under the heading called `name`, at any level and without
+    /// regard to case, up to the next heading at the same level or above: the
+    /// heading's own line, and the end (exclusive). Headings inside fenced code
+    /// are code, so a `# comment` in a shell block does not end a section.
+    pub fn section_span(&self, name: &str) -> Option<(usize, usize)> {
+        self.span(name).map(|(start, end, _)| (start, end))
+    }
+
+    /// The same, with the heading's level. A section also ends at a note's
+    /// heading, whatever its level: a note appended after a hand-written
+    /// `# Result` is a note, and replacing the result must never erase it.
+    fn span(&self, name: &str) -> Option<(usize, usize, usize)> {
+        let headings = headings(&self.body);
+        let (start, level) = headings
+            .iter()
+            .find(|(_, _, text)| text.eq_ignore_ascii_case(name))
+            .map(|(line, level, _)| (*line, *level))?;
+        let end = headings
+            .iter()
+            .find(|(line, l, text)| *line > start && (*l <= level || is_note_heading(text)))
+            .map_or_else(|| self.body.lines().count(), |(line, _, _)| *line);
+        Some((start, end, level))
+    }
+
+    /// What finishing this item concluded: its `Result` section, or nothing.
+    /// The part a dependent quotes, so it does not have to read the history.
+    pub fn result(&self) -> Option<String> {
+        let (start, end) = self.section_span("Result")?;
+        let text = self
+            .body
+            .lines()
+            .skip(start + 1)
+            .take(end - start - 1)
+            .collect::<Vec<_>>()
+            .join("\n");
+        let text = text.trim();
+        (!text.is_empty()).then(|| text.to_string())
+    }
+
+    /// Write the result, replacing the one there is rather than adding a second.
+    ///
+    /// A heading inside the text is pushed below the Result heading's level, or
+    /// the section would end there: the reader would see half of it, and the
+    /// next replacement would leave the other half behind.
+    pub fn set_result(&mut self, text: &str) {
+        let existing = self.span("Result");
+        let text = beneath(text.trim(), existing.map_or(2, |(_, _, level)| level));
+        let text = text.as_str();
+        let lines: Vec<&str> = self.body.lines().collect();
+        let body = if let Some((start, end, _)) = existing {
+            let mut out: Vec<String> = lines[..=start].iter().map(|l| (*l).to_string()).collect();
+            out.push(String::new());
+            out.push(text.to_string());
+            if end < lines.len() {
+                out.push(String::new());
+                out.extend(lines[end..].iter().map(|l| (*l).to_string()));
+            }
+            out.join("\n")
+        } else {
+            let body = self.body.trim_end();
+            if body.is_empty() {
+                format!("## Result\n\n{text}")
+            } else {
+                format!("{body}\n\n## Result\n\n{text}")
+            }
+        };
+        self.set_body(&format!("{}\n", body.trim_end()));
+    }
+
     pub fn set_body(&mut self, text: &str) {
         self.body = text.replace("\r\n", "\n");
     }
@@ -667,6 +742,88 @@ impl Item {
     pub fn touch(&mut self, today: &str) {
         self.meta.updated = Some(today.to_string());
     }
+}
+
+/// Every Markdown heading in a body, as (line, level, text), skipping fenced
+/// code blocks.
+pub fn headings(body: &str) -> Vec<(usize, usize, String)> {
+    let lines: Vec<&str> = body.lines().collect();
+    scan_headings(&lines, 0)
+}
+
+fn scan_headings(lines: &[&str], from: usize) -> Vec<(usize, usize, String)> {
+    let mut out = Vec::new();
+    let mut fence: Option<(&str, usize)> = None;
+    for (n, line) in lines.iter().enumerate().skip(from) {
+        let trimmed = line.trim_start();
+        if let Some(marker) = ["```", "~~~"].into_iter().find(|m| trimmed.starts_with(m)) {
+            match fence {
+                Some((open, _)) if open == marker => fence = None,
+                None => fence = Some((marker, n)),
+                Some(_) => {}
+            }
+            continue;
+        }
+        if fence.is_some() {
+            continue;
+        }
+        let level = trimmed.chars().take_while(|c| *c == '#').count();
+        if (1..=6).contains(&level)
+            && let Some(text) = trimmed[level..].strip_prefix(' ')
+        {
+            out.push((
+                n,
+                level,
+                text.trim().trim_end_matches('#').trim().to_string(),
+            ));
+        }
+    }
+    // A fence nobody closed is a stray marker, not a block running to the end:
+    // reading it as one would hide every heading after it, and the Result with
+    // them, so each new result would be written again where nothing finds it.
+    if let Some((_, at)) = fence {
+        out.extend(scan_headings(lines, at + 1));
+    }
+    out
+}
+
+/// Headings that `cairn note`, `release` and `propose` write: a date, a
+/// handoff, a proposal. What a run recorded, rather than what an item asks.
+pub fn is_note_heading(heading: &str) -> bool {
+    let b = heading.as_bytes();
+    let dated = b.len() >= 10
+        && b[..4].iter().all(u8::is_ascii_digit)
+        && b[4] == b'-'
+        && b[5..7].iter().all(u8::is_ascii_digit)
+        && b[7] == b'-'
+        && b[8..10].iter().all(u8::is_ascii_digit);
+    dated || heading.starts_with("Released by") || heading.starts_with("Proposed ")
+}
+
+/// Text to go under a heading of `level`, its own headings pushed deeper so
+/// none of them ends the section it belongs to.
+fn beneath(text: &str, level: usize) -> String {
+    let marks = headings(text);
+    let Some(shallowest) = marks.iter().map(|(_, l, _)| *l).min() else {
+        return text.to_string();
+    };
+    if shallowest > level {
+        return text.to_string();
+    }
+    let by = level + 1 - shallowest;
+    let at: std::collections::HashSet<usize> = marks.iter().map(|(n, _, _)| *n).collect();
+    text.lines()
+        .enumerate()
+        .map(|(n, line)| {
+            if at.contains(&n) {
+                let indent = line.len() - line.trim_start().len();
+                format!("{}{}{}", &line[..indent], "#".repeat(by), line.trim_start())
+            } else {
+                line.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// Format a source location the way the GNU Coding Standards prescribe:
