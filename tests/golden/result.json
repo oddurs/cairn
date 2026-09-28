@@ -1,0 +1,23 @@
+{
+  "assignee": null,
+  "body": "## Problem\n\nNobody knew.\n\n## RESULT\n\nIt was the cache.\n\n```sh\n# not a heading\ncairn check\n```\n\n### Detail\n\nStill part of the result.\n\n## 2026-09-27\n\nA note written after.\n",
+  "category": "done",
+  "claimed": null,
+  "closed_at": null,
+  "created": null,
+  "created_by": null,
+  "depends_on": [],
+  "fields": {},
+  "id": 15,
+  "key": null,
+  "labels": [],
+  "milestone": null,
+  "owner": null,
+  "ref": "0015",
+  "result": "It was the cache.\n\n```sh\n# not a heading\ncairn check\n```\n\n### Detail\n\nStill part of the result.",
+  "source": null,
+  "status": "done",
+  "title": "A finished item says what it concluded",
+  "type": null,
+  "updated": null
+}

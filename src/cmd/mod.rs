@@ -280,6 +280,11 @@ pub fn item_json(
     let mut o = serde_json::Map::new();
     o.insert("id".into(), json!(item.id));
     o.insert("ref".into(), json!(cfg.format_id(item.id)));
+    // Present only when there is one, as `uid` is: a key every item grew at
+    // once would change what every existing reading of an item returns.
+    if let Some(result) = item.result() {
+        o.insert("result".into(), json!(result));
+    }
     if let Some(uid) = item.meta.uid {
         o.insert("uid".into(), json!(uid.to_string()));
     }
@@ -320,6 +325,25 @@ pub fn item_json(
         o.insert("body".into(), json!(item.body));
     }
     J::Object(o)
+}
+
+/// What to say when an item finishes without a result and open work depends
+/// on it: those items will be handed nothing to quote. None when nothing waits.
+pub fn nothing_to_quote(cfg: &Config, items: &[Item], done: &Item) -> Option<String> {
+    let waiting: Vec<String> = items
+        .iter()
+        .filter(|i| !cfg.category(i.status()).is_closed() && i.meta.depends_on.contains(&done.id))
+        .map(|i| cfg.format_id(i.id))
+        .collect();
+    if waiting.is_empty() {
+        return None;
+    }
+    let id = cfg.format_id(done.id);
+    Some(format!(
+        "{} depend(s) on {id}, and it has no result for them to quote — \
+         `cairn close {id} --result \"…\"` records one",
+        waiting.join(", ")
+    ))
 }
 
 fn opt_json(s: Option<&str>) -> serde_json::Value {

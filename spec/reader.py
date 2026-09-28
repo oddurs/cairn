@@ -161,6 +161,58 @@ def identity(value, format):
     return number
 
 
+def headings(body, start=0):
+    """§10.2: (line, level, text) for each Markdown heading, fenced code skipped.
+
+    A fence that is never closed is not a fence: the headings after it count.
+    """
+    lines = body.split("\n")
+    found, fence, opened = [], None, None
+    for n in range(start, len(lines)):
+        stripped = lines[n].lstrip()
+        marker = next((m for m in ("```", "~~~") if stripped.startswith(m)), None)
+        if marker:
+            if fence is None:
+                fence, opened = marker, n
+            elif fence == marker:
+                fence = None
+            continue
+        if fence is not None:
+            continue
+        level = len(stripped) - len(stripped.lstrip("#"))
+        if 1 <= level <= 6 and stripped[level:].startswith(" "):
+            found.append((n, level, stripped[level:].strip().rstrip("#").strip()))
+    if fence is not None:
+        found.extend(headings(body, opened + 1))
+    return found
+
+
+def is_note_heading(text):
+    """§10.2: a heading a note was written under."""
+    return (
+        re.match(r"\d{4}-\d{2}-\d{2}", text) is not None
+        or text.startswith("Released by")
+        or text.startswith("Proposed ")
+    )
+
+
+def result(body):
+    """§10.2: the text under the first heading named Result, to the next at its
+    level or above, or to a note's heading."""
+    marks = headings(body)
+    start = next(((n, lvl) for n, lvl, text in marks if text.lower() == "result"), None)
+    if start is None:
+        return None
+    line, level = start
+    lines = body.split("\n")
+    end = next(
+        (n for n, lvl, text in marks if n > line and (lvl <= level or is_note_heading(text))),
+        len(lines),
+    )
+    text = "\n".join(lines[line + 1:end]).strip()
+    return text or None
+
+
 def as_ids(value, format):
     return [identity(v, format) for v in as_list(value)]
 
@@ -219,6 +271,10 @@ def read(path, text=None, format=5):
         # blank line is the separator, not content.
         "body": body.lstrip("\n"),
     }
+    # §10.2: what the item concluded, present only when there is one.
+    concluded = result(item["body"])
+    if concluded is not None:
+        item["result"] = concluded
     # §4.2: the tag, from format 5, present only when the file carries one.
     if format >= 5 and meta.get("uid") is not None:
         item["uid"] = uuid4(meta["uid"], "`uid`")

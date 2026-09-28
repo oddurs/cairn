@@ -1,0 +1,23 @@
+{
+  "assignee": null,
+  "body": "# Result\n\nThe answer, under a top-level heading.\n\n## 2026-09-27\n\nA note written after, which is not part of it.\n",
+  "category": "done",
+  "claimed": null,
+  "closed_at": null,
+  "created": null,
+  "created_by": null,
+  "depends_on": [],
+  "fields": {},
+  "id": 17,
+  "key": null,
+  "labels": [],
+  "milestone": null,
+  "owner": null,
+  "ref": "0017",
+  "result": "The answer, under a top-level heading.",
+  "source": null,
+  "status": "done",
+  "title": "A result above a note",
+  "type": null,
+  "updated": null
+}

@@ -1,0 +1,22 @@
+{
+  "assignee": null,
+  "body": "## Result\n\n## 2026-09-27\n\nClosed, nothing concluded.\n",
+  "category": "done",
+  "claimed": null,
+  "closed_at": null,
+  "created": null,
+  "created_by": null,
+  "depends_on": [],
+  "fields": {},
+  "id": 16,
+  "key": null,
+  "labels": [],
+  "milestone": null,
+  "owner": null,
+  "ref": "0016",
+  "source": null,
+  "status": "done",
+  "title": "An empty result is no result",
+  "type": null,
+  "updated": null
+}

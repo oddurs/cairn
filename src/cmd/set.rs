@@ -5,7 +5,7 @@ use crate::identity::Id;
 // cairn set / close / reopen — mutating item fields, with schema validation.
 use std::io::Write;
 
-use crate::config::{Config, FieldKind};
+use crate::config::{Category, Config, FieldKind};
 use crate::item::{Field, Item, split_list};
 use crate::lock::Lock;
 use crate::store::{Store, today};
@@ -45,6 +45,11 @@ pub struct CloseArgs {
     /// Status to move to (defaults to the first `done` status)
     #[arg(short, long, value_name = "STATUS")]
     pub status: Option<String>,
+
+    /// What finishing it concluded, written as its `## Result`, which the work
+    /// that depends on it quotes
+    #[arg(short, long, value_name = "TEXT")]
+    pub result: Option<String>,
 
     #[arg(short, long, action = ArgAction::SetTrue)]
     pub quiet: bool,
@@ -250,7 +255,19 @@ pub fn close(args: CloseArgs) -> Result<i32> {
             ),
         },
     };
-    transition(&cfg, &args.ids, &target, args.quiet, "closed")
+    // One item's answer: the same sentence written into several items would
+    // be a claim about each that nobody made.
+    if args.result.is_some() && args.ids.len() > 1 {
+        bail!("--result is one item's answer; close them one at a time to give each its own");
+    }
+    transition(
+        &cfg,
+        &args.ids,
+        &target,
+        args.quiet,
+        "closed",
+        args.result.as_deref(),
+    )
 }
 
 pub fn reopen(args: ReopenArgs) -> Result<i32> {
@@ -259,10 +276,17 @@ pub fn reopen(args: ReopenArgs) -> Result<i32> {
         .status
         .clone()
         .unwrap_or_else(|| cfg.initial_status().to_string());
-    transition(&cfg, &args.ids, &target, args.quiet, "reopened")
+    transition(&cfg, &args.ids, &target, args.quiet, "reopened", None)
 }
 
-fn transition(cfg: &Config, ids: &[String], status: &str, quiet: bool, verb: &str) -> Result<i32> {
+fn transition(
+    cfg: &Config,
+    ids: &[String],
+    status: &str,
+    quiet: bool,
+    verb: &str,
+    result: Option<&str>,
+) -> Result<i32> {
     let store = Store::new(cfg);
     let lock = Lock::acquire(cfg)?;
 
@@ -319,6 +343,9 @@ fn transition(cfg: &Config, ids: &[String], status: &str, quiet: bool, verb: &st
             // close: a value nobody can act on is worse than none.
             apply(&mut item, cfg, "closed_at", Assign::Set(String::new()))?;
         }
+        if let Some(text) = result {
+            item.set_result(text);
+        }
         item.touch(&today());
         item.save()?;
         if !quiet {
@@ -359,6 +386,16 @@ fn transition(cfg: &Config, ids: &[String], status: &str, quiet: bool, verb: &st
     // open for good.
     if !quiet && cfg.category(status).is_closed() {
         let after = store.load_all()?;
+        // Only for work done: a dropped item concluded nothing to quote, and
+        // the command the hint suggests would move it to done.
+        for item in changed
+            .iter()
+            .filter(|i| i.result().is_none() && cfg.category(i.status()) == Category::Done)
+        {
+            if let Some(hint) = crate::cmd::nothing_to_quote(cfg, &after, item) {
+                eprintln!("  {} {hint}", style::yellow("hint:"));
+            }
+        }
         let touched: Vec<&str> = changed.iter().filter_map(|i| cfg.schedule_of(i)).collect();
         for (container, total) in crate::cmd::finished_but_open(cfg, &after) {
             if container

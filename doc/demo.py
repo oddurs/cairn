@@ -34,7 +34,7 @@ SCRIPT = [
     "cairn new 'Rate-limit the public API' -t feature -m v0.2 --set priority=p1 -d 3",
     "cairn next",
     "cairn claim --next",
-    "cairn close 3",
+    "cairn close 3 --result 'Authorization code flow, with PKCE.'",
     "cairn next",
     "cairn board",
     # Ends on the roadmap rather than `render`, which the hooks have already

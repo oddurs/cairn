@@ -901,10 +901,20 @@ fn close_item(a: &Value) -> Result<String> {
         }
     }
     apply_requested(&mut item, &cfg, "status", Assign::Set(status))?;
+    if let Some(text) = s(a, "result") {
+        item.set_result(&text);
+    }
     item.touch(&today());
     item.save()?;
     drop(lock);
     hooks::item(&cfg, &store, hooks::Event::AfterChange, &item);
+    let waiting = if item.result().is_none()
+        && cfg.category(item.status()) == crate::config::Category::Done
+    {
+        crate::cmd::nothing_to_quote(&cfg, &store.load_all()?, &item)
+    } else {
+        None
+    };
 
     // Reported, not refused. The agent may be right and the criteria stale, and
     // a tool that refused would teach models to tick boxes before closing
@@ -913,7 +923,11 @@ fn close_item(a: &Value) -> Result<String> {
     let mut out = json!({
         "closed": item.id,
         "status": item.status(),
+        "result": item.result(),
     });
+    if let Some(hint) = waiting {
+        out["hint"] = json!(hint);
+    }
     if c.any() {
         out["criteria"] = json!({ "done": c.done, "total": c.total });
         if !c.complete() {
@@ -1232,10 +1246,13 @@ fn tools() -> Vec<Value> {
         }),
         json!({
             "name": "close_item",
-            "description": "Mark an item finished.",
+            "description": "Mark an item finished. Give a `result`: what finishing it concluded, in a \
+        sentence or a short paragraph. It is written as the item's `## Result`, and it is what the work \
+        that depends on this item is handed instead of its whole history.",
             "inputSchema": obj(json!({
                 "id": id_prop("Item id"),
                 "status": str_prop("Status to move to (default: the first done status)"),
+                "result": str_prop("What finishing it concluded, in Markdown; replaces an earlier result"),
             }), vec!["id"]),
         }),
         json!({
