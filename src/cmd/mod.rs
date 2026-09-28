@@ -24,6 +24,7 @@ pub mod roadmap;
 pub mod search;
 pub mod set;
 pub mod show;
+pub mod split;
 pub mod tick;
 pub mod worktrees;
 

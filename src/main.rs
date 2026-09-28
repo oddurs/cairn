@@ -134,6 +134,9 @@ enum Command {
     /// An item as the prompt an agent reads, with everything it rests on
     Prompt(cmd::prompt::Args),
 
+    /// Turn an item's numbered steps into items of their own: `cairn split 12`
+    Split(cmd::split::Args),
+
     /// Show how an item changed, from the repository's own history
     Log(cmd::log::Args),
 
@@ -275,6 +278,7 @@ fn run(command: Command) -> Result<i32> {
         Command::Release(a) => cmd::claim::release(a),
         Command::Show(a) => cmd::show::run(a),
         Command::Prompt(a) => cmd::prompt::run(a),
+        Command::Split(a) => cmd::split::run(a),
         Command::Log(a) => cmd::log::run(a),
         Command::Set(a) => cmd::set::run(a),
         Command::Note(a) => cmd::note::run(a),

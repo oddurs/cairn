@@ -2950,6 +2950,31 @@ A view, like @command{render}: nothing is written, and it works at any format
 cairn reads. The Model Context Protocol's @code{prompt_item} returns the same
 text, and the generated agent instructions tell an agent to start from it.
 
+@section Splitting into sub-prompts
+
+@cindex cairn split
+@cindex sub-prompts
+A prompt too big to run in one go is usually already written as numbered steps.
+@command{cairn split} makes each top-level step of the item's Approach an item
+of its own:
+
+@example
+$ cairn split 147 --dry-run
+  159 In the harrow repository, file and do the reader change
+  160 Install the matching pair  after 159
+  161 Migrate harrow, rim and nun, each in its own commit, ...  after 160
+$ cairn split 147
+@end example
+
+@noindent
+Each child takes its title from the step's first sentence, its body from the
+whole step, and the parent's type, milestone and priority; each depends on the
+step before it (@option{--parallel} for none), and the parent depends on all of
+them, so it cannot finish first. Where the schema declares a rollup reference
+by id, such as the standard preset's @code{part_of}, each child names the parent
+through it. A note on the parent records the split, and splitting it again is
+refused. @option{--from} reads another section's steps.
+
 @node Verifying a release
 @chapter Verifying a release
 
@@ -3395,6 +3420,10 @@ prints the file unchanged; @option{--path} prints only its location.
 Prints an item as the prompt to work from: the item and everything it rests
 on, each part naming its source. @option{--json} returns the parts as data.
 @xref{Items as prompts}.
+
+@section cairn split
+Makes each numbered step of an item's Approach an item of its own, in order.
+@option{--parallel}, @option{--from}, @option{--dry-run}. @xref{Items as prompts}.
 
 @section cairn set
 @cindex set

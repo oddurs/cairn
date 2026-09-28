@@ -46,7 +46,6 @@ An item reads as a prompt that outlives the session, and cairn treats it as
 
 ### up next
 
-- [ ] [`0157`](https://github.com/oddurs/cairn/blob/main/cairn/items/0157-split-a-prompt-s-numbered-steps-into-sub-prompts.md) Split a prompt's numbered steps into sub-prompts <sup>feature · p2</sup>
 - [ ] [`0158`](https://github.com/oddurs/cairn/blob/main/cairn/items/0158-say-when-a-prompt-will-be-misread.md) Say when a prompt will be misread <sup>feature · p2</sup>
 
 ## later — Someday
