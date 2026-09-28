@@ -56,7 +56,6 @@ Options without a commitment to build them. Reconsider when an actual user task 
 
 ### not committed
 
-- [ ] [`0159`](https://github.com/oddurs/cairn/blob/main/cairn/items/0159-cairn-panics-when-the-reader-of-its-output-goes-away.md) cairn panics when the reader of its output goes away <sup>bug · p2</sup>
 - [ ] [`0160`](https://github.com/oddurs/cairn/blob/main/cairn/items/0160-mcp-show-item-still-describes-ids-as-format-4-uuids.md) MCP show_item still describes ids as format-4 UUIDs <sup>bug · p3</sup>
 - [ ] [`0161`](https://github.com/oddurs/cairn/blob/main/cairn/items/0161-forty-concurrent-writers-can-outwait-the-project-lock-on-a-loaded-machine.md) Forty concurrent writers can outwait the project lock on a loaded machine <sup>bug · p3</sup>
 

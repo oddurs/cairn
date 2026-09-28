@@ -220,6 +220,8 @@ enum Command {
 }
 
 fn main() {
+    // First, so help and --bug-report are covered as well as the commands.
+    quiet_about_broken_pipes();
     let cli = Cli::parse();
     if cli.no_hooks {
         hooks::disable();
@@ -255,13 +257,49 @@ fn main() {
         std::process::exit(2);
     };
 
-    match run(command) {
-        Ok(code) => std::process::exit(code),
-        Err(e) => {
+    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| run(command)));
+    match outcome {
+        Ok(Ok(code)) => std::process::exit(code),
+        Ok(Err(e)) => {
             eprintln!("{}: {e:#}", style::red("cairn"));
             std::process::exit(1);
         }
+        // The reader went away. Quietly, and with the status a process killed
+        // by SIGPIPE reports: the command may have stopped partway — a bulk
+        // `set` after its first item, a `check` whose verdict nobody read —
+        // and a script under `set -o pipefail` must be able to tell.
+        // Unwinding has already released the project lock.
+        Err(panic) if is_broken_pipe(panic.as_ref()) => std::process::exit(BROKEN_PIPE),
+        Err(panic) => std::panic::resume_unwind(panic),
     }
+}
+
+/// 128 + SIGPIPE, what a shell reports for a process its pipe killed.
+const BROKEN_PIPE: i32 = 141;
+
+/// A reader that stops reading — `head`, a pager quit early — makes every
+/// later `println!` panic. That is the ordinary end of a pipeline, not a fault,
+/// so it is not reported as one. It still unwinds rather than exiting where it
+/// happens, because a command that prints while holding the project lock must
+/// let go of it on the way out.
+fn quiet_about_broken_pipes() {
+    let report = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        if !is_broken_pipe(info.payload()) {
+            report(info);
+        }
+    }));
+}
+
+/// Whether a panic is std's report of writing to a closed stdout or stderr.
+fn is_broken_pipe(payload: &(dyn std::any::Any + Send)) -> bool {
+    let message = payload
+        .downcast_ref::<String>()
+        .map(String::as_str)
+        .or_else(|| payload.downcast_ref::<&str>().copied())
+        .unwrap_or_default();
+    message.starts_with("failed printing to std")
+        && (message.contains("Broken pipe") || message.contains("pipe is being closed"))
 }
 
 /// Commands return an exit code so `check` and `render --check` can fail CI
