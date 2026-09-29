@@ -84,14 +84,21 @@ that was fixed months ago.
 | Where | What to do | Who can |
 | --- | --- | --- |
 | crates.io | Automatic, if `CARGO_REGISTRY_TOKEN` is set | maintainer |
-| Homebrew tap (`Formula/cairn.rb`) | Update `url`, `sha256` and `version` | maintainer |
+| Homebrew tap, stable (`Formula/cairn.rb`) | For a stable release: update `version` and the four `sha256` | maintainer |
+| Homebrew tap, pre-release (`Formula/cairn-next.rb`) | For a pre-release: the same, in this file instead | maintainer |
 | AUR | Bump `pkgver`, refresh `.SRCINFO` | package owner |
 | nixpkgs | Bump `version` and `cargoHash`, open a pull request | anyone |
 | Homebrew core | Only once the notability bar is met | anyone |
 | Debian, Fedora | Needs the source tarball and a signature | a distribution packager |
 
 The Homebrew tap is live at `oddurs/homebrew-cairn`. Verify its formula after
-each release; the release workflow does not update it. Crates.io publication
+each release; the release workflow does not update it. It carries two:
+`cairn`, the stable line, which is what `brew install` gives, and `cairn-next`,
+the 1.x pre-release line Harrow 0.2 is paired with. A pre-release updates
+`cairn-next` only. When 1.0.0 ships, `cairn` moves to it and `cairn-next` is
+retired, as its header says. The two do not conflict in the formula, since tap
+trust would refuse one that loads the other; installing both leaves the second
+`bin/cairn` unlinked. Crates.io publication
 is tracked by `0001`; the other distribution channels are follow-up in `0053`.
 
 ## What CI already proved
