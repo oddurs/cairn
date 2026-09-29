@@ -39,3 +39,7 @@ Tagged v1.0.0-alpha.1 at 68ac154 (merge of #124) after release-check passed on m
 ## Result
 
 cairn 1.0.0-alpha.1 is released as a GitHub pre-release from tag v1.0.0-alpha.1 (68ac154): binaries for five platforms, the source tarball and checksums, with build provenance attested; v0.3.0 stays the latest release. No signatures or crates.io publish, for want of their secrets.
+
+## 2026-09-28
+
+Homebrew: the harrow-51 session added Formula/cairn-next.rb to oddurs/homebrew-cairn (#3, fixed in #4) at 1.0.0-alpha.1, so brew can install a format-5 cairn; plain cairn stays on 0.3.0. Named cairn-next rather than cairn@1 because Homebrew requires a versioned formula to be keg-only, which would leave no cairn on PATH, and without conflicts_with because tap trust refuses a formula that loads another. Verified there with brew install, brew test and cairn check on a format-5 backlog. doc/RELEASING.md now names both formulae and which a release updates.
